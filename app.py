@@ -26,7 +26,7 @@ PASTA_BASE = Path(__file__).resolve().parent
 PASTA_RESULTADOS = PASTA_BASE / "resultados"
 PASTA_DOWNLOADS = PASTA_BASE / "downloads"
 
-BASE_FINAL = PASTA_RESULTADOS / "base_final_minerador_cnpj.xlsx"
+BASE_FINAL = PASTA_RESULTADOS / "base_final_minerador_cnpj.csv"
 MUNICIPIOS_ZIP = PASTA_DOWNLOADS / "Municipios.zip"
 FAVORITOS_JSON = PASTA_BASE / "favoritos.json"
 STATUS_BM_JSON = PASTA_BASE / "status_bm.json"
@@ -297,7 +297,7 @@ def usuarios_que_usaram(status_geral, cnpj):
 
 def carregar_base():
     usuario = usuario_atual()
-    df = pd.read_excel(BASE_FINAL, dtype=str)
+    df = pd.read_csv(BASE_FINAL, dtype=str)
 
     df["cnpj_limpo"] = df["cnpj"].apply(limpar_cnpj)
 
