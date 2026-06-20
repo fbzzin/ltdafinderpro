@@ -1,7 +1,9 @@
-from db import conectar
+from db import conectar, criar_banco
 
 
 def obter_usuarios():
+    criar_banco()
+
     conn = conectar()
     cursor = conn.cursor()
 
@@ -24,6 +26,7 @@ def obter_usuarios():
 
 
 def salvar_usuario(usuario, senha, tipo):
+    criar_banco()
 
     conn = conectar()
     cursor = conn.cursor()
@@ -47,6 +50,7 @@ def salvar_usuario(usuario, senha, tipo):
 
 
 def excluir_usuario(usuario):
+    criar_banco()
 
     conn = conectar()
     cursor = conn.cursor()
@@ -61,6 +65,7 @@ def excluir_usuario(usuario):
 
 
 def obter_favoritos():
+    criar_banco()
 
     conn = conectar()
     cursor = conn.cursor()
@@ -81,6 +86,7 @@ def obter_favoritos():
 
 
 def adicionar_favorito(cnpj):
+    criar_banco()
 
     conn = conectar()
     cursor = conn.cursor()
@@ -98,6 +104,7 @@ def adicionar_favorito(cnpj):
 
 
 def remover_favorito(cnpj):
+    criar_banco()
 
     conn = conectar()
     cursor = conn.cursor()
@@ -112,6 +119,7 @@ def remover_favorito(cnpj):
 
 
 def obter_status_bm():
+    criar_banco()
 
     conn = conectar()
     cursor = conn.cursor()
@@ -124,7 +132,6 @@ def obter_status_bm():
     status_geral = {}
 
     for row in cursor.fetchall():
-
         usuario = row["usuario"]
 
         if usuario not in status_geral:
@@ -138,6 +145,7 @@ def obter_status_bm():
 
 
 def salvar_status(usuario, cnpj, status):
+    criar_banco()
 
     conn = conectar()
     cursor = conn.cursor()
@@ -170,6 +178,7 @@ def salvar_status(usuario, cnpj, status):
 
 
 def remover_status(usuario, cnpj):
+    criar_banco()
 
     conn = conectar()
     cursor = conn.cursor()
@@ -188,6 +197,7 @@ def remover_status(usuario, cnpj):
 
 
 def obter_historico():
+    criar_banco()
 
     conn = conectar()
     cursor = conn.cursor()
