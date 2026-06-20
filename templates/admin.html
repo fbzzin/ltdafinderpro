@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<title>Painel Admin - LTDAFinder Pro</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<div class="layout">
+
+    <aside class="sidebar">
+
+        <div>
+
+            <div class="sidebar-logo">
+                <img src="{{ url_for('static', filename='logo.png') }}">
+            </div>
+
+            <div class="usuario-box">
+                <div>
+                    <span>Usuário logado</span>
+                    <strong>👤 {{ usuario_logado }}</strong>
+                </div>
+            </div>
+
+            <nav class="menu">
+                <a class="menu-item" href="/">🔎 Minerar CNPJs</a>
+                <a class="menu-item" href="/master">📊 Dashboard Master</a>
+                <a class="menu-item" href="/usados">📌 Meus CNPJs Usados</a>
+                <a class="menu-item" href="/favoritos">⭐ Favoritos</a>
+                <a class="menu-item" href="/estatisticas">📈 Estatísticas</a>
+                <a class="menu-item active" href="/admin">👑 Painel Admin</a>
+                <a class="menu-item sair" href="/logout">🚪 Sair</a>
+            </nav>
+
+        </div>
+
+        <div class="sidebar-footer">
+            Versão Local <strong>V1.0</strong>
+        </div>
+
+    </aside>
+
+    <main class="main">
+
+        <div class="topbar">
+            <h1>👑 Painel Admin</h1>
+            <p>Gerenciamento de usuários e acompanhamento geral da operação.</p>
+        </div>
+
+        {% if mensagem %}
+        <section class="tabela">
+            <div class="aviso-bm">
+                ✅ {{ mensagem }}
+            </div>
+        </section>
+        {% endif %}
+
+        {% if erro %}
+        <section class="tabela">
+            <div class="aviso-global">
+                ⚠ {{ erro }}
+            </div>
+        </section>
+        {% endif %}
+
+        <section class="cards">
+
+            <div class="card">
+                <h3>Total Geral</h3>
+                <p>{{ estatisticas_gerais.total }}</p>
+            </div>
+
+            <div class="card">
+                <h3>Sucessos</h3>
+                <p>{{ estatisticas_gerais.sucesso }}</p>
+            </div>
+
+            <div class="card">
+                <h3>Taxa Geral</h3>
+                <p>{{ "%.1f"|format(estatisticas_gerais.taxa_sucesso) }}%</p>
+            </div>
+
+            <div class="card">
+                <h3>Usuários</h3>
+                <p>{{ usuarios|length }}</p>
+            </div>
+
+        </section>
+
+        <section class="filtros">
+
+            <h2>Criar Usuário</h2>
+
+            <form method="POST">
+
+                <input type="hidden" name="acao" value="criar_usuario">
+
+                <div class="grid-filtros">
+
+                    <div>
+                        <label>Usuário</label>
+                        <input name="usuario" placeholder="Usuário">
+                    </div>
+
+                    <div>
+                        <label>Senha</label>
+                        <input name="senha" placeholder="Senha">
+                    </div>
+
+                    <div>
+                        <label>Tipo</label>
+                        <select name="tipo">
+                            <option value="equipe">Equipe</option>
+                            <option value="admin">Admin</option>
+                        </select>
+                    </div>
+
+                </div>
+
+                <div class="acoes">
+                    <button type="submit">Criar usuário</button>
+                </div>
+
+            </form>
+
+        </section>
+
+        <section class="tabela">
+
+            <div class="tabela-topo">
+                <h2>Usuários</h2>
+                <span>{{ usuarios|length }} usuários cadastrados</span>
+            </div>
+
+            <table>
+
+                <thead>
+                    <tr>
+                        <th>Usuário</th>
+                        <th>Tipo</th>
+                        <th>Total BMs</th>
+                        <th>Sucesso</th>
+                        <th>Taxa</th>
+                        <th>Ações</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+
+                    {% for item in estatisticas_gerais.usuarios %}
+
+                    <tr>
+
+                        <td>{{ item.usuario }}</td>
+
+                        <td>{{ usuarios[item.usuario].tipo }}</td>
+
+                        <td>{{ item.total }}</td>
+
+                        <td>{{ item.sucesso }}</td>
+
+                        <td>{{ "%.1f"|format(item.taxa_sucesso) }}%</td>
+
+                        <td class="acoes-tabela">
+                            <a href="/admin/usuario/{{ item.usuario }}" class="btn-acao btn-ver" title="Abrir usuário">
+                                👁
+                            </a>
+                        </td>
+
+                    </tr>
+
+                    {% endfor %}
+
+                </tbody>
+
+            </table>
+
+        </section>
+
+    </main>
+
+</div>
+
+</body>
+</html>

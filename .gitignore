@@ -1,0 +1,17 @@
+__pycache__/
+*.pyc
+
+downloads/
+resultados/
+
+database.db
+
+venv/
+.venv/
+env/
+
+*.zip
+*.xlsx
+*.csv
+
+.DS_Store

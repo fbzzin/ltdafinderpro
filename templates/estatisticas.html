@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Estatísticas - LtdaFinder Pro</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<div class="layout">
+
+    <aside class="sidebar">
+
+        <div>
+
+            <div class="sidebar-logo">
+                <img src="{{ url_for('static', filename='logo.png') }}">
+            </div>
+
+            <div class="usuario-box">
+                <div>
+                    <span>Usuário logado</span>
+                    <strong>👤 {{ usuario_logado }}</strong>
+                </div>
+            </div>
+
+            <nav class="menu">
+                <a class="menu-item" href="/">🔎 Minerar CNPJs</a>
+                <a class="menu-item" href="/master">📊 Dashboard Master</a>
+                <a class="menu-item" href="/usados">📌 Meus CNPJs Usados</a>
+                <a class="menu-item" href="/favoritos">⭐ Favoritos</a>
+                <a class="menu-item active" href="/estatisticas">📈 Estatísticas</a>
+                {% if tipo_usuario == "admin" %}
+                <a class="menu-item" href="/admin">👑 Painel Admin</a>
+                {% endif %}
+                <a class="menu-item sair" href="/logout">🚪 Sair</a>
+            </nav>
+
+        </div>
+
+        <div class="sidebar-footer">
+            Versão Local <strong>V1.0</strong>
+        </div>
+
+    </aside>
+
+    <main class="main">
+
+        <div class="topbar">
+            <h1>📊 Estatísticas</h1>
+            <p>Desempenho individual e geral da operação.</p>
+        </div>
+
+        <section class="tabela">
+
+            <h2>Meu desempenho</h2>
+
+            <table>
+
+                <thead>
+                    <tr>
+                        <th>Status</th>
+                        <th>Quantidade</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+
+                    {% for status in status_opcoes %}
+                    <tr>
+                        <td>{{ status }}</td>
+                        <td>{{ minha_estatistica.contagem[status] }}</td>
+                    </tr>
+                    {% endfor %}
+
+                    <tr>
+                        <th>Total Trabalhado</th>
+                        <th>{{ minha_estatistica.total }}</th>
+                    </tr>
+
+                    <tr>
+                        <th>Total de Sucessos</th>
+                        <th>{{ minha_estatistica.sucesso }}</th>
+                    </tr>
+
+                    <tr>
+                        <th>Taxa de Sucesso</th>
+                        <th>{{ "%.2f"|format(minha_estatistica.taxa_sucesso) }}%</th>
+                    </tr>
+
+                </tbody>
+
+            </table>
+
+        </section>
+
+        {% if tipo_usuario == "admin" %}
+
+        <br><br>
+
+        <section class="tabela">
+
+            <h2>👑 Estatísticas Gerais da Equipe</h2>
+
+            <table>
+
+                <thead>
+                    <tr>
+                        <th>Usuário</th>
+                        <th>Total</th>
+                        <th>Sucessos</th>
+                        <th>Taxa de Sucesso</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+
+                    {% for usuario in estatisticas_gerais.usuarios %}
+                    <tr>
+
+                        <td>{{ usuario.usuario }}</td>
+
+                        <td>{{ usuario.total }}</td>
+
+                        <td>{{ usuario.sucesso }}</td>
+
+                        <td>
+                            {{ "%.2f"|format(usuario.taxa_sucesso) }}%
+                        </td>
+
+                    </tr>
+                    {% endfor %}
+
+                </tbody>
+
+            </table>
+
+        </section>
+
+        <br><br>
+
+        <section class="tabela">
+
+            <h2>🌎 Operação Completa</h2>
+
+            <table>
+
+                <thead>
+                    <tr>
+                        <th>Status</th>
+                        <th>Total Geral</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+
+                    {% for status in status_opcoes %}
+                    <tr>
+
+                        <td>{{ status }}</td>
+
+                        <td>
+                            {{ estatisticas_gerais.contagem[status] }}
+                        </td>
+
+                    </tr>
+                    {% endfor %}
+
+                    <tr>
+                        <th>Total Geral</th>
+                        <th>{{ estatisticas_gerais.total }}</th>
+                    </tr>
+
+                    <tr>
+                        <th>Sucessos Gerais</th>
+                        <th>{{ estatisticas_gerais.sucesso }}</th>
+                    </tr>
+
+                    <tr>
+                        <th>Taxa Geral</th>
+                        <th>
+                            {{ "%.2f"|format(estatisticas_gerais.taxa_sucesso) }}%
+                        </th>
+                    </tr>
+
+                </tbody>
+
+            </table>
+
+        </section>
+
+        {% endif %}
+
+    </main>
+
+</div>
+
+</body>
+</html>

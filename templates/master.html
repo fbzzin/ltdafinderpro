@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Dashboard Master - LTDAFinder Pro</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+<div class="layout">
+
+    <aside class="sidebar">
+
+        <div>
+            <div class="sidebar-logo">
+                <img src="{{ url_for('static', filename='logo.png') }}">
+            </div>
+
+            <div class="usuario-box">
+                <div>
+                    <span>Usuário logado</span>
+                    <strong>👤 {{ usuario_logado }}</strong>
+                </div>
+            </div>
+
+            <nav class="menu">
+                <a class="menu-item" href="/">🔎 Minerar CNPJs</a>
+                <a class="menu-item active" href="/master">📊 Dashboard Master</a>
+                <a class="menu-item" href="/usados">📌 Meus CNPJs Usados</a>
+                <a class="menu-item" href="/favoritos">⭐ Favoritos</a>
+                <a class="menu-item" href="/estatisticas">📈 Estatísticas</a>
+                {% if tipo_usuario == "admin" %}
+                <a class="menu-item" href="/admin">👑 Painel Admin</a>
+                {% endif %}
+                <a class="menu-item sair" href="/logout">🚪 Sair</a>
+            </nav>
+        </div>
+
+        <div class="sidebar-footer">
+            Versão Local <strong>V1.0</strong>
+        </div>
+
+    </aside>
+
+    <main class="main">
+
+        <header class="topbar">
+            <div class="topbar-flex">
+                <div class="topbar-title">
+                    <button type="button" class="menu-toggle" id="menuToggle" title="Abrir menu">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </button>
+
+                    <div>
+                        <h1>Dashboard Master</h1>
+                        <p>Controle geral da operação de BMs e desempenho da equipe.</p>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <section class="cards">
+
+            <div class="card">
+                <h3>Total Trabalhado</h3>
+                <p>{{ estatisticas_gerais.total }}</p>
+            </div>
+
+            <div class="card">
+                <h3>Sucessos Gerais</h3>
+                <p>{{ estatisticas_gerais.sucesso }}</p>
+            </div>
+
+            <div class="card">
+                <h3>Taxa Geral</h3>
+                <p>{{ "%.1f"|format(estatisticas_gerais.taxa_sucesso) }}%</p>
+            </div>
+
+            <div class="card">
+                <h3>Produção Hoje</h3>
+                <p>{{ historico_hoje.total }}</p>
+            </div>
+
+            <div class="card">
+                <h3>Verificou 250</h3>
+                <p>{{ estatisticas_gerais.contagem.get("Verificou 250", 0) }}</p>
+            </div>
+
+            <div class="card">
+                <h3>Verificou 2k</h3>
+                <p>{{ estatisticas_gerais.contagem.get("Verificou 2k", 0) }}</p>
+            </div>
+
+            <div class="card">
+                <h3>Verificou 100k</h3>
+                <p>{{ estatisticas_gerais.contagem.get("Verificou 100k", 0) }}</p>
+            </div>
+
+            <div class="card">
+                <h3>Checkpoint</h3>
+                <p>{{ estatisticas_gerais.contagem.get("Checkpoint", 0) }}</p>
+            </div>
+
+        </section>
+
+        <section class="cards">
+
+            <div class="card">
+                <h3>PMI</h3>
+                <p>{{ estatisticas_gerais.contagem.get("Precisa de mais informações", 0) }}</p>
+            </div>
+
+            <div class="card">
+                <h3>Restrito</h3>
+                <p>{{ estatisticas_gerais.contagem.get("Restrito", 0) }}</p>
+            </div>
+
+            <div class="card">
+                <h3>Descartado</h3>
+                <p>{{ estatisticas_gerais.contagem.get("Descartado", 0) }}</p>
+            </div>
+
+            <div class="card">
+                <h3>BM em Análise</h3>
+                <p>{{ estatisticas_gerais.contagem.get("BM em Análise", 0) }}</p>
+            </div>
+
+        </section>
+
+        <section class="tabela">
+
+            <div class="tabela-topo">
+                <h2>📊 Distribuição por Status</h2>
+                <span>Visão geral da operação</span>
+            </div>
+
+            <div style="height:360px;">
+                <canvas id="graficoStatus"></canvas>
+            </div>
+
+        </section>
+
+        <br>
+
+        <section class="tabela">
+
+            <div class="tabela-topo">
+                <h2>🏆 Ranking Geral dos Usuários</h2>
+                <span>{{ estatisticas_gerais.usuarios|length }} usuários</span>
+            </div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Usuário</th>
+                        <th>Total</th>
+                        <th>250</th>
+                        <th>2k</th>
+                        <th>100k</th>
+                        <th>Sucessos</th>
+                        <th>Taxa</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    {% for item in estatisticas_gerais.usuarios %}
+                    <tr>
+                        <td>{{ loop.index }}º</td>
+
+                        <td>
+                            {% if tipo_usuario == "admin" %}
+                            <a href="/admin/usuario/{{ item.usuario }}">
+                                {{ item.usuario }}
+                            </a>
+                            {% else %}
+                            {{ item.usuario }}
+                            {% endif %}
+                        </td>
+
+                        <td>{{ item.total }}</td>
+                        <td>{{ item.contagem.get("Verificou 250", 0) }}</td>
+                        <td>{{ item.contagem.get("Verificou 2k", 0) }}</td>
+                        <td>{{ item.contagem.get("Verificou 100k", 0) }}</td>
+                        <td>{{ item.sucesso }}</td>
+                        <td>{{ "%.1f"|format(item.taxa_sucesso) }}%</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+
+        </section>
+
+        <br>
+
+        <section class="tabela">
+
+            <div class="tabela-topo">
+                <h2>📅 Produção de Hoje</h2>
+                <span>{{ historico_hoje.total }} registros hoje</span>
+            </div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Usuário</th>
+                        <th>Total Hoje</th>
+                        <th>250</th>
+                        <th>2k</th>
+                        <th>100k</th>
+                        <th>Sucessos</th>
+                        <th>Taxa</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    {% for item in historico_hoje.usuarios %}
+                    <tr>
+                        <td>{{ loop.index }}º</td>
+                        <td>{{ item.usuario }}</td>
+                        <td>{{ item.total }}</td>
+                        <td>{{ item.contagem.get("Verificou 250", 0) }}</td>
+                        <td>{{ item.contagem.get("Verificou 2k", 0) }}</td>
+                        <td>{{ item.contagem.get("Verificou 100k", 0) }}</td>
+                        <td>{{ item.sucesso }}</td>
+                        <td>{{ "%.1f"|format(item.taxa_sucesso) }}%</td>
+                    </tr>
+                    {% endfor %}
+
+                    {% if historico_hoje.usuarios|length == 0 %}
+                    <tr>
+                        <td colspan="8">Nenhuma produção registrada hoje ainda.</td>
+                    </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+
+        </section>
+
+    </main>
+
+</div>
+
+<script>
+    const menuToggle = document.getElementById("menuToggle");
+    const sidebarOverlay = document.getElementById("sidebarOverlay");
+
+    function fecharMenuMobile() {
+        document.body.classList.remove("sidebar-aberta");
+    }
+
+    function alternarMenu() {
+        if (window.innerWidth <= 1000) {
+            document.body.classList.toggle("sidebar-aberta");
+        } else {
+            document.body.classList.toggle("sidebar-fechada");
+        }
+    }
+
+    if (menuToggle) {
+        menuToggle.addEventListener("click", alternarMenu);
+    }
+
+    if (sidebarOverlay) {
+        sidebarOverlay.addEventListener("click", fecharMenuMobile);
+    }
+
+    const statusLabels = {{ estatisticas_gerais.contagem.keys()|list|tojson }};
+    const statusValores = {{ estatisticas_gerais.contagem.values()|list|tojson }};
+
+    new Chart(document.getElementById("graficoStatus"), {
+        type: "bar",
+        data: {
+            labels: statusLabels,
+            datasets: [{
+                label: "Quantidade",
+                data: statusValores
+            }]
+        },
+        options: {
+            responsive:true,
+            maintainAspectRatio:false,
+            plugins:{
+                legend:{
+                    labels:{
+                        color:"#ffffff"
+                    }
+                }
+            },
+            scales:{
+                x:{
+                    ticks:{
+                        color:"#cfefff"
+                    },
+                    grid:{
+                        color:"rgba(255,255,255,.08)"
+                    }
+                },
+                y:{
+                    beginAtZero:true,
+                    ticks:{
+                        color:"#cfefff"
+                    },
+                    grid:{
+                        color:"rgba(255,255,255,.08)"
+                    }
+                }
+            }
+        }
+    });
+</script>
+
+</body>
+</html>

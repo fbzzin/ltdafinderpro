@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Meus CNPJs Usados - LtdaFinder Pro</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+<div class="layout">
+
+    <aside class="sidebar">
+
+        <div>
+            <div class="sidebar-logo">
+                <img src="{{ url_for('static', filename='logo.png') }}">
+            </div>
+
+            <div class="usuario-box">
+                <div>
+                    <span>Usuário logado</span>
+                    <strong>👤 {{ usuario_logado }}</strong>
+                </div>
+            </div>
+
+            <nav class="menu">
+                <a class="menu-item" href="/">🔎 Minerar CNPJs</a>
+                <a class="menu-item" href="/master">📊 Dashboard Master</a>
+                <a class="menu-item active" href="/usados">📌 Meus CNPJs Usados</a>
+                <a class="menu-item" href="/favoritos">⭐ Favoritos</a>
+                <a class="menu-item" href="/estatisticas">📈 Estatísticas</a>
+                {% if tipo_usuario == "admin" %}
+                <a class="menu-item" href="/admin">👑 Painel Admin</a>
+                {% endif %}
+                <a class="menu-item sair" href="/logout">🚪 Sair</a>
+            </nav>
+        </div>
+
+        <div class="sidebar-footer">
+            Versão Local <strong>V1.0</strong>
+        </div>
+
+    </aside>
+
+    <main class="main">
+
+        <header class="topbar">
+            <div class="topbar-flex">
+                <div class="topbar-title">
+                    <button type="button" class="menu-toggle" id="menuToggle" title="Abrir menu">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </button>
+
+                    <div>
+                        <h1>Meus CNPJs Usados</h1>
+                        <p>Histórico individual de empresas utilizadas por {{ usuario_logado }}</p>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <section class="cards">
+            <div class="card">
+                <h3>Total Usados</h3>
+                <p>{{ total_empresas }}</p>
+            </div>
+
+            <div class="card">
+                <h3>Favoritos</h3>
+                <p>{{ total_favoritos }}</p>
+            </div>
+
+            <div class="card">
+                <h3>Capital Médio</h3>
+                <p>R$ {{ "{:,.2f}".format(capital_medio).replace(",", "X").replace(".", ",").replace("X", ".") }}</p>
+            </div>
+
+            <div class="card">
+                <h3>Usuário</h3>
+                <p>{{ usuario_logado }}</p>
+            </div>
+        </section>
+
+        <section class="filtros">
+            <h2>Filtros dos meus usados</h2>
+
+            <form action="/usados" method="post">
+
+                <input type="hidden" name="pagina" value="1">
+
+                <div class="grid-filtros">
+
+                    <div>
+                        <label>Busca</label>
+                        <input
+                            type="text"
+                            name="busca"
+                            value="{{ filtros.busca }}"
+                            placeholder="CNPJ, empresa, sócio, email ou telefone"
+                        >
+                    </div>
+
+                    <div>
+                        <label>Status BM</label>
+                        <select name="status_bm">
+                            <option value="">Todos</option>
+                            {% for status in status_opcoes %}
+                                {% if status != "Disponível" %}
+                                <option value="{{ status }}" {% if filtros.status_bm == status %}selected{% endif %}>
+                                    {{ status }}
+                                </option>
+                                {% endif %}
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div>
+                        <label>UF</label>
+                        <select name="uf">
+                            <option value="">Todos</option>
+                            {% for uf in ufs %}
+                            <option value="{{ uf }}" {% if filtros.uf == uf %}selected{% endif %}>{{ uf }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div>
+                        <label>Categoria</label>
+                        <select name="categoria">
+                            <option value="">Todas</option>
+                            {% for categoria in categorias %}
+                            <option value="{{ categoria }}" {% if filtros.categoria == categoria %}selected{% endif %}>
+                                {{ categoria }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div>
+                        <label>Registros por página</label>
+                        <select name="por_pagina">
+                            <option value="25" {% if filtros.por_pagina == "25" %}selected{% endif %}>25</option>
+                            <option value="50" {% if filtros.por_pagina == "50" %}selected{% endif %}>50</option>
+                            <option value="100" {% if filtros.por_pagina == "100" %}selected{% endif %}>100</option>
+                            <option value="200" {% if filtros.por_pagina == "200" %}selected{% endif %}>200</option>
+                        </select>
+                    </div>
+
+                </div>
+
+                <div class="acoes">
+                    <button type="submit">🔎 Filtrar Usados</button>
+
+                    <button
+                        type="submit"
+                        formaction="/exportar"
+                        formmethod="post"
+                        class="btn-exportar"
+                    >
+                        📥 Exportar Excel
+                    </button>
+                </div>
+
+            </form>
+        </section>
+
+        <section class="tabela">
+            <div class="tabela-topo">
+                <h2>Histórico de CNPJs usados</h2>
+                <span>
+                    Página {{ paginacao.pagina_atual }} de {{ paginacao.total_paginas }}
+                    · {{ total_empresas }} registros encontrados
+                </span>
+            </div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>CNPJ</th>
+                        <th>Razão Social</th>
+                        <th>Status BM</th>
+                        <th>Capital</th>
+                        <th>UF</th>
+                        <th>Município</th>
+                        <th>Telefone</th>
+                        <th>Email</th>
+                        <th>Sócio</th>
+                        <th>Ações</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    {% for empresa in empresas %}
+                    <tr class="linha-utilizada">
+                        <td>{{ empresa.cnpj_formatado }}</td>
+
+                        <td>
+                            {{ empresa.razao_social }}
+
+                            <div class="aviso-bm">
+                                ⚠ Você já utilizou este CNPJ para verificação.
+                            </div>
+
+                            {% if empresa.usado_por %}
+                            <div class="aviso-global">
+                                🌐 Histórico global: {{ empresa.usado_por }}
+                            </div>
+                            {% endif %}
+                        </td>
+
+                        <td>
+                            <select
+                                class="select-status-bm"
+                                data-cnpj="{{ empresa.cnpj_limpo }}"
+                            >
+                                {% for status in status_opcoes %}
+                                <option
+                                    value="{{ status }}"
+                                    {% if empresa.status_bm == status %}selected{% endif %}
+                                >
+                                    {{ status }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </td>
+
+                        <td>{{ empresa.capital_formatado }}</td>
+                        <td>{{ empresa.uf }}</td>
+                        <td>{{ empresa.municipio_nome }}</td>
+                        <td>{{ empresa.telefone_formatado }}</td>
+                        <td>{{ empresa.email }}</td>
+                        <td>{{ empresa.nome_socio }}</td>
+
+                        <td class="acoes-tabela">
+                            <a
+                                href="/empresa/{{ empresa.cnpj_limpo }}"
+                                class="btn-acao btn-ver"
+                                title="Ver empresa"
+                            >
+                                👁
+                            </a>
+
+                            <button
+                                class="btn-acao btn-copiar"
+                                title="Copiar dados"
+                                data-texto="Empresa: {{ empresa.razao_social }} | CNPJ: {{ empresa.cnpj_formatado }} | Meu Status BM: {{ empresa.status_bm }} | Histórico global: {{ empresa.usado_por }} | Sócio: {{ empresa.nome_socio }} | Telefone: {{ empresa.telefone_formatado }} | Email: {{ empresa.email }} | Cidade: {{ empresa.municipio_nome }} - {{ empresa.uf }} | Capital: {{ empresa.capital_formatado }}"
+                            >
+                                📋
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+
+            <div class="paginacao">
+
+                <form action="/usados" method="post">
+                    <input type="hidden" name="busca" value="{{ filtros.busca }}">
+                    <input type="hidden" name="status_bm" value="{{ filtros.status_bm }}">
+                    <input type="hidden" name="uf" value="{{ filtros.uf }}">
+                    <input type="hidden" name="categoria" value="{{ filtros.categoria }}">
+                    <input type="hidden" name="por_pagina" value="{{ filtros.por_pagina }}">
+                    <input type="hidden" name="pagina" value="{{ paginacao.pagina_anterior }}">
+
+                    <button class="btn-pagina" type="submit" {% if not paginacao.tem_anterior %}disabled{% endif %}>
+                        ◀ Anterior
+                    </button>
+                </form>
+
+                <div class="paginas">
+                    {% for pagina in paginacao.paginas %}
+                    <form action="/usados" method="post">
+                        <input type="hidden" name="busca" value="{{ filtros.busca }}">
+                        <input type="hidden" name="status_bm" value="{{ filtros.status_bm }}">
+                        <input type="hidden" name="uf" value="{{ filtros.uf }}">
+                        <input type="hidden" name="categoria" value="{{ filtros.categoria }}">
+                        <input type="hidden" name="por_pagina" value="{{ filtros.por_pagina }}">
+                        <input type="hidden" name="pagina" value="{{ pagina }}">
+
+                        <button
+                            type="submit"
+                            class="btn-numero {% if pagina == paginacao.pagina_atual %}ativo{% endif %}"
+                        >
+                            {{ pagina }}
+                        </button>
+                    </form>
+                    {% endfor %}
+                </div>
+
+                <form action="/usados" method="post">
+                    <input type="hidden" name="busca" value="{{ filtros.busca }}">
+                    <input type="hidden" name="status_bm" value="{{ filtros.status_bm }}">
+                    <input type="hidden" name="uf" value="{{ filtros.uf }}">
+                    <input type="hidden" name="categoria" value="{{ filtros.categoria }}">
+                    <input type="hidden" name="por_pagina" value="{{ filtros.por_pagina }}">
+                    <input type="hidden" name="pagina" value="{{ paginacao.pagina_proxima }}">
+
+                    <button class="btn-pagina" type="submit" {% if not paginacao.tem_proxima %}disabled{% endif %}>
+                        Próxima ▶
+                    </button>
+                </form>
+
+            </div>
+        </section>
+
+    </main>
+
+</div>
+
+<script>
+    const menuToggle = document.getElementById("menuToggle");
+    const sidebarOverlay = document.getElementById("sidebarOverlay");
+
+    function fecharMenuMobile() {
+        document.body.classList.remove("sidebar-aberta");
+    }
+
+    function alternarMenu() {
+        if (window.innerWidth <= 1000) {
+            document.body.classList.toggle("sidebar-aberta");
+        } else {
+            document.body.classList.toggle("sidebar-fechada");
+        }
+    }
+
+    if (menuToggle) {
+        menuToggle.addEventListener("click", alternarMenu);
+    }
+
+    if (sidebarOverlay) {
+        sidebarOverlay.addEventListener("click", fecharMenuMobile);
+    }
+
+    document.addEventListener("click", function(event) {
+        const botaoCopiar = event.target.closest(".btn-copiar");
+
+        if (!botaoCopiar) {
+            return;
+        }
+
+        const texto = botaoCopiar.getAttribute("data-texto");
+
+        navigator.clipboard.writeText(texto).then(function() {
+            botaoCopiar.textContent = "✅";
+
+            setTimeout(function() {
+                botaoCopiar.textContent = "📋";
+            }, 1200);
+        });
+    });
+
+    document.addEventListener("change", function(event) {
+        const seletorStatus = event.target.closest(".select-status-bm");
+
+        if (!seletorStatus) {
+            return;
+        }
+
+        const cnpj = seletorStatus.getAttribute("data-cnpj");
+        const novoStatus = seletorStatus.value;
+
+        const formData = new FormData();
+        formData.append("status_bm", novoStatus);
+
+        fetch("/status-bm/" + cnpj, {
+            method: "POST",
+            body: formData
+        })
+        .then(function(resposta) {
+            return resposta.json();
+        })
+        .then(function(dados) {
+            if (!dados.ok) {
+                return;
+            }
+
+            if (novoStatus === "Disponível") {
+                window.location.reload();
+            }
+        });
+    });
+</script>
+
+</body>
+</html>

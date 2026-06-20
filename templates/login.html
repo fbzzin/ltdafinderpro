@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Login - LtdaFinder Pro</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<div class="login-page">
+
+    <div class="login-card">
+
+        <img
+            src="{{ url_for('static', filename='logo.png') }}"
+            alt="LtdaFinder Pro"
+            class="login-logo"
+        >
+
+        <h1>Acesso Restrito</h1>
+        <p>Entre para acessar o painel operacional.</p>
+
+        {% if erro %}
+        <div class="login-erro">
+            {{ erro }}
+        </div>
+        {% endif %}
+
+        <form method="post" action="/login">
+
+            <label>Usuário</label>
+            <input
+                type="text"
+                name="usuario"
+                placeholder="Digite seu usuário"
+                required
+            >
+
+            <label>Senha</label>
+            <input
+                type="password"
+                name="senha"
+                placeholder="Digite sua senha"
+                required
+            >
+
+            <button type="submit">
+                Entrar
+            </button>
+
+        </form>
+
+        <div class="login-links">
+            Ainda não possui conta?
+
+            <a href="/registrar">
+                Registrar-se
+            </a>
+        </div>
+
+        <div class="login-info">
+            LtdaFinder Pro · Operação BM
+        </div>
+
+    </div>
+
+</div>
+
+</body>
+</html>

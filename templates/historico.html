@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Histórico da Operação - LTDAFinder Pro</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+<div class="layout">
+
+    <aside class="sidebar">
+
+        <div>
+
+            <div class="sidebar-logo">
+                <img src="{{ url_for('static', filename='logo.png') }}">
+            </div>
+
+            <div class="usuario-box">
+                <div>
+                    <span>Usuário logado</span>
+                    <strong>👤 {{ usuario_logado }}</strong>
+                </div>
+            </div>
+
+            <nav class="menu">
+                <a class="menu-item" href="/">🔎 Minerar CNPJs</a>
+                <a class="menu-item" href="/master">📊 Dashboard Master</a>
+                <a class="menu-item" href="/usados">📌 Meus CNPJs Usados</a>
+                <a class="menu-item" href="/favoritos">⭐ Favoritos</a>
+                <a class="menu-item active" href="/historico">📜 Histórico</a>
+                <a class="menu-item" href="/estatisticas">📈 Estatísticas</a>
+                {% if tipo_usuario == "admin" %}
+                <a class="menu-item" href="/admin">👑 Painel Admin</a>
+                {% endif %}
+                <a class="menu-item sair" href="/logout">🚪 Sair</a>
+            </nav>
+
+        </div>
+
+        <div class="sidebar-footer">
+            Versão Local <strong>V1.0</strong>
+        </div>
+
+    </aside>
+
+    <main class="main">
+
+        <header class="topbar">
+            <div class="topbar-flex">
+                <div class="topbar-title">
+
+                    <button type="button" class="menu-toggle" id="menuToggle">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </button>
+
+                    <div>
+                        <h1>📜 Histórico da Operação</h1>
+                        <p>Registro completo das alterações realizadas.</p>
+                    </div>
+
+                </div>
+            </div>
+        </header>
+
+        <section class="tabela">
+
+            <div class="tabela-topo">
+                <h2>Últimos Eventos</h2>
+                <span>{{ historico|length }} registros</span>
+            </div>
+
+            <table>
+
+                <thead>
+                    <tr>
+                        <th>Data</th>
+                        <th>Usuário</th>
+                        <th>CNPJ</th>
+                        <th>Status Anterior</th>
+                        <th>Status Novo</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+
+                    {% for item in historico %}
+
+                    <tr>
+
+                        <td>{{ item.data }}</td>
+
+                        <td>{{ item.usuario }}</td>
+
+                        <td>{{ item.cnpj }}</td>
+
+                        <td>{{ item.status_antigo }}</td>
+
+                        <td>{{ item.status_novo }}</td>
+
+                    </tr>
+
+                    {% endfor %}
+
+                </tbody>
+
+            </table>
+
+        </section>
+
+    </main>
+
+</div>
+
+<script>
+
+const menuToggle = document.getElementById("menuToggle");
+const sidebarOverlay = document.getElementById("sidebarOverlay");
+
+function fecharMenuMobile() {
+    document.body.classList.remove("sidebar-aberta");
+}
+
+function alternarMenu() {
+    if (window.innerWidth <= 1000) {
+        document.body.classList.toggle("sidebar-aberta");
+    } else {
+        document.body.classList.toggle("sidebar-fechada");
+    }
+}
+
+if (menuToggle) {
+    menuToggle.addEventListener("click", alternarMenu);
+}
+
+if (sidebarOverlay) {
+    sidebarOverlay.addEventListener("click", fecharMenuMobile);
+}
+
+</script>
+
+</body>
+</html>

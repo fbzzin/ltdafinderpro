@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Usuário {{ usuario_alvo }} - LTDAFinder Pro</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<div class="layout">
+
+    <aside class="sidebar">
+
+        <div>
+
+            <div class="sidebar-logo">
+                <img src="{{ url_for('static', filename='logo.png') }}">
+            </div>
+
+            <div class="usuario-box">
+                <div>
+                    <span>Usuário logado</span>
+                    <strong>👤 {{ usuario_logado }}</strong>
+                </div>
+            </div>
+
+            <nav class="menu">
+                <a class="menu-item" href="/">🔎 Minerar CNPJs</a>
+                <a class="menu-item" href="/master">📊 Dashboard Master</a>
+                <a class="menu-item" href="/usados">📌 Meus CNPJs Usados</a>
+                <a class="menu-item" href="/favoritos">⭐ Favoritos</a>
+                <a class="menu-item" href="/estatisticas">📈 Estatísticas</a>
+                <a class="menu-item active" href="/admin">👑 Painel Admin</a>
+                <a class="menu-item sair" href="/logout">🚪 Sair</a>
+            </nav>
+
+        </div>
+
+        <div class="sidebar-footer">
+            Versão Local <strong>V1.0</strong>
+        </div>
+
+    </aside>
+
+    <main class="main">
+
+        <div class="topbar">
+            <h1>👤 Usuário: {{ usuario_alvo }}</h1>
+            <p>Controle individual de desempenho e CNPJs utilizados.</p>
+        </div>
+
+        <section class="cards">
+
+            <div class="card">
+                <h3>Total BMs</h3>
+                <p>{{ estatistica.total }}</p>
+            </div>
+
+            <div class="card">
+                <h3>Sucessos</h3>
+                <p>{{ estatistica.sucesso }}</p>
+            </div>
+
+            <div class="card">
+                <h3>Taxa</h3>
+                <p>{{ "%.1f"|format(estatistica.taxa_sucesso) }}%</p>
+            </div>
+
+            <div class="card">
+                <h3>Tipo</h3>
+                <p>{{ dados_usuario.tipo }}</p>
+            </div>
+
+        </section>
+
+        <section class="filtros">
+
+            <h2>Alterar dados do usuário</h2>
+
+            <form method="POST" action="/admin">
+
+                <input type="hidden" name="acao" value="alterar_usuario">
+                <input type="hidden" name="usuario" value="{{ usuario_alvo }}">
+
+                <div class="grid-filtros">
+
+                    <div>
+                        <label>Nova senha</label>
+                        <input name="senha" placeholder="Deixe em branco para manter">
+                    </div>
+
+                    <div>
+                        <label>Tipo</label>
+                        <select name="tipo">
+                            <option value="equipe" {% if dados_usuario.tipo == "equipe" %}selected{% endif %}>Equipe</option>
+                            <option value="admin" {% if dados_usuario.tipo == "admin" %}selected{% endif %}>Admin</option>
+                        </select>
+                    </div>
+
+                </div>
+
+                <div class="acoes">
+                    <button type="submit">Salvar usuário</button>
+                </div>
+
+            </form>
+
+            {% if usuario_alvo != usuario_logado and usuario_alvo != "fabiano" %}
+            <form method="POST" action="/admin" style="margin-top:15px;">
+
+                <input type="hidden" name="acao" value="excluir_usuario">
+                <input type="hidden" name="usuario" value="{{ usuario_alvo }}">
+
+                <div class="acoes">
+                    <button type="submit" class="btn-exportar">
+                        Excluir usuário
+                    </button>
+                </div>
+
+            </form>
+            {% endif %}
+
+        </section>
+
+        <section class="tabela">
+
+            <div class="tabela-topo">
+                <h2>Empresas Utilizadas</h2>
+                <span>{{ empresas|length }} registros encontrados</span>
+            </div>
+
+            <table>
+
+                <thead>
+                    <tr>
+                        <th>CNPJ</th>
+                        <th>Razão Social</th>
+                        <th>Capital</th>
+                        <th>UF</th>
+                        <th>Município</th>
+                        <th>Status Atual</th>
+                        <th>Alterar Status</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+
+                    {% for empresa in empresas %}
+
+                    <tr class="linha-utilizada">
+
+                        <td>{{ empresa.cnpj_formatado }}</td>
+
+                        <td>{{ empresa.razao_social }}</td>
+
+                        <td>{{ empresa.capital_formatado }}</td>
+
+                        <td>{{ empresa.uf }}</td>
+
+                        <td>{{ empresa.municipio_nome }}</td>
+
+                        <td>{{ empresa.status_bm }}</td>
+
+                        <td>
+                            <form method="POST" action="/admin/status/{{ usuario_alvo }}/{{ empresa.cnpj_limpo }}">
+
+                                <select name="status_bm">
+                                    {% for status in status_opcoes %}
+                                    <option
+                                        value="{{ status }}"
+                                        {% if status == empresa.status_bm %}selected{% endif %}
+                                    >
+                                        {{ status }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+
+                                <button type="submit">
+                                    Salvar
+                                </button>
+
+                            </form>
+                        </td>
+
+                    </tr>
+
+                    {% endfor %}
+
+                    {% if empresas|length == 0 %}
+                    <tr>
+                        <td colspan="7">Este usuário ainda não utilizou nenhum CNPJ.</td>
+                    </tr>
+                    {% endif %}
+
+                </tbody>
+
+            </table>
+
+        </section>
+
+    </main>
+
+</div>
+
+</body>
+</html>

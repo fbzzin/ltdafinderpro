@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ empresa.razao_social }} - LtdaFinder Pro</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+<div class="layout">
+
+    <aside class="sidebar">
+
+        <div>
+
+            <div class="sidebar-logo">
+                <img src="{{ url_for('static', filename='logo.png') }}">
+            </div>
+
+            <div class="usuario-box">
+                <div>
+                    <span>Usuário logado</span>
+                    <strong>👤 {{ usuario_logado }}</strong>
+                </div>
+            </div>
+
+            <nav class="menu">
+                <a class="menu-item" href="/">🔎 Minerar CNPJs</a>
+                <a class="menu-item" href="/master">📊 Dashboard Master</a>
+                <a class="menu-item" href="/usados">📌 Meus CNPJs Usados</a>
+                <a class="menu-item" href="/favoritos">⭐ Favoritos</a>
+                <a class="menu-item" href="/estatisticas">📈 Estatísticas</a>
+                {% if tipo_usuario == "admin" %}
+                <a class="menu-item" href="/admin">👑 Painel Admin</a>
+                {% endif %}
+                <a class="menu-item sair" href="/logout">🚪 Sair</a>
+            </nav>
+
+        </div>
+
+        <div class="sidebar-footer">
+            Versão Local <strong>V1.0</strong>
+        </div>
+
+    </aside>
+
+    <main class="main">
+
+        <div class="topbar">
+            <div class="topbar-flex">
+                <div class="topbar-title">
+                    <button type="button" class="menu-toggle" id="menuToggle" title="Abrir menu">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </button>
+
+                    <div>
+                        <h1>{{ empresa.razao_social }}</h1>
+                        <p>Informações completas da empresa</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="cards">
+
+            <div class="card">
+                <h3>CNPJ</h3>
+                <p>{{ empresa.cnpj_formatado }}</p>
+            </div>
+
+            <div class="card">
+                <h3>Capital Social</h3>
+                <p>{{ empresa.capital_formatado }}</p>
+            </div>
+
+            <div class="card">
+                <h3>Cidade</h3>
+                <p>{{ empresa.municipio_nome }} - {{ empresa.uf }}</p>
+            </div>
+
+            <div class="card">
+                <h3>Status BM</h3>
+                <p>{{ empresa.status_bm }}</p>
+            </div>
+
+        </div>
+
+        <section class="tabela">
+
+            <h2>Dados da Empresa</h2>
+
+            <table>
+
+                <tr>
+                    <th>Razão Social</th>
+                    <td>{{ empresa.razao_social }}</td>
+                </tr>
+
+                <tr>
+                    <th>Nome Fantasia</th>
+                    <td>{{ empresa.nome_fantasia }}</td>
+                </tr>
+
+                <tr>
+                    <th>Sócio</th>
+                    <td>{{ empresa.nome_socio }}</td>
+                </tr>
+
+                <tr>
+                    <th>Telefone</th>
+                    <td>{{ empresa.telefone_formatado }}</td>
+                </tr>
+
+                <tr>
+                    <th>Email</th>
+                    <td>{{ empresa.email }}</td>
+                </tr>
+
+                <tr>
+                    <th>Sexo Provável</th>
+                    <td>{{ empresa.sexo_provavel }}</td>
+                </tr>
+
+                <tr>
+                    <th>CNAE</th>
+                    <td>{{ empresa.cnae_principal }}</td>
+                </tr>
+
+                <tr>
+                    <th>Categoria</th>
+                    <td>{{ empresa.categoria_cnae }}</td>
+                </tr>
+
+                <tr>
+                    <th>Data de Abertura</th>
+                    <td>{{ empresa.data_inicio }}</td>
+                </tr>
+
+                <tr>
+                    <th>Situação Cadastral</th>
+                    <td>{{ empresa.situacao_cadastral }}</td>
+                </tr>
+
+                <tr>
+                    <th>Histórico Global</th>
+                    <td>
+                        {% if empresa.usado_por %}
+                            🌐 {{ empresa.usado_por }}
+                        {% else %}
+                            Nenhum histórico encontrado
+                        {% endif %}
+                    </td>
+                </tr>
+
+            </table>
+
+            <br>
+
+            {% if empresa.bm_utilizada %}
+            <div class="aviso-bm">
+                ⚠ Você já utilizou este CNPJ para verificação.
+            </div>
+            {% endif %}
+
+            <br>
+
+            <a href="/">
+                <button>
+                    ← Voltar para Minerador
+                </button>
+            </a>
+
+        </section>
+
+    </main>
+
+</div>
+
+<script>
+    const menuToggle = document.getElementById("menuToggle");
+    const sidebarOverlay = document.getElementById("sidebarOverlay");
+
+    function fecharMenuMobile() {
+        document.body.classList.remove("sidebar-aberta");
+    }
+
+    function alternarMenu() {
+        if (window.innerWidth <= 1000) {
+            document.body.classList.toggle("sidebar-aberta");
+        } else {
+            document.body.classList.toggle("sidebar-fechada");
+        }
+    }
+
+    if (menuToggle) {
+        menuToggle.addEventListener("click", alternarMenu);
+    }
+
+    if (sidebarOverlay) {
+        sidebarOverlay.addEventListener("click", fecharMenuMobile);
+    }
+</script>
+
+</body>
+</html>
