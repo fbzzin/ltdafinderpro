@@ -22,7 +22,7 @@ from database_utils import (
 app = Flask(__name__)
 app.secret_key = "ltdafinder-pro-chave-local"
 criar_banco()
-PASTA_BASE = Path(r"C:\Users\Dutra\Desktop\minerador-cnpj")
+PASTA_BASE = Path(__file__).resolve().parent
 PASTA_RESULTADOS = PASTA_BASE / "resultados"
 PASTA_DOWNLOADS = PASTA_BASE / "downloads"
 
