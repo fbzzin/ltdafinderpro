@@ -1,7 +1,7 @@
 import sqlite3
 from pathlib import Path
 
-PASTA_BASE = Path(r"C:\Users\Dutra\Desktop\minerador-cnpj")
+PASTA_BASE = Path(__file__).resolve().parent
 BANCO = PASTA_BASE / "database.db"
 
 
