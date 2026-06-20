@@ -7,7 +7,7 @@ from datetime import datetime
 
 from backup_utils import criar_backup
 from historico_utils import carregar_historico, registrar_evento
-
+from db import criar_banco
 from database_utils import (
     obter_usuarios,
     obter_favoritos,
@@ -21,7 +21,7 @@ from database_utils import (
     )
 app = Flask(__name__)
 app.secret_key = "ltdafinder-pro-chave-local"
-
+criar_banco()
 PASTA_BASE = Path(r"C:\Users\Dutra\Desktop\minerador-cnpj")
 PASTA_RESULTADOS = PASTA_BASE / "resultados"
 PASTA_DOWNLOADS = PASTA_BASE / "downloads"
