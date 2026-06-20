@@ -2,7 +2,6 @@ __pycache__/
 *.pyc
 
 downloads/
-resultados/
 
 database.db
 
@@ -11,7 +10,6 @@ venv/
 env/
 
 *.zip
-*.xlsx
 *.csv
 
 .DS_Store
