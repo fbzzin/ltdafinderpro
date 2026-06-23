@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>Perfis Meta - LtdaFinder Pro</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+<div class="layout">
+
+    <aside class="sidebar">
+
+        <div>
+            <div class="sidebar-logo">
+                <img src="{{ url_for('static', filename='logo.png') }}">
+            </div>
+
+            <div class="usuario-box">
+                <div>
+                    <span>Usuário logado</span>
+                    <strong>👤 {{ usuario_logado }}</strong>
+                </div>
+            </div>
+
+            <nav class="menu">
+                <a class="menu-item" href="/">🔎 Minerar CNPJs</a>
+                <a class="menu-item" href="/master">📊 Dashboard Master</a>
+                <a class="menu-item" href="/usados">📌 Meus CNPJs Usados</a>
+                <a class="menu-item" href="/favoritos">⭐ Favoritos</a>
+                <a class="menu-item active" href="/perfis-meta">👤 Perfis Meta</a>
+                <a class="menu-item" href="/relatorios-bm">📄 Relatórios BM</a>
+                <a class="menu-item" href="/estatisticas">📈 Estatísticas</a>
+                {% if tipo_usuario == "admin" %}
+                <a class="menu-item" href="/admin">👑 Painel Admin</a>
+                {% endif %}
+                <a class="menu-item sair" href="/logout">🚪 Sair</a>
+            </nav>
+        </div>
+
+        <div class="sidebar-footer">
+            Versão Local <strong>V1.0</strong>
+        </div>
+
+    </aside>
+
+    <main class="main">
+
+        <header class="topbar">
+            <div class="topbar-flex">
+                <div class="topbar-title">
+                    <button type="button" class="menu-toggle" id="menuToggle" title="Abrir menu">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </button>
+
+                    <div>
+                        <h1>Perfis Meta</h1>
+                        <p>Controle operacional de perfil, BM e CNPJ vinculado. Adeus Trello, foi... uma coisa.</p>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        {% if mensagem %}
+        <div class="login-sucesso">{{ mensagem }}</div>
+        {% endif %}
+
+        {% if erro %}
+        <div class="login-erro">{{ erro }}</div>
+        {% endif %}
+
+        <section class="cards">
+            <div class="card">
+                <h3>Total de Perfis</h3>
+                <p>{{ resumo_perfis.total }}</p>
+            </div>
+
+            <div class="card">
+                <h3>Com CNPJ</h3>
+                <p>{{ resumo_perfis.com_empresa }}</p>
+            </div>
+
+            <div class="card">
+                <h3>Sucesso</h3>
+                <p>{{ resumo_perfis.sucesso }}</p>
+            </div>
+
+            <div class="card">
+                <h3>Taxa de Sucesso</h3>
+                <p>{{ "%.1f"|format(resumo_perfis.taxa_sucesso) }}%</p>
+            </div>
+        </section>
+
+        <section class="filtros">
+            <h2>Novo Perfil Meta</h2>
+
+            <form action="/perfis-meta" method="post">
+                <input type="hidden" name="acao" value="criar_perfil">
+
+                <div class="grid-filtros">
+                    <div>
+                        <label>Nome do Perfil</label>
+                        <input type="text" name="nome" placeholder="Perfil de Teste - 01" required>
+                    </div>
+
+                    <div>
+                        <label>CNPJ com status usado</label>
+                        <select name="cnpj_limpo">
+                            <option value="">Criar sem vincular agora</option>
+                            {% for empresa in empresas_disponiveis %}
+                            <option value="{{ empresa.cnpj_limpo }}">
+                                {{ empresa.razao_social }} - {{ empresa.cnpj_formatado }} | {{ empresa.status_bm }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div>
+                        <label>Proxy</label>
+                        <input type="text" name="proxy" placeholder="BR-SP-01">
+                    </div>
+
+                    <div>
+                        <label>Navegador</label>
+                        <input type="text" name="navegador" placeholder="AdsPower, Chrome, Dolphin...">
+                    </div>
+
+                    <div>
+                        <label>Conta Facebook</label>
+                        <input type="text" name="conta_facebook" placeholder="email ou identificação da conta">
+                    </div>
+
+                    <div>
+                        <label>Senha Facebook</label>
+                        <input type="text" name="senha_facebook" placeholder="senha do perfil">
+                    </div>
+
+                    <div>
+                        <label>Observações</label>
+                        <input type="text" name="observacoes" placeholder="Gupshup, proxy, etapa atual...">
+                    </div>
+                </div>
+
+                <div class="acoes">
+                    <button type="submit">➕ Criar Perfil</button>
+                </div>
+            </form>
+        </section>
+
+        <section class="filtros">
+            <h2>Filtros</h2>
+
+            <form action="/perfis-meta" method="get">
+                <div class="grid-filtros">
+                    <div>
+                        <label>Busca</label>
+                        <input type="text" name="busca" value="{{ filtros.busca }}" placeholder="Perfil, CNPJ, empresa ou conta">
+                    </div>
+
+                    <div>
+                        <label>Status BM</label>
+                        <select name="status">
+                            <option value="">Todos</option>
+                            {% for status in status_opcoes %}
+                                {% if status != "Disponível" %}
+                                <option value="{{ status }}" {% if filtros.status == status %}selected{% endif %}>
+                                    {{ status }}
+                                </option>
+                                {% endif %}
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div>
+                        <label>Data inicial</label>
+                        <input type="date" name="data_inicio" value="{{ filtros.data_inicio }}">
+                    </div>
+
+                    <div>
+                        <label>Data final</label>
+                        <input type="date" name="data_fim" value="{{ filtros.data_fim }}">
+                    </div>
+                </div>
+
+                <div class="acoes">
+                    <button type="submit">🔎 Filtrar Perfis</button>
+                    <a href="/perfis-meta" class="btn-voltar-empresa">Limpar filtros</a>
+                </div>
+            </form>
+        </section>
+
+        <section class="tabela tabela-moderna">
+            <div class="tabela-topo">
+                <h2>Perfis cadastrados</h2>
+                <span>{{ perfis|length }} perfil(is) encontrado(s)</span>
+            </div>
+
+            <div class="resultado-lista">
+
+                {% for perfil in perfis %}
+                <div class="empresa-row {% if perfil.cnpj_limpo %}empresa-row-usada{% endif %}">
+
+                    <div class="empresa-col empresa-identidade">
+                        <div class="empresa-cnpj">
+                            👤 {{ perfil.nome }}
+                        </div>
+
+                        <div class="empresa-nome">
+                            {% if perfil.razao_social %}
+                                {{ perfil.razao_social }}
+                            {% else %}
+                                Sem CNPJ vinculado
+                            {% endif %}
+                        </div>
+
+                        <div class="empresa-meta">
+                            {% if perfil.cnpj_formatado %}
+                            <span>🧾 {{ perfil.cnpj_formatado }}</span>
+                            {% endif %}
+
+                            {% if perfil.uf %}
+                            <span>📍 {{ perfil.municipio_nome }} - {{ perfil.uf }}</span>
+                            {% endif %}
+
+                            <span>📅 {{ perfil.criado_em }}</span>
+                        </div>
+                    </div>
+
+                    <div class="empresa-col empresa-info-bloco">
+                        <div class="label-mini">Proxy</div>
+                        <strong>{{ perfil.proxy if perfil.proxy else "Não informado" }}</strong>
+
+                        <div class="label-mini espaco-mini">Navegador</div>
+                        <small>{{ perfil.navegador if perfil.navegador else "Não informado" }}</small>
+                    </div>
+
+                    <div class="empresa-col empresa-info-bloco">
+                        <div class="label-mini">Conta Facebook</div>
+                        <strong>{{ perfil.conta_facebook if perfil.conta_facebook else "Não informada" }}</strong>
+
+                        <div class="label-mini espaco-mini">Senha Facebook</div>
+                        <small>{{ perfil.senha_facebook if perfil.senha_facebook else "Não informada" }}</small>
+
+                        <div class="label-mini espaco-mini">Observações</div>
+                        <small>{{ perfil.observacoes if perfil.observacoes else "Sem observações" }}</small>
+                    </div>
+
+                    <div class="empresa-col empresa-status-col">
+                        <div class="label-mini">Status BM</div>
+
+                        {% if perfil.cnpj_limpo %}
+                        <select class="select-status-bm select-status-perfil" data-perfil="{{ perfil.id }}">
+                            {% for status in status_opcoes %}
+                            <option value="{{ status }}" {% if perfil.status_bm == status %}selected{% endif %}>
+                                {{ status }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        {% else %}
+                        <strong>Sem CNPJ</strong>
+                        {% endif %}
+                    </div>
+
+                    <div class="empresa-col empresa-status-col">
+                        <div class="label-mini">Vincular CNPJ</div>
+
+                        {% if not perfil.cnpj_limpo %}
+                        <form action="/perfis-meta" method="post">
+                            <input type="hidden" name="acao" value="vincular_cnpj">
+                            <input type="hidden" name="perfil_id" value="{{ perfil.id }}">
+
+                            <select name="cnpj_limpo" class="select-status-bm">
+                                {% for empresa in empresas_disponiveis %}
+                                <option value="{{ empresa.cnpj_limpo }}">
+                                    {{ empresa.razao_social }} - {{ empresa.cnpj_formatado }} | {{ empresa.status_bm }}
+                                </option>
+                                {% endfor %}
+                            </select>
+
+                            <div style="margin-top:10px;">
+                                <button type="submit">Vincular</button>
+                            </div>
+                        </form>
+                        {% else %}
+                        <strong>CNPJ já vinculado</strong>
+                        <small>Este CNPJ já está reservado neste perfil.</small>
+                        {% endif %}
+                    </div>
+
+                    <div class="empresa-col empresa-acoes-col">
+                        <div class="acoes-tabela">
+                            {% if perfil.cnpj_limpo %}
+                            <a href="/empresa/{{ perfil.cnpj_limpo }}" class="btn-acao btn-ver" title="Ver empresa">👁</a>
+                            {% endif %}
+
+                            <button
+                                type="button"
+                                class="btn-acao btn-editar-perfil"
+                                title="Editar perfil"
+                                data-perfil="{{ perfil.id }}"
+                                style="background:linear-gradient(135deg,#facc15,#f97316);"
+                            >
+                                ✏️
+                            </button>
+
+                            <button
+                                type="button"
+                                class="btn-acao btn-copiar"
+                                title="Copiar dados"
+                                data-texto="Perfil: {{ perfil.nome }} | Empresa: {{ perfil.razao_social }} | CNPJ: {{ perfil.cnpj_formatado }} | Status BM: {{ perfil.status_bm }} | Proxy: {{ perfil.proxy }} | Navegador: {{ perfil.navegador }} | Conta Facebook: {{ perfil.conta_facebook }} | Senha Facebook: {{ perfil.senha_facebook }} | Observações: {{ perfil.observacoes }}"
+                            >
+                                📋
+                            </button>
+
+                            <form action="/perfis-meta/excluir/{{ perfil.id }}" method="post" onsubmit="return confirm('Excluir este perfil? O CNPJ não será apagado, só o vínculo do perfil.');">
+                                <button type="submit" class="btn-acao" title="Excluir perfil" style="background:linear-gradient(135deg,#ef4444,#991b1b);">🗑</button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <div class="empresa-col formulario-edicao-perfil" id="editar-perfil-{{ perfil.id }}" style="display:none; grid-column:1 / -1;">
+                        <form action="/perfis-meta" method="post">
+                            <input type="hidden" name="acao" value="editar_perfil">
+                            <input type="hidden" name="perfil_id" value="{{ perfil.id }}">
+
+                            <div class="grid-filtros">
+                                <div>
+                                    <label>Nome do Perfil</label>
+                                    <input type="text" name="nome" value="{{ perfil.nome }}" required>
+                                </div>
+
+                                <div>
+                                    <label>Proxy</label>
+                                    <input type="text" name="proxy" value="{{ perfil.proxy }}">
+                                </div>
+
+                                <div>
+                                    <label>Navegador</label>
+                                    <input type="text" name="navegador" value="{{ perfil.navegador }}">
+                                </div>
+
+                                <div>
+                                    <label>Conta Facebook</label>
+                                    <input type="text" name="conta_facebook" value="{{ perfil.conta_facebook }}">
+                                </div>
+
+                                <div>
+                                    <label>Senha Facebook</label>
+                                    <input type="text" name="senha_facebook" value="{{ perfil.senha_facebook }}">
+                                </div>
+
+                                <div>
+                                    <label>Observações</label>
+                                    <input type="text" name="observacoes" value="{{ perfil.observacoes }}">
+                                </div>
+                            </div>
+
+                            <div class="acoes">
+                                <button type="submit">💾 Salvar Alterações</button>
+                                <button type="button" class="btn-cancelar-edicao" data-perfil="{{ perfil.id }}" style="background:#1b3354;">Cancelar</button>
+                            </div>
+                        </form>
+                    </div>
+
+                </div>
+                {% endfor %}
+
+                {% if perfis|length == 0 %}
+                <div class="empresa-row">
+                    <div class="empresa-col empresa-identidade">
+                        <div class="empresa-nome">Nenhum perfil encontrado.</div>
+                        <div class="empresa-meta">
+                            <span>Marque qualquer status diferente de Disponível no CNPJ e crie seus perfis aqui.</span>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
+            </div>
+        </section>
+
+    </main>
+
+</div>
+
+<script>
+    window.addEventListener("pageshow", function(event) {
+        if (event.persisted) {
+            window.location.reload();
+        }
+    });
+
+    const menuToggle = document.getElementById("menuToggle");
+    const sidebarOverlay = document.getElementById("sidebarOverlay");
+
+    function fecharMenuMobile() {
+        document.body.classList.remove("sidebar-aberta");
+    }
+
+    function alternarMenu() {
+        if (window.innerWidth <= 1000) {
+            document.body.classList.toggle("sidebar-aberta");
+        } else {
+            document.body.classList.toggle("sidebar-fechada");
+        }
+    }
+
+    if (menuToggle) {
+        menuToggle.addEventListener("click", alternarMenu);
+    }
+
+    if (sidebarOverlay) {
+        sidebarOverlay.addEventListener("click", fecharMenuMobile);
+    }
+
+    document.addEventListener("click", function(event) {
+        const botaoCopiar = event.target.closest(".btn-copiar");
+
+        if (!botaoCopiar) {
+            return;
+        }
+
+        const texto = botaoCopiar.getAttribute("data-texto");
+
+        navigator.clipboard.writeText(texto).then(function() {
+            botaoCopiar.textContent = "✅";
+
+            setTimeout(function() {
+                botaoCopiar.textContent = "📋";
+            }, 1200);
+        });
+    });
+
+    document.addEventListener("click", function(event) {
+        const botaoEditar = event.target.closest(".btn-editar-perfil");
+        const botaoCancelar = event.target.closest(".btn-cancelar-edicao");
+
+        if (botaoEditar) {
+            const perfilId = botaoEditar.getAttribute("data-perfil");
+            const formulario = document.getElementById("editar-perfil-" + perfilId);
+
+            if (formulario) {
+                formulario.style.display = formulario.style.display === "none" ? "block" : "none";
+            }
+        }
+
+        if (botaoCancelar) {
+            const perfilId = botaoCancelar.getAttribute("data-perfil");
+            const formulario = document.getElementById("editar-perfil-" + perfilId);
+
+            if (formulario) {
+                formulario.style.display = "none";
+            }
+        }
+    });
+
+    document.addEventListener("change", function(event) {
+        const seletorStatus = event.target.closest(".select-status-perfil");
+
+        if (!seletorStatus) {
+            return;
+        }
+
+        const perfilId = seletorStatus.getAttribute("data-perfil");
+        const novoStatus = seletorStatus.value;
+
+        const formData = new FormData();
+        formData.append("status_bm", novoStatus);
+
+        fetch("/perfis-meta/status/" + perfilId, {
+            method: "POST",
+            body: formData,
+            cache: "no-store",
+            headers: {
+                "Cache-Control": "no-cache"
+            }
+        })
+        .then(function(resposta) {
+            return resposta.json();
+        })
+        .then(function(dados) {
+            if (!dados.ok) {
+                alert(dados.erro || "Erro ao salvar status do perfil.");
+                return;
+            }
+
+            window.location.reload();
+        })
+        .catch(function(erro) {
+            alert("Erro ao salvar status do perfil.");
+            console.error(erro);
+        });
+    });
+</script>
+
+</body>
+</html>

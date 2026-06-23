@@ -1,1 +1,240 @@
-[]
+[
+    {
+        "data": "20/06/2026 14:11:11",
+        "usuario": "fabiano",
+        "cnpj": "42.652.639/0001-00",
+        "status_antigo": "-",
+        "status_novo": "Perfil Meta criado: 61579301365950"
+    },
+    {
+        "data": "20/06/2026 13:40:29",
+        "usuario": "fabiano",
+        "cnpj": "-",
+        "status_antigo": "Perfil Meta",
+        "status_novo": "Perfil atualizado: 61579286726447"
+    },
+    {
+        "data": "20/06/2026 13:39:22",
+        "usuario": "fabiano",
+        "cnpj": "-",
+        "status_antigo": "Perfil Meta",
+        "status_novo": "Perfil atualizado: Metodo novo - 06"
+    },
+    {
+        "data": "20/06/2026 13:38:35",
+        "usuario": "fabiano",
+        "cnpj": "-",
+        "status_antigo": "Perfil Meta",
+        "status_novo": "Perfil atualizado: 61590415866497"
+    },
+    {
+        "data": "20/06/2026 12:30:51",
+        "usuario": "fabiano",
+        "cnpj": "63.029.947/0001-45",
+        "status_antigo": "-",
+        "status_novo": "Perfil Meta criado: 61590415866497"
+    },
+    {
+        "data": "20/06/2026 12:29:20",
+        "usuario": "fabiano",
+        "cnpj": "55.195.907/0001-45",
+        "status_antigo": "-",
+        "status_novo": "Perfil Meta criado: Metodo novo - 06"
+    },
+    {
+        "data": "20/06/2026 12:27:29",
+        "usuario": "fabiano",
+        "cnpj": "52.759.726/0001-06",
+        "status_antigo": "-",
+        "status_novo": "Perfil Meta criado: 61579286726447"
+    },
+    {
+        "data": "20/06/2026 12:26:15",
+        "usuario": "fabiano",
+        "cnpj": "63.299.925/0001-03",
+        "status_antigo": "-",
+        "status_novo": "Perfil Meta criado: 61579257388396"
+    },
+    {
+        "data": "20/06/2026 11:44:17",
+        "usuario": "fabiano",
+        "cnpj": "35.111.275/0001-87",
+        "status_antigo": "BM em Análise",
+        "status_novo": "Disponível"
+    },
+    {
+        "data": "20/06/2026 11:44:13",
+        "usuario": "fabiano",
+        "cnpj": "35.111.275/0001-87",
+        "status_antigo": "Disponível",
+        "status_novo": "BM em Análise"
+    },
+    {
+        "data": "20/06/2026 09:37:17",
+        "usuario": "fabiano",
+        "cnpj": "63.029.947/0001-45",
+        "status_antigo": "Disponível",
+        "status_novo": "BM em Análise"
+    },
+    {
+        "data": "20/06/2026 09:19:32",
+        "usuario": "fabiano",
+        "cnpj": "55.195.907/0001-45",
+        "status_antigo": "Disponível",
+        "status_novo": "BM em Análise"
+    },
+    {
+        "data": "20/06/2026 09:09:48",
+        "usuario": "fabiano",
+        "cnpj": "52.759.726/0001-06",
+        "status_antigo": "Disponível",
+        "status_novo": "BM em Análise"
+    },
+    {
+        "data": "20/06/2026 08:57:22",
+        "usuario": "fabiano",
+        "cnpj": "42.652.639/0001-00",
+        "status_antigo": "Disponível",
+        "status_novo": "Descartado"
+    },
+    {
+        "data": "20/06/2026 08:49:41",
+        "usuario": "fabiano",
+        "cnpj": "63.299.925/0001-03",
+        "status_antigo": "Disponível",
+        "status_novo": "BM em Análise"
+    },
+    {
+        "data": "20/06/2026 08:26:11",
+        "usuario": "fabiano",
+        "cnpj": "50.981.512/0001-54",
+        "status_antigo": "BM em Análise",
+        "status_novo": "Disponível"
+    },
+    {
+        "data": "20/06/2026 08:26:09",
+        "usuario": "fabiano",
+        "cnpj": "50.981.512/0001-54",
+        "status_antigo": "Disponível",
+        "status_novo": "BM em Análise"
+    },
+    {
+        "data": "20/06/2026 08:26:07",
+        "usuario": "fabiano",
+        "cnpj": "51.229.699/0001-05",
+        "status_antigo": "BM em Análise",
+        "status_novo": "Disponível"
+    },
+    {
+        "data": "20/06/2026 08:22:51",
+        "usuario": "fabiano",
+        "cnpj": "51.229.699/0001-05",
+        "status_antigo": "Disponível",
+        "status_novo": "BM em Análise"
+    },
+    {
+        "data": "20/06/2026 08:18:04",
+        "usuario": "fabiano",
+        "cnpj": "51.229.699/0001-05",
+        "status_antigo": "BM em Análise",
+        "status_novo": "Disponível"
+    },
+    {
+        "data": "20/06/2026 08:18:03",
+        "usuario": "fabiano",
+        "cnpj": "51.229.699/0001-05",
+        "status_antigo": "Disponível",
+        "status_novo": "BM em Análise"
+    },
+    {
+        "data": "20/06/2026 01:42:16",
+        "usuario": "fabiano",
+        "cnpj": "51.229.699/0001-05",
+        "status_antigo": "BM em Análise",
+        "status_novo": "Disponível"
+    },
+    {
+        "data": "20/06/2026 01:42:09",
+        "usuario": "fabiano",
+        "cnpj": "51.229.699/0001-05",
+        "status_antigo": "Disponível",
+        "status_novo": "BM em Análise"
+    },
+    {
+        "data": "20/06/2026 01:38:58",
+        "usuario": "fabiano",
+        "cnpj": "51.229.699/0001-05",
+        "status_antigo": "Checkpoint",
+        "status_novo": "Disponível"
+    },
+    {
+        "data": "20/06/2026 01:38:43",
+        "usuario": "fabiano",
+        "cnpj": "51.229.699/0001-05",
+        "status_antigo": "Disponível",
+        "status_novo": "Checkpoint"
+    },
+    {
+        "data": "20/06/2026 01:38:22",
+        "usuario": "fabiano",
+        "cnpj": "51.229.699/0001-05",
+        "status_antigo": "Verificou 2k",
+        "status_novo": "Disponível"
+    },
+    {
+        "data": "20/06/2026 01:38:17",
+        "usuario": "fabiano",
+        "cnpj": "51.229.699/0001-05",
+        "status_antigo": "Disponível",
+        "status_novo": "Verificou 2k"
+    },
+    {
+        "data": "20/06/2026 01:38:13",
+        "usuario": "fabiano",
+        "cnpj": "51.229.699/0001-05",
+        "status_antigo": "Precisa de mais informações",
+        "status_novo": "Disponível"
+    },
+    {
+        "data": "20/06/2026 01:38:02",
+        "usuario": "fabiano",
+        "cnpj": "51.229.699/0001-05",
+        "status_antigo": "Disponível",
+        "status_novo": "Precisa de mais informações"
+    },
+    {
+        "data": "20/06/2026 01:37:57",
+        "usuario": "fabiano",
+        "cnpj": "51.229.699/0001-05",
+        "status_antigo": "Verificou 2k",
+        "status_novo": "Disponível"
+    },
+    {
+        "data": "20/06/2026 01:37:56",
+        "usuario": "fabiano",
+        "cnpj": "51.229.699/0001-05",
+        "status_antigo": "Disponível",
+        "status_novo": "Verificou 2k"
+    },
+    {
+        "data": "20/06/2026 01:37:55",
+        "usuario": "fabiano",
+        "cnpj": "51.229.699/0001-05",
+        "status_antigo": "Usado em BM",
+        "status_novo": "Disponível"
+    },
+    {
+        "data": "20/06/2026 01:37:55",
+        "usuario": "fabiano",
+        "cnpj": "51.229.699/0001-05",
+        "status_antigo": "BM em Análise",
+        "status_novo": "Usado em BM"
+    },
+    {
+        "data": "20/06/2026 01:37:53",
+        "usuario": "fabiano",
+        "cnpj": "51.229.699/0001-05",
+        "status_antigo": "Disponível",
+        "status_novo": "BM em Análise"
+    }
+]

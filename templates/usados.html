@@ -2,6 +2,9 @@
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
+    <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>Meus CNPJs Usados - LtdaFinder Pro</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
@@ -30,6 +33,8 @@
                 <a class="menu-item" href="/master">📊 Dashboard Master</a>
                 <a class="menu-item active" href="/usados">📌 Meus CNPJs Usados</a>
                 <a class="menu-item" href="/favoritos">⭐ Favoritos</a>
+                <a class="menu-item" href="/perfis-meta">👤 Perfis Meta</a>
+                <a class="menu-item" href="/relatorios-bm">📄 Relatórios BM</a>
                 <a class="menu-item" href="/estatisticas">📈 Estatísticas</a>
                 {% if tipo_usuario == "admin" %}
                 <a class="menu-item" href="/admin">👑 Painel Admin</a>
@@ -141,6 +146,16 @@
                     </div>
 
                     <div>
+                        <label>Data inicial de uso</label>
+                        <input type="date" name="data_inicio" value="{{ filtros.data_inicio }}">
+                    </div>
+
+                    <div>
+                        <label>Data final de uso</label>
+                        <input type="date" name="data_fim" value="{{ filtros.data_fim }}">
+                    </div>
+
+                    <div>
                         <label>Registros por página</label>
                         <select name="por_pagina">
                             <option value="25" {% if filtros.por_pagina == "25" %}selected{% endif %}>25</option>
@@ -183,6 +198,7 @@
                         <th>CNPJ</th>
                         <th>Razão Social</th>
                         <th>Status BM</th>
+                        <th>Data de Uso</th>
                         <th>Capital</th>
                         <th>UF</th>
                         <th>Município</th>
@@ -228,6 +244,8 @@
                             </select>
                         </td>
 
+                        <td>{{ empresa.data_uso_bm }}</td>
+
                         <td>{{ empresa.capital_formatado }}</td>
                         <td>{{ empresa.uf }}</td>
                         <td>{{ empresa.municipio_nome }}</td>
@@ -247,7 +265,7 @@
                             <button
                                 class="btn-acao btn-copiar"
                                 title="Copiar dados"
-                                data-texto="Empresa: {{ empresa.razao_social }} | CNPJ: {{ empresa.cnpj_formatado }} | Meu Status BM: {{ empresa.status_bm }} | Histórico global: {{ empresa.usado_por }} | Sócio: {{ empresa.nome_socio }} | Telefone: {{ empresa.telefone_formatado }} | Email: {{ empresa.email }} | Cidade: {{ empresa.municipio_nome }} - {{ empresa.uf }} | Capital: {{ empresa.capital_formatado }}"
+                                data-texto="Empresa: {{ empresa.razao_social }} | CNPJ: {{ empresa.cnpj_formatado }} | Meu Status BM: {{ empresa.status_bm }} | Data de Uso: {{ empresa.data_uso_bm }} | Histórico global: {{ empresa.usado_por }} | Sócio: {{ empresa.nome_socio }} | Telefone: {{ empresa.telefone_formatado }} | Email: {{ empresa.email }} | Cidade: {{ empresa.municipio_nome }} - {{ empresa.uf }} | Capital: {{ empresa.capital_formatado }}"
                             >
                                 📋
                             </button>
@@ -264,6 +282,8 @@
                     <input type="hidden" name="status_bm" value="{{ filtros.status_bm }}">
                     <input type="hidden" name="uf" value="{{ filtros.uf }}">
                     <input type="hidden" name="categoria" value="{{ filtros.categoria }}">
+                    <input type="hidden" name="data_inicio" value="{{ filtros.data_inicio }}">
+                    <input type="hidden" name="data_fim" value="{{ filtros.data_fim }}">
                     <input type="hidden" name="por_pagina" value="{{ filtros.por_pagina }}">
                     <input type="hidden" name="pagina" value="{{ paginacao.pagina_anterior }}">
 
@@ -297,6 +317,8 @@
                     <input type="hidden" name="status_bm" value="{{ filtros.status_bm }}">
                     <input type="hidden" name="uf" value="{{ filtros.uf }}">
                     <input type="hidden" name="categoria" value="{{ filtros.categoria }}">
+                    <input type="hidden" name="data_inicio" value="{{ filtros.data_inicio }}">
+                    <input type="hidden" name="data_fim" value="{{ filtros.data_fim }}">
                     <input type="hidden" name="por_pagina" value="{{ filtros.por_pagina }}">
                     <input type="hidden" name="pagina" value="{{ paginacao.pagina_proxima }}">
 
@@ -313,6 +335,12 @@
 </div>
 
 <script>
+    window.addEventListener("pageshow", function(event) {
+        if (event.persisted) {
+            window.location.reload();
+        }
+    });
+
     const menuToggle = document.getElementById("menuToggle");
     const sidebarOverlay = document.getElementById("sidebarOverlay");
 
@@ -369,19 +397,26 @@
 
         fetch("/status-bm/" + cnpj, {
             method: "POST",
-            body: formData
+            body: formData,
+            cache: "no-store",
+            headers: {
+                "Cache-Control": "no-cache"
+            }
         })
         .then(function(resposta) {
             return resposta.json();
         })
         .then(function(dados) {
             if (!dados.ok) {
+                alert("Erro ao salvar status do CNPJ.");
                 return;
             }
 
-            if (novoStatus === "Disponível") {
-                window.location.reload();
-            }
+            window.location.reload();
+        })
+        .catch(function(erro) {
+            alert("Erro ao salvar status do CNPJ.");
+            console.error(erro);
         });
     });
 </script>

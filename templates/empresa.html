@@ -12,11 +12,9 @@
 <div class="layout">
 
     <aside class="sidebar">
-
         <div>
-
             <div class="sidebar-logo">
-                <img src="{{ url_for('static', filename='logo.png') }}">
+                <img src="{{ url_for('static', filename='logo.png') }}" alt="LtdaFinder Pro">
             </div>
 
             <div class="usuario-box">
@@ -31,148 +29,179 @@
                 <a class="menu-item" href="/master">📊 Dashboard Master</a>
                 <a class="menu-item" href="/usados">📌 Meus CNPJs Usados</a>
                 <a class="menu-item" href="/favoritos">⭐ Favoritos</a>
+                <a class="menu-item" href="/historico">📜 Histórico</a>
                 <a class="menu-item" href="/estatisticas">📈 Estatísticas</a>
                 {% if tipo_usuario == "admin" %}
                 <a class="menu-item" href="/admin">👑 Painel Admin</a>
                 {% endif %}
                 <a class="menu-item sair" href="/logout">🚪 Sair</a>
             </nav>
-
         </div>
 
         <div class="sidebar-footer">
             Versão Local <strong>V1.0</strong>
         </div>
-
     </aside>
 
     <main class="main">
 
-        <div class="topbar">
-            <div class="topbar-flex">
-                <div class="topbar-title">
-                    <button type="button" class="menu-toggle" id="menuToggle" title="Abrir menu">
-                        <span></span>
-                        <span></span>
-                        <span></span>
-                    </button>
+        {% set data_raw = empresa.data_inicio|string %}
+        {% if data_raw|length >= 8 %}
+            {% set data_formatada = data_raw[6:8] ~ "/" ~ data_raw[4:6] ~ "/" ~ data_raw[0:4] %}
+        {% else %}
+            {% set data_formatada = empresa.data_inicio %}
+        {% endif %}
 
-                    <div>
-                        <h1>{{ empresa.razao_social }}</h1>
-                        <p>Informações completas da empresa</p>
+        <section class="empresa-detalhe">
+
+            <div class="empresa-header">
+                <div>
+                    <h1>🏢 Dados da Empresa</h1>
+                    <p>Informações completas da empresa selecionada</p>
+                </div>
+
+                <button type="button" class="btn-copiar-cnpj" id="btnCopiarCnpj" data-cnpj="{{ empresa.cnpj_formatado }}">
+                    📋 Copiar CNPJ
+                </button>
+            </div>
+
+            <div class="empresa-grid">
+
+                <div class="empresa-card">
+                    <h2>🗂 Informações Básicas</h2>
+
+                    <div class="info-linha">
+                        <span>Razão Social</span>
+                        <strong>{{ empresa.razao_social }}</strong>
+                    </div>
+
+                    <div class="info-linha">
+                        <span>Nome Fantasia</span>
+                        <strong>{{ empresa.nome_fantasia }}</strong>
+                    </div>
+
+                    <div class="info-linha">
+                        <span>Sócio</span>
+                        <strong>{{ empresa.nome_socio }}</strong>
+                    </div>
+
+                    <div class="info-linha">
+                        <span>Telefone</span>
+                        <strong>{{ empresa.telefone_formatado }}</strong>
+                    </div>
+
+                    <div class="info-linha">
+                        <span>Email</span>
+                        <strong>{{ empresa.email }}</strong>
+                    </div>
+
+                    <div class="info-linha">
+                        <span>Sexo Provável</span>
+                        <strong>{{ empresa.sexo_provavel }}</strong>
+                    </div>
+
+                    <div class="info-linha">
+                        <span>CNAE</span>
+                        <strong>{{ empresa.cnae_principal }}</strong>
+                    </div>
+
+                    <div class="info-linha">
+                        <span>Categoria</span>
+                        <strong>{{ empresa.categoria_cnae }}</strong>
                     </div>
                 </div>
+
+                <div class="empresa-card">
+                    <h2>📋 Informações Complementares</h2>
+
+                    <div class="info-box">
+                        <span>Data de Abertura</span>
+                        <strong>{{ data_formatada }}</strong>
+                    </div>
+
+                    <div class="info-box">
+                        <span>Situação Cadastral</span>
+                        <strong>{{ empresa.situacao_cadastral }}</strong>
+                    </div>
+
+                    <div class="info-box">
+                        <span>Idade da Empresa</span>
+                        <strong>{{ empresa.idade_empresa }} ano(s)</strong>
+                    </div>
+
+                    <div class="info-box">
+                        <span>Status BM</span>
+                        <strong>{{ empresa.status_bm }}</strong>
+                    </div>
+
+                    <div class="info-box">
+                        <span>Histórico Global</span>
+                        <strong>
+                            {% if empresa.usado_por %}
+                                {{ empresa.usado_por }}
+                            {% else %}
+                                Nenhum histórico encontrado
+                            {% endif %}
+                        </strong>
+                    </div>
+                </div>
+
+                <div class="empresa-card ia-card-detalhe ia-card-{{ empresa.ia_classe }}">
+                    <h2>🤖 IA Operacional</h2>
+
+                    <div class="ia-score-box ia-score-{{ empresa.ia_classe }}">
+                        <div class="ia-score-circulo ia-score-{{ empresa.ia_classe }}">
+                            <strong>{{ empresa.score_ia }}</strong>
+                            <span>/100</span>
+                        </div>
+
+                        <div class="ia-classificacao ia-texto-{{ empresa.ia_classe }}">
+                            {{ empresa.ia_recomendacao }}
+                        </div>
+                    </div>
+
+                    <div class="ia-motivos ia-motivos-grid">
+
+                        <div class="ia-grupo ia-grupo-positivo">
+                            <div class="ia-subtitulo">Pontos positivos</div>
+
+                            {% if empresa.ia_motivos %}
+                                {% for motivo in empresa.ia_motivos %}
+                                <div class="ia-motivo positivo">
+                                    ✓ {{ motivo }}
+                                </div>
+                                {% endfor %}
+                            {% else %}
+                                <div class="ia-motivo atencao">
+                                    ⚠ Nenhum ponto positivo forte encontrado
+                                </div>
+                            {% endif %}
+                        </div>
+
+                        <div class="ia-grupo ia-grupo-atencao">
+                            <div class="ia-subtitulo ia-subtitulo-atencao">Pontos de atenção</div>
+
+                            {% if empresa.ia_pontos_atencao %}
+                                {% for ponto in empresa.ia_pontos_atencao %}
+                                <div class="ia-motivo atencao">
+                                    ⚠ {{ ponto }}
+                                </div>
+                                {% endfor %}
+                            {% else %}
+                                <div class="ia-motivo positivo">
+                                    ✓ Nenhum ponto crítico encontrado
+                                </div>
+                            {% endif %}
+                        </div>
+
+                    </div>
+                </div>
+
             </div>
-        </div>
 
-        <div class="cards">
-
-            <div class="card">
-                <h3>CNPJ</h3>
-                <p>{{ empresa.cnpj_formatado }}</p>
+            <div class="empresa-acoes">
+                <a href="/" class="btn-voltar-empresa">← Voltar para Minerador</a>
             </div>
-
-            <div class="card">
-                <h3>Capital Social</h3>
-                <p>{{ empresa.capital_formatado }}</p>
-            </div>
-
-            <div class="card">
-                <h3>Cidade</h3>
-                <p>{{ empresa.municipio_nome }} - {{ empresa.uf }}</p>
-            </div>
-
-            <div class="card">
-                <h3>Status BM</h3>
-                <p>{{ empresa.status_bm }}</p>
-            </div>
-
-        </div>
-
-        <section class="tabela">
-
-            <h2>Dados da Empresa</h2>
-
-            <table>
-
-                <tr>
-                    <th>Razão Social</th>
-                    <td>{{ empresa.razao_social }}</td>
-                </tr>
-
-                <tr>
-                    <th>Nome Fantasia</th>
-                    <td>{{ empresa.nome_fantasia }}</td>
-                </tr>
-
-                <tr>
-                    <th>Sócio</th>
-                    <td>{{ empresa.nome_socio }}</td>
-                </tr>
-
-                <tr>
-                    <th>Telefone</th>
-                    <td>{{ empresa.telefone_formatado }}</td>
-                </tr>
-
-                <tr>
-                    <th>Email</th>
-                    <td>{{ empresa.email }}</td>
-                </tr>
-
-                <tr>
-                    <th>Sexo Provável</th>
-                    <td>{{ empresa.sexo_provavel }}</td>
-                </tr>
-
-                <tr>
-                    <th>CNAE</th>
-                    <td>{{ empresa.cnae_principal }}</td>
-                </tr>
-
-                <tr>
-                    <th>Categoria</th>
-                    <td>{{ empresa.categoria_cnae }}</td>
-                </tr>
-
-                <tr>
-                    <th>Data de Abertura</th>
-                    <td>{{ empresa.data_inicio }}</td>
-                </tr>
-
-                <tr>
-                    <th>Situação Cadastral</th>
-                    <td>{{ empresa.situacao_cadastral }}</td>
-                </tr>
-
-                <tr>
-                    <th>Histórico Global</th>
-                    <td>
-                        {% if empresa.usado_por %}
-                            🌐 {{ empresa.usado_por }}
-                        {% else %}
-                            Nenhum histórico encontrado
-                        {% endif %}
-                    </td>
-                </tr>
-
-            </table>
-
-            <br>
-
-            {% if empresa.bm_utilizada %}
-            <div class="aviso-bm">
-                ⚠ Você já utilizou este CNPJ para verificação.
-            </div>
-            {% endif %}
-
-            <br>
-
-            <a href="/">
-                <button>
-                    ← Voltar para Minerador
-                </button>
-            </a>
 
         </section>
 
@@ -202,6 +231,22 @@
 
     if (sidebarOverlay) {
         sidebarOverlay.addEventListener("click", fecharMenuMobile);
+    }
+
+    const btnCopiarCnpj = document.getElementById("btnCopiarCnpj");
+
+    if (btnCopiarCnpj) {
+        btnCopiarCnpj.addEventListener("click", function() {
+            const cnpj = this.getAttribute("data-cnpj");
+
+            navigator.clipboard.writeText(cnpj).then(() => {
+                this.textContent = "✅ Copiado";
+
+                setTimeout(() => {
+                    this.textContent = "📋 Copiar CNPJ";
+                }, 1200);
+            });
+        });
     }
 </script>
 

@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>Relatórios BM - LtdaFinder Pro</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+<div class="layout">
+
+    <aside class="sidebar">
+        <div>
+            <div class="sidebar-logo">
+                <img src="{{ url_for('static', filename='logo.png') }}" alt="LtdaFinder Pro">
+            </div>
+
+            <div class="usuario-box">
+                <div>
+                    <span>Usuário logado</span>
+                    <strong>👤 {{ usuario_logado }}</strong>
+                </div>
+            </div>
+
+            <nav class="menu">
+                <a class="menu-item" href="/">🔎 Minerar CNPJs</a>
+                <a class="menu-item" href="/master">📊 Dashboard Master</a>
+                <a class="menu-item" href="/usados">📌 Meus CNPJs Usados</a>
+                <a class="menu-item" href="/favoritos">⭐ Favoritos</a>
+                <a class="menu-item" href="/perfis-meta">👤 Perfis Meta</a>
+                <a class="menu-item active" href="/relatorios-bm">📄 Relatórios BM</a>
+                <a class="menu-item" href="/historico">📜 Histórico</a>
+                <a class="menu-item" href="/estatisticas">📈 Estatísticas</a>
+                {% if tipo_usuario == "admin" %}
+                <a class="menu-item" href="/admin">👑 Painel Admin</a>
+                {% endif %}
+                <a class="menu-item sair" href="/logout">🚪 Sair</a>
+            </nav>
+        </div>
+
+        <div class="sidebar-footer">
+            Versão Local <strong>V1.0</strong>
+        </div>
+    </aside>
+
+    <main class="main">
+
+        <header class="topbar">
+            <div class="topbar-flex">
+                <div class="topbar-title">
+                    <button type="button" class="menu-toggle" id="menuToggle" title="Abrir menu">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </button>
+
+                    <div>
+                        <h1>Relatórios BM</h1>
+                        <p>Relatório automático com base nos status marcados nos CNPJs e Perfis Meta.</p>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <section class="cards">
+            <div class="card">
+                <h3>BMs Movimentadas</h3>
+                <p>{{ resumo.total }}</p>
+            </div>
+
+            <div class="card">
+                <h3>Sucesso</h3>
+                <p>{{ resumo.sucesso }}</p>
+            </div>
+
+            <div class="card">
+                <h3>Problemas</h3>
+                <p>{{ resumo.problemas }}</p>
+            </div>
+
+            <div class="card">
+                <h3>Taxa de Sucesso</h3>
+                <p>{{ "%.1f"|format(resumo.taxa_sucesso) }}%</p>
+            </div>
+        </section>
+
+        <section class="filtros">
+            <h2>Gerar relatório por período</h2>
+
+            <form action="/relatorios-bm" method="post">
+                <div class="grid-filtros">
+
+                    <div>
+                        <label>Data inicial</label>
+                        <input type="date" name="data_inicio" value="{{ filtros.data_inicio }}">
+                    </div>
+
+                    <div>
+                        <label>Data final</label>
+                        <input type="date" name="data_fim" value="{{ filtros.data_fim }}">
+                    </div>
+
+                    {% if tipo_usuario == "admin" %}
+                    <div>
+                        <label>Usuário</label>
+                        <select name="usuario">
+                            <option value="">Todos</option>
+                            {% for usuario in usuarios %}
+                            <option value="{{ usuario }}" {% if filtros.usuario == usuario %}selected{% endif %}>
+                                {{ usuario }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    {% endif %}
+
+                </div>
+
+                <div class="acoes">
+                    <button type="submit">📄 Gerar Relatório</button>
+                    <button type="button" id="copiarRelatorio">📋 Copiar Texto</button>
+                    <button type="button" id="baixarRelatorio" class="btn-exportar">⬇️ Baixar TXT</button>
+                </div>
+            </form>
+        </section>
+
+        <section class="cards">
+            <div class="card">
+                <h3>Verificou 250</h3>
+                <p>{{ resumo.contagem.get("Verificou 250", 0) }}</p>
+            </div>
+
+            <div class="card">
+                <h3>Verificou 2k</h3>
+                <p>{{ resumo.contagem.get("Verificou 2k", 0) }}</p>
+            </div>
+
+            <div class="card">
+                <h3>Verificou 100k</h3>
+                <p>{{ resumo.contagem.get("Verificou 100k", 0) }}</p>
+            </div>
+
+            <div class="card">
+                <h3>Maior Problema</h3>
+                <p>{{ resumo.maior_problema }}</p>
+            </div>
+        </section>
+
+        <section class="tabela">
+            <div class="tabela-topo">
+                <h2>Resumo por status</h2>
+                <span>{{ filtros.data_inicio }} até {{ filtros.data_fim }}</span>
+            </div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Status</th>
+                        <th>Quantidade</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    {% for status, quantidade in resumo.contagem.items() %}
+                    <tr>
+                        <td>{{ status }}</td>
+                        <td>{{ quantidade }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </section>
+
+        <section class="tabela">
+            <div class="tabela-topo">
+                <h2>Texto gerado</h2>
+                <span>Pronto para copiar ou baixar em TXT</span>
+            </div>
+
+            <textarea id="textoRelatorio" style="width:100%; min-height:430px; padding:18px; border-radius:16px; background:#0f1b2c; border:1px solid rgba(0,102,204,.30); color:white; font-size:15px; line-height:1.55; resize:vertical;">{{ texto_relatorio }}</textarea>
+        </section>
+
+        {% if resumo.usuarios|length > 0 %}
+        <section class="tabela">
+            <div class="tabela-topo">
+                <h2>Resumo por usuário</h2>
+                <span>{{ resumo.usuarios|length }} usuário(s)</span>
+            </div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Usuário</th>
+                        <th>Total</th>
+                        <th>Sucesso</th>
+                        <th>Taxa de Sucesso</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    {% for item in resumo.usuarios %}
+                    <tr>
+                        <td>{{ item.usuario }}</td>
+                        <td>{{ item.total }}</td>
+                        <td>{{ item.sucesso }}</td>
+                        <td>{{ "%.1f"|format(item.taxa_sucesso) }}%</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </section>
+        {% endif %}
+
+    </main>
+
+</div>
+
+<script>
+    const menuToggle = document.getElementById("menuToggle");
+    const sidebarOverlay = document.getElementById("sidebarOverlay");
+
+    function fecharMenuMobile() {
+        document.body.classList.remove("sidebar-aberta");
+    }
+
+    function alternarMenu() {
+        if (window.innerWidth <= 1000) {
+            document.body.classList.toggle("sidebar-aberta");
+        } else {
+            document.body.classList.toggle("sidebar-fechada");
+        }
+    }
+
+    if (menuToggle) {
+        menuToggle.addEventListener("click", alternarMenu);
+    }
+
+    if (sidebarOverlay) {
+        sidebarOverlay.addEventListener("click", fecharMenuMobile);
+    }
+
+    const textoRelatorio = document.getElementById("textoRelatorio");
+    const copiarRelatorio = document.getElementById("copiarRelatorio");
+    const baixarRelatorio = document.getElementById("baixarRelatorio");
+
+    if (copiarRelatorio && textoRelatorio) {
+        copiarRelatorio.addEventListener("click", function() {
+            navigator.clipboard.writeText(textoRelatorio.value).then(function() {
+                copiarRelatorio.textContent = "✅ Copiado";
+
+                setTimeout(function() {
+                    copiarRelatorio.textContent = "📋 Copiar Texto";
+                }, 1200);
+            });
+        });
+    }
+
+    if (baixarRelatorio && textoRelatorio) {
+        baixarRelatorio.addEventListener("click", function() {
+            const blob = new Blob([textoRelatorio.value], {type: "text/plain;charset=utf-8"});
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+
+            link.href = url;
+            link.download = "relatorio_bm_{{ filtros.data_inicio }}_a_{{ filtros.data_fim }}.txt";
+
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            URL.revokeObjectURL(url);
+        });
+    }
+</script>
+
+</body>
+</html>

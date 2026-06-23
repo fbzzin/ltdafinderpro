@@ -58,14 +58,35 @@
 
                     <div>
                         <h1>Dashboard Master</h1>
-                        <p>Controle geral da operação de BMs e desempenho da equipe.</p>
+                        <p>Visão geral da operação, status das BMs e produtividade.</p>
                     </div>
                 </div>
             </div>
         </header>
 
         <section class="cards">
+            <div class="card">
+                <h3>Total na Base</h3>
+                <p>{{ dashboard_master.total_base }}</p>
+            </div>
 
+            <div class="card">
+                <h3>Disponíveis</h3>
+                <p>{{ dashboard_master.total_disponiveis }}</p>
+            </div>
+
+            <div class="card">
+                <h3>CNPJs Usados</h3>
+                <p>{{ dashboard_master.total_usados }}</p>
+            </div>
+
+            <div class="card">
+                <h3>Favoritos</h3>
+                <p>{{ dashboard_master.total_favoritos }}</p>
+            </div>
+        </section>
+
+        <section class="cards">
             <div class="card">
                 <h3>Total Trabalhado</h3>
                 <p>{{ estatisticas_gerais.total }}</p>
@@ -85,44 +106,39 @@
                 <h3>Produção Hoje</h3>
                 <p>{{ historico_hoje.total }}</p>
             </div>
+        </section>
 
+        <section class="cards">
             <div class="card">
                 <h3>Verificou 250</h3>
-                <p>{{ estatisticas_gerais.contagem.get("Verificou 250", 0) }}</p>
+                <p>{{ dashboard_master.total_250 }}</p>
             </div>
 
             <div class="card">
                 <h3>Verificou 2k</h3>
-                <p>{{ estatisticas_gerais.contagem.get("Verificou 2k", 0) }}</p>
+                <p>{{ dashboard_master.total_2k }}</p>
             </div>
 
             <div class="card">
                 <h3>Verificou 100k</h3>
-                <p>{{ estatisticas_gerais.contagem.get("Verificou 100k", 0) }}</p>
+                <p>{{ dashboard_master.total_100k }}</p>
             </div>
 
             <div class="card">
-                <h3>Checkpoint</h3>
-                <p>{{ estatisticas_gerais.contagem.get("Checkpoint", 0) }}</p>
+                <h3>Capital Médio</h3>
+                <p>R$ {{ "{:,.2f}".format(dashboard_master.capital_medio).replace(",", "X").replace(".", ",").replace("X", ".") }}</p>
             </div>
-
         </section>
 
         <section class="cards">
-
             <div class="card">
-                <h3>PMI</h3>
-                <p>{{ estatisticas_gerais.contagem.get("Precisa de mais informações", 0) }}</p>
+                <h3>250 → 2k</h3>
+                <p>{{ "%.1f"|format(dashboard_master.taxa_250_para_2k) }}%</p>
             </div>
 
             <div class="card">
-                <h3>Restrito</h3>
-                <p>{{ estatisticas_gerais.contagem.get("Restrito", 0) }}</p>
-            </div>
-
-            <div class="card">
-                <h3>Descartado</h3>
-                <p>{{ estatisticas_gerais.contagem.get("Descartado", 0) }}</p>
+                <h3>2k → 100k</h3>
+                <p>{{ "%.1f"|format(dashboard_master.taxa_2k_para_100k) }}%</p>
             </div>
 
             <div class="card">
@@ -130,18 +146,90 @@
                 <p>{{ estatisticas_gerais.contagem.get("BM em Análise", 0) }}</p>
             </div>
 
+            <div class="card">
+                <h3>Restrito</h3>
+                <p>{{ estatisticas_gerais.contagem.get("Restrito", 0) }}</p>
+            </div>
+        </section>
+
+        <section class="dashboard-grid">
+
+            <div class="tabela">
+                <div class="tabela-topo">
+                    <h2>🥧 Status BM</h2>
+                    <span>Distribuição geral</span>
+                </div>
+
+                <div class="grafico-box">
+                    <canvas id="graficoStatus"></canvas>
+                </div>
+            </div>
+
+            <div class="tabela">
+                <div class="tabela-topo">
+                    <h2>📈 Evolução Diária</h2>
+                    <span>Últimos 15 dias</span>
+                </div>
+
+                <div class="grafico-box">
+                    <canvas id="graficoEvolucao"></canvas>
+                </div>
+            </div>
+
+        </section>
+
+        <section class="dashboard-grid">
+
+            <div class="tabela">
+                <div class="tabela-topo">
+                    <h2>🌎 Top UFs</h2>
+                    <span>Distribuição da base</span>
+                </div>
+
+                <div class="grafico-box">
+                    <canvas id="graficoUf"></canvas>
+                </div>
+            </div>
+
+            <div class="tabela">
+                <div class="tabela-topo">
+                    <h2>🏆 Usuários</h2>
+                    <span>Produção geral</span>
+                </div>
+
+                <div class="grafico-box">
+                    <canvas id="graficoUsuarios"></canvas>
+                </div>
+            </div>
+
         </section>
 
         <section class="tabela">
 
             <div class="tabela-topo">
-                <h2>📊 Distribuição por Status</h2>
-                <span>Visão geral da operação</span>
+                <h2>📊 Ranking por Status</h2>
+                <span>Quantidade e percentual</span>
             </div>
 
-            <div style="height:360px;">
-                <canvas id="graficoStatus"></canvas>
-            </div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Status</th>
+                        <th>Quantidade</th>
+                        <th>Percentual</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    {% for item in dashboard_master.ranking_status %}
+                    <tr>
+                        <td>{{ item.status }}</td>
+                        <td>{{ item.quantidade }}</td>
+                        <td>{{ "%.1f"|format(item.percentual) }}%</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
 
         </section>
 
@@ -271,44 +359,176 @@
         sidebarOverlay.addEventListener("click", fecharMenuMobile);
     }
 
+    const corTexto = "#cfefff";
+    const corGrid = "rgba(255,255,255,.08)";
+
     const statusLabels = {{ estatisticas_gerais.contagem.keys()|list|tojson }};
     const statusValores = {{ estatisticas_gerais.contagem.values()|list|tojson }};
 
+    const evolucaoLabels = {{ evolucao_diaria.labels|tojson }};
+    const evolucaoValores = {{ evolucao_diaria.valores|tojson }};
+    const evolucaoSucessos = {{ evolucao_diaria.sucessos|tojson }};
+
+    const ufLabels = {{ top_ufs.labels|tojson }};
+    const ufValores = {{ top_ufs.valores|tojson }};
+
+    const usuariosLabels = {{ estatisticas_gerais.usuarios|map(attribute="usuario")|list|tojson }};
+    const usuariosValores = {{ estatisticas_gerais.usuarios|map(attribute="total")|list|tojson }};
+
     new Chart(document.getElementById("graficoStatus"), {
-        type: "bar",
+        type: "doughnut",
         data: {
             labels: statusLabels,
             datasets: [{
                 label: "Quantidade",
-                data: statusValores
+                data: statusValores,
+                borderWidth: 1
             }]
         },
         options: {
-            responsive:true,
-            maintainAspectRatio:false,
-            plugins:{
-                legend:{
-                    labels:{
-                        color:"#ffffff"
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: "bottom",
+                    labels: {
+                        color: corTexto
+                    }
+                }
+            }
+        }
+    });
+
+    new Chart(document.getElementById("graficoEvolucao"), {
+        type: "line",
+        data: {
+            labels: evolucaoLabels,
+            datasets: [
+                {
+                    label: "Total produzido",
+                    data: evolucaoValores,
+                    tension: 0.35,
+                    borderWidth: 3
+                },
+                {
+                    label: "Sucessos",
+                    data: evolucaoSucessos,
+                    tension: 0.35,
+                    borderWidth: 3
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    labels: {
+                        color: corTexto
                     }
                 }
             },
-            scales:{
-                x:{
-                    ticks:{
-                        color:"#cfefff"
+            scales: {
+                x: {
+                    ticks: {
+                        color: corTexto
                     },
-                    grid:{
-                        color:"rgba(255,255,255,.08)"
+                    grid: {
+                        color: corGrid
                     }
                 },
-                y:{
-                    beginAtZero:true,
-                    ticks:{
-                        color:"#cfefff"
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        color: corTexto
                     },
-                    grid:{
-                        color:"rgba(255,255,255,.08)"
+                    grid: {
+                        color: corGrid
+                    }
+                }
+            }
+        }
+    });
+
+    new Chart(document.getElementById("graficoUf"), {
+        type: "bar",
+        data: {
+            labels: ufLabels,
+            datasets: [{
+                label: "Empresas",
+                data: ufValores,
+                borderWidth: 1
+            }]
+        },
+        options: {
+            indexAxis: "y",
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    labels: {
+                        color: corTexto
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    beginAtZero: true,
+                    ticks: {
+                        color: corTexto
+                    },
+                    grid: {
+                        color: corGrid
+                    }
+                },
+                y: {
+                    ticks: {
+                        color: corTexto
+                    },
+                    grid: {
+                        color: corGrid
+                    }
+                }
+            }
+        }
+    });
+
+    new Chart(document.getElementById("graficoUsuarios"), {
+        type: "bar",
+        data: {
+            labels: usuariosLabels,
+            datasets: [{
+                label: "Total trabalhado",
+                data: usuariosValores,
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    labels: {
+                        color: corTexto
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    ticks: {
+                        color: corTexto
+                    },
+                    grid: {
+                        color: corGrid
+                    }
+                },
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        color: corTexto
+                    },
+                    grid: {
+                        color: corGrid
                     }
                 }
             }
