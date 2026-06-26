@@ -12,3 +12,14 @@ env/
 *.zip
 
 .DS_Store
+backup_json_final/
+backup/
+usuarios.json
+status_bm.json
+favoritos.json
+historico.json
+historico_producao.json
+datas_uso_cnpj.json
+perfis_meta.json
+backup_perfis_meta.json
+historico_producao_backup_antes_reset.json
