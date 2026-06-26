@@ -1,45 +1,63 @@
-from pathlib import Path
+﻿import json
 from datetime import datetime
-import json
+from sqlalchemy import text
+from database import engine
 
-PASTA_BASE = Path(r"C:\Users\Dutra\Desktop\minerador-cnpj")
 
-ARQUIVO_HISTORICO = PASTA_BASE / "historico.json"
+def garantir_tabela_historico():
+    with engine.connect() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS historico (
+                id SERIAL PRIMARY KEY,
+                dados JSONB NOT NULL
+            )
+        """))
+        conn.commit()
 
 
 def carregar_historico():
-    if not ARQUIVO_HISTORICO.exists():
-        return []
+    garantir_tabela_historico()
 
     try:
-        with open(ARQUIVO_HISTORICO, "r", encoding="utf-8") as arquivo:
-            return json.load(arquivo)
-    except:
+        with engine.connect() as conn:
+            resultado = conn.execute(text("SELECT dados FROM historico LIMIT 1")).fetchone()
+
+        if not resultado:
+            return []
+
+        dados = resultado[0]
+
+        if isinstance(dados, str):
+            dados = json.loads(dados)
+
+        return dados if isinstance(dados, list) else []
+
+    except Exception:
         return []
 
 
 def salvar_historico(lista):
-    with open(ARQUIVO_HISTORICO, "w", encoding="utf-8") as arquivo:
-        json.dump(
-            lista,
-            arquivo,
-            ensure_ascii=False,
-            indent=4
+    garantir_tabela_historico()
+
+    if not isinstance(lista, list):
+        lista = []
+
+    with engine.connect() as conn:
+        conn.execute(text("DELETE FROM historico"))
+        conn.execute(
+            text("INSERT INTO historico (dados) VALUES (:dados)"),
+            {"dados": json.dumps(lista, ensure_ascii=False)}
         )
+        conn.commit()
 
 
-def registrar_evento(
-    usuario,
-    cnpj,
-    status_antigo,
-    status_novo
-):
+def registrar_evento(usuario, cnpj, status_antigo, status_novo):
     historico = carregar_historico()
 
     historico.insert(
         0,
         {
-            "data": datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+            "data": datetime.now().strftime("%d/%m/%Y %H:%M"),
             "usuario": usuario,
             "cnpj": cnpj,
             "status_antigo": status_antigo,

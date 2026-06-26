@@ -1,28 +1,24 @@
-from pathlib import Path
+﻿from pathlib import Path
 from datetime import datetime
-import shutil
 
 PASTA_BASE = Path(__file__).resolve().parent
-
 PASTA_BACKUP = PASTA_BASE / "backup"
 PASTA_BACKUP.mkdir(parents=True, exist_ok=True)
 
-ARQUIVOS = [
-    PASTA_BASE / "usuarios.json",
-    PASTA_BASE / "favoritos.json",
-    PASTA_BASE / "status_bm.json"
-]
-
 
 def criar_backup():
-    data = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    """
+    Backup antigo por JSON desativado.
+    Os dados principais agora estão em SQL/PostgreSQL.
+    Mantido para não quebrar chamadas antigas do app.py.
+    """
+    pasta = PASTA_BACKUP / datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    pasta.mkdir(parents=True, exist_ok=True)
 
-    pasta_destino = PASTA_BACKUP / data
-    pasta_destino.mkdir(parents=True, exist_ok=True)
+    marcador = pasta / "backup_desativado.txt"
+    marcador.write_text(
+        "Backup por JSON desativado. Dados principais migrados para SQL/PostgreSQL.",
+        encoding="utf-8"
+    )
 
-    for arquivo in ARQUIVOS:
-        if arquivo.exists():
-            shutil.copy2(
-                arquivo,
-                pasta_destino / arquivo.name
-            )
+    return pasta
