@@ -507,7 +507,7 @@
 
                     <div>
                         <h1>Site Gerado</h1>
-                        <p>Preview, cópia e download do HTML salvo no PostgreSQL.</p>
+                        <p>Preview, download do HTML e pacote pronto para Cloudflare Workers.</p>
                     </div>
                 </div>
             </div>
@@ -522,11 +522,26 @@
             <div class="preview-actions">
                 <button type="button" class="btn-site-main" id="btnCopiarHtml">📋 Copiar HTML</button>
                 <a class="btn-site-secondary" href="/site-gerado/{{ site.id }}/download">⬇ Baixar index.html</a>
+                <a class="btn-site-secondary" href="/site-gerado/{{ site.id }}/worker-zip">☁️ Baixar pacote Cloudflare Worker</a>
+                <a class="btn-site-secondary" href="/site-gerado/{{ site.id }}/worker-download">⚙️ Baixar worker.js</a>
                 <a class="btn-site-secondary" href="/gerador-site/{{ site.cnpj }}">Gerar outro modelo</a>
                 <a class="btn-site-danger" href="/sites">Voltar ao histórico</a>
             </div>
 
             <textarea id="htmlGerado" class="html-textarea" spellcheck="false">{{ site.html_gerado }}</textarea>
+        </section>
+
+        <section class="site-box">
+            <h2>Cloudflare Workers</h2>
+            <p style="margin:0 0 14px 0; color:var(--site-muted); line-height:1.6;">
+                Use o pacote Cloudflare Worker para publicar esse mesmo site em um subdomínio
+                <strong style="color:#fff;">workers.dev</strong>. O ZIP já vem com <strong style="color:#fff;">worker.js</strong>,
+                <strong style="color:#fff;">wrangler.toml</strong>, <strong style="color:#fff;">package.json</strong> e instruções.
+            </p>
+
+            <textarea class="html-textarea" style="min-height:170px;" spellcheck="false" readonly>npm install
+npx wrangler login
+npx wrangler deploy</textarea>
         </section>
 
         <section class="site-box">

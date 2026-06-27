@@ -1616,6 +1616,11 @@ def gerar_nome_arquivo_site(empresa):
 
 
 def montar_endereco_empresa(empresa):
+    endereco_personalizado = valor_texto(empresa.get("endereco_site", ""))
+
+    if endereco_personalizado:
+        return endereco_personalizado
+
     partes = []
 
     for campo in ["logradouro", "numero", "complemento", "bairro"]:
@@ -2353,7 +2358,7 @@ def gerar_html_site_empresa(empresa, meta_tag, modelo_site, observacoes=""):
     conteudo = obter_conteudo_segmento(segmento)
     imagens = IMAGENS_SEGMENTO.get(segmento, IMAGENS_SEGMENTO["servicos"])
 
-    nome_site = nome_exibicao_empresa(empresa)
+    nome_site = valor_texto(empresa.get("nome_site", "")) or nome_exibicao_empresa(empresa)
     razao_social = valor_publico(empresa.get("razao_social", ""))
     nome_fantasia = valor_publico(empresa.get("nome_fantasia", ""))
     cnpj_formatado = formatar_cnpj(limpar_cnpj(empresa.get("cnpj_limpo", empresa.get("cnpj", ""))))
@@ -2578,6 +2583,115 @@ def gerar_html_site_empresa(empresa, meta_tag, modelo_site, observacoes=""):
 
     return html
 
+
+
+def aplicar_personalizacao_site(empresa, nome_site="", telefone_site="", email_site="", endereco_site=""):
+    empresa_site = dict(empresa)
+    empresa_site["nome_site"] = valor_texto(nome_site, "") or nome_exibicao_empresa(empresa)
+    empresa_site["telefone_formatado"] = valor_texto(telefone_site, "")
+    empresa_site["email"] = valor_texto(email_site, "")
+    empresa_site["endereco_site"] = valor_texto(endereco_site, "")
+    return empresa_site
+
+
+def gerar_nome_worker_site(site):
+    base = valor_texto(site.get("nome_fantasia", "")) or valor_texto(site.get("nome_empresarial", "")) or "site"
+    slug = normalizar_slug_site(base).replace("_", "-")
+    cnpj = limpar_cnpj(site.get("cnpj", ""))
+    sufixo = cnpj[-4:] if cnpj else datetime.now().strftime("%H%M")
+    nome = f"{slug}-{sufixo}"
+    nome = re.sub(r"[^a-z0-9-]+", "-", nome.lower()).strip("-")
+    nome = re.sub(r"-+", "-", nome)
+
+    if not nome:
+        nome = f"site-{sufixo}"
+
+    if len(nome) > 54:
+        nome = nome[:54].strip("-")
+
+    return nome
+
+
+def gerar_worker_js_site(html):
+    html_literal = json.dumps(html, ensure_ascii=False)
+    robots_literal = json.dumps("User-agent: *\nAllow: /\n")
+
+    return f"""const HTML = {html_literal};
+const ROBOTS = {robots_literal};
+
+export default {{
+  async fetch(request) {{
+    const url = new URL(request.url);
+
+    if (url.pathname === "/robots.txt") {{
+      return new Response(ROBOTS, {{
+        headers: {{
+          "content-type": "text/plain; charset=UTF-8",
+          "cache-control": "public, max-age=3600"
+        }}
+      }});
+    }}
+
+    return new Response(HTML, {{
+      headers: {{
+        "content-type": "text/html; charset=UTF-8",
+        "cache-control": "public, max-age=300"
+      }}
+    }});
+  }}
+}};
+"""
+
+
+def gerar_wrangler_toml_site(nome_worker):
+    hoje = datetime.now().strftime("%Y-%m-%d")
+
+    return f"""name = \"{nome_worker}\"
+main = \"src/worker.js\"
+compatibility_date = \"{hoje}\"
+workers_dev = true
+"""
+
+
+def gerar_package_json_worker(nome_worker):
+    return json.dumps({
+        "name": nome_worker,
+        "version": "1.0.0",
+        "private": True,
+        "scripts": {
+            "dev": "wrangler dev",
+            "deploy": "wrangler deploy"
+        },
+        "devDependencies": {
+            "wrangler": "latest"
+        }
+    }, ensure_ascii=False, indent=2)
+
+
+def gerar_readme_worker(site, nome_worker):
+    return f"""LTDAFinder Pro - Cloudflare Workers
+
+Site: {site.get('nome_empresarial', '')}
+Arquivo Worker: src/worker.js
+Nome sugerido do Worker: {nome_worker}
+
+Como publicar pelo Wrangler:
+
+1. Instale as dependências:
+   npm install
+
+2. Faça login na Cloudflare:
+   npx wrangler login
+
+3. Publique no workers.dev:
+   npx wrangler deploy
+
+Depois do deploy, a URL ficará no padrão:
+https://{nome_worker}.SEU-SUBDOMINIO.workers.dev
+
+Observação:
+O subdomínio workers.dev depende da configuração da sua conta Cloudflare.
+"""
 
 def salvar_site_gerado(dados):
     criar_tabela_sites_gerados()
@@ -3651,6 +3765,17 @@ def gerador_site(cnpj):
     meta_tag = request.values.get("meta_tag", "").strip()
     observacoes = request.values.get("observacoes", "").strip()
 
+    if request.method == "POST":
+        nome_site = request.form.get("nome_site", "").strip()
+        telefone_site = request.form.get("telefone_site", "").strip()
+        email_site = request.form.get("email_site", "").strip()
+        endereco_site = request.form.get("endereco_site", "").strip()
+    else:
+        nome_site = nome_exibicao_empresa(empresa)
+        telefone_site = valor_texto(empresa.get("telefone_formatado", ""))
+        email_site = valor_texto(empresa.get("email", ""))
+        endereco_site = montar_endereco_empresa(empresa)
+
     if modelo_site not in MODELOS_SITE_DICT:
         modelo_site = "institucional"
 
@@ -3661,20 +3786,21 @@ def gerador_site(cnpj):
             erro = "A meta tag parece inválida. Cole a tag completa começando com <meta."
         else:
             cnpj_limpo = limpar_cnpj(empresa.get("cnpj_limpo", empresa.get("cnpj", cnpj)))
-            html_gerado = gerar_html_site_empresa(empresa, meta_tag, modelo_site, observacoes)
-            nome_arquivo = gerar_nome_arquivo_site(empresa)
+            empresa_site = aplicar_personalizacao_site(empresa, nome_site, telefone_site, email_site, endereco_site)
+            html_gerado = gerar_html_site_empresa(empresa_site, meta_tag, modelo_site, observacoes)
+            nome_arquivo = gerar_nome_arquivo_site(empresa_site)
 
             site_id = salvar_site_gerado({
                 "usuario": usuario_atual(),
                 "cnpj": cnpj_limpo,
                 "cnpj_formatado": formatar_cnpj(cnpj_limpo),
                 "nome_empresarial": valor_texto(empresa.get("razao_social", "")),
-                "nome_fantasia": valor_texto(empresa.get("nome_fantasia", "")),
+                "nome_fantasia": valor_texto(nome_site) or valor_texto(empresa.get("nome_fantasia", "")),
                 "cnae_principal": valor_texto(empresa.get("cnae_principal", "")),
                 "categoria_cnae": valor_texto(empresa.get("categoria_cnae", "")),
-                "endereco": montar_endereco_empresa(empresa),
-                "telefone": valor_texto(empresa.get("telefone_formatado", "")),
-                "email": valor_texto(empresa.get("email", "")),
+                "endereco": valor_texto(endereco_site),
+                "telefone": valor_texto(telefone_site),
+                "email": valor_texto(email_site),
                 "meta_tag": meta_tag,
                 "modelo_site": modelo_site,
                 "nome_arquivo": nome_arquivo,
@@ -3699,6 +3825,10 @@ def gerador_site(cnpj):
         modelo_site=modelo_site,
         meta_tag=meta_tag,
         observacoes=observacoes,
+        nome_site=nome_site,
+        telefone_site=telefone_site,
+        email_site=email_site,
+        endereco_site=endereco_site,
         erro=erro
     )
 
@@ -3739,6 +3869,60 @@ def site_gerado_download(site_id):
         download_name=nome_arquivo,
         as_attachment=True,
         mimetype="text/html; charset=utf-8"
+    )
+
+
+
+@app.route("/site-gerado/<int:site_id>/worker-download", methods=["GET"])
+@login_obrigatorio
+def site_gerado_worker_download(site_id):
+    site = buscar_site_gerado(site_id)
+
+    if not site:
+        abort(404)
+
+    worker_js = gerar_worker_js_site(site.get("html_gerado", ""))
+    nome_worker = gerar_nome_worker_site(site)
+    output = io.BytesIO(worker_js.encode("utf-8"))
+    output.seek(0)
+
+    return send_file(
+        output,
+        download_name=f"{nome_worker}.worker.js",
+        as_attachment=True,
+        mimetype="application/javascript; charset=utf-8"
+    )
+
+
+@app.route("/site-gerado/<int:site_id>/worker-zip", methods=["GET"])
+@login_obrigatorio
+def site_gerado_worker_zip(site_id):
+    site = buscar_site_gerado(site_id)
+
+    if not site:
+        abort(404)
+
+    nome_worker = gerar_nome_worker_site(site)
+    worker_js = gerar_worker_js_site(site.get("html_gerado", ""))
+    wrangler_toml = gerar_wrangler_toml_site(nome_worker)
+    package_json = gerar_package_json_worker(nome_worker)
+    readme = gerar_readme_worker(site, nome_worker)
+
+    output = io.BytesIO()
+
+    with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as zip_file:
+        zip_file.writestr("src/worker.js", worker_js)
+        zip_file.writestr("wrangler.toml", wrangler_toml)
+        zip_file.writestr("package.json", package_json)
+        zip_file.writestr("README.txt", readme)
+
+    output.seek(0)
+
+    return send_file(
+        output,
+        download_name=f"{nome_worker}_cloudflare_worker.zip",
+        as_attachment=True,
+        mimetype="application/zip"
     )
 
 @app.route("/exportar", methods=["POST"])

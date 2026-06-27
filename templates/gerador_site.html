@@ -507,7 +507,7 @@
 
                     <div>
                         <h1>Gerar Site Institucional</h1>
-                        <p>Escolha o estilo, cole a meta tag e gere o HTML completo.</p>
+                        <p>Escolha o estilo, personalize os contatos, cole a meta tag e gere o HTML completo.</p>
                     </div>
                 </div>
             </div>
@@ -524,7 +524,7 @@
 
         <section class="gerador-layout">
             <aside class="site-box">
-                <h2>Dados da empresa</h2>
+                <h2>Dados do CNPJ original</h2>
 
                 <div class="empresa-resumo">
                     <div>
@@ -572,7 +572,36 @@
 
                 <div style="height:18px;"></div>
 
-                <label>Meta tag da Meta <strong style="color:#dc2626;">obrigatória</strong></label>
+                <h2 style="margin-top:0;">Informações que vão aparecer no site</h2>
+                <p style="margin:-8px 0 16px 0; color:var(--site-muted); font-size:14px; line-height:1.5;">
+                    Esses campos vêm preenchidos com os dados do CNPJ, mas você pode trocar antes de gerar.
+                </p>
+
+                <div class="site-form-grid" style="grid-template-columns:repeat(2,minmax(0,1fr)); align-items:start;">
+                    <div>
+                        <label>Nome exibido no site</label>
+                        <input type="text" name="nome_site" value="{{ nome_site }}" placeholder="Nome que aparecerá no topo e no rodapé">
+                    </div>
+
+                    <div>
+                        <label>Telefone / WhatsApp</label>
+                        <input type="text" name="telefone_site" value="{{ telefone_site }}" placeholder="Ex: (11) 99999-9999">
+                    </div>
+
+                    <div>
+                        <label>E-mail</label>
+                        <input type="email" name="email_site" value="{{ email_site }}" placeholder="contato@empresa.com.br">
+                    </div>
+
+                    <div>
+                        <label>Endereço exibido</label>
+                        <textarea name="endereco_site" style="min-height:88px;" placeholder="Endereço que será exibido no site">{{ endereco_site }}</textarea>
+                    </div>
+                </div>
+
+                <div style="height:18px;"></div>
+
+                <label>Meta tag da Meta <strong style="color:#ffb4b4;">obrigatória</strong></label>
                 <textarea name="meta_tag" placeholder='<meta name="facebook-domain-verification" content="..." />' required>{{ meta_tag }}</textarea>
 
                 <div style="height:14px;"></div>
