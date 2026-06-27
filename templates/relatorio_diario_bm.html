@@ -1,10 +1,10 @@
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
-    <meta charset="UTF-8">
-    <title>Nova Verificação BM - LtdaFinder Pro</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-    <style>
+<meta charset="UTF-8">
+<title>Relatório Diário BM - LtdaFinder Pro</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<style>
 
         :root{
             --bm-bg:#050b16;
@@ -202,11 +202,26 @@
         @media(max-width:720px){.bm-stats,.bm-filtros-grid{grid-template-columns:1fr}.central-hero h1,.bm-page-head h1,.bm-head h1{font-size:24px}}
 
     </style>
+
+<style>
+.fila-table{display:grid;gap:14px;}
+.fila-row{display:grid;grid-template-columns:120px 1fr 160px 220px;gap:14px;align-items:center;background:linear-gradient(180deg,var(--bm-panel),#08111f);border:1px solid var(--bm-border);border-radius:18px;padding:16px;box-shadow:var(--bm-shadow);}
+.fila-row h3{margin:0 0 6px;color:#fff;font-size:17px;}
+.fila-row p{margin:0;color:var(--bm-muted);font-size:13px;line-height:1.45;}
+.pill{display:inline-flex;align-items:center;justify-content:center;border-radius:999px;padding:8px 10px;font-weight:900;font-size:12px;border:1px solid rgba(255,255,255,.12);}
+.pill-alta{background:rgba(251,113,133,.16);color:#fecdd3;border-color:rgba(251,113,133,.28);}
+.pill-media,.pill-média{background:rgba(250,204,21,.14);color:#fef9c3;border-color:rgba(250,204,21,.28);}
+.pill-baixa{background:rgba(56,189,248,.14);color:#dbeafe;border-color:rgba(56,189,248,.28);}
+.inline-form{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0;}
+.inline-form input,.inline-form select{background:#020617;color:#e5f2ff;border:1px solid var(--bm-border);border-radius:12px;padding:10px;}
+.relatorio-box{width:100%;min-height:340px;background:#020617;color:#e5f2ff;border:1px solid var(--bm-border);border-radius:16px;padding:16px;font-family:Consolas,monospace;white-space:pre-wrap;}
+@media(max-width:1100px){.fila-row{grid-template-columns:1fr;}.inline-form{align-items:stretch}.inline-form .bm-btn{width:100%;}}
+</style>
+
 </head>
 <body>
 
 <div class="sidebar-overlay" id="sidebarOverlay"></div>
-
 <div class="layout">
     <aside class="sidebar">
         <div>
@@ -218,12 +233,11 @@
                 <a class="menu-item" href="/usados">📌 Meus CNPJs Usados</a>
                 <a class="menu-item" href="/favoritos">⭐ Favoritos</a>
                 <a class="menu-item" href="/perfis-meta">👤 Perfis Meta</a>
-                <a class="menu-item active" href="/central-bm">🧭 Central BM</a>
-                <a class="menu-item" href="/fila-bm">🧭 Fila BM</a>
+                <a class="menu-item" href="/central-bm">🧭 Central BM</a>
                 <a class="menu-item" href="/radar-bm">📡 Radar BM</a>
                 <a class="menu-item" href="/fila-bm">🧭 Fila BM</a>
                 <a class="menu-item" href="/relatorios-bm">📄 Relatórios BM</a>
-                <a class="menu-item" href="/relatorio-diario-bm">🗓️ Relatório Diário</a>
+                <a class="menu-item active" href="/relatorio-diario-bm">🗓️ Relatório Diário</a>
                 <a class="menu-item" href="/sites">🌐 Gerador de Sites</a>
                 <a class="menu-item" href="/historico">📜 Histórico</a>
                 <a class="menu-item" href="/estatisticas">📈 Estatísticas</a>
@@ -235,129 +249,41 @@
     </aside>
 
     <main class="main">
-        <section class="bm-page-head">
-            <h1>➕ Nova Verificação BM</h1>
-            <p>Crie o dossiê operacional: CNPJ, perfil, domínio, meta tag, checklist e score de prontidão.</p>
+        <section class="bm-head"><h1>🗓️ Relatório Diário BM</h1><p>Resumo automático das verificações atualizadas no dia.</p></section>
+        <section class="bm-card">
+            <h2>Gerar relatório</h2>
+            <form method="get" action="/relatorio-diario-bm" class="filtros-bm">
+                <input type="date" name="data" value="{{ filtros.data }}">
+                {% if tipo_usuario == "admin" %}<select name="usuario"><option value="">Todos operadores</option>{% for usuario in usuarios %}<option value="{{ usuario }}" {% if filtros.usuario == usuario %}selected{% endif %}>{{ usuario }}</option>{% endfor %}</select>{% endif %}
+                <button class="bm-btn bm-btn-dark" type="submit">🔎 Atualizar</button>
+            </form>
         </section>
-
-        {% if erro %}<div class="alerta alerta-erro">{{ erro }}</div>{% endif %}
-
-        {% if empresa %}
-        <div class="empresa-resumo">
-            <strong>{{ dados.cnpj_formatado }}</strong> · {{ dados.razao_social }}<br>
-            Telefone: {{ dados.telefone_operacional or 'Não informado' }} · E-mail: {{ dados.email_operacional or 'Não informado' }}
-        </div>
-        {% endif %}
-
-        <form method="post" action="/central-bm/nova">
-            <section class="bm-form-card">
-                <h2>🗂 Dados principais</h2>
-                <div class="bm-form-grid">
-                    <div>
-                        <label>CNPJ</label>
-                        <input type="text" name="cnpj" value="{{ dados.cnpj or '' }}" placeholder="Digite ou cole o CNPJ" required>
-                        <input type="hidden" name="site_gerado_id" value="{{ dados.site_gerado_id or '' }}">
-                        <input type="hidden" name="site_nome_arquivo" value="{{ dados.site_nome_arquivo or '' }}">
-                        <input type="hidden" name="site_modelo" value="{{ dados.site_modelo or '' }}">
-                    </div>
-                    <div>
-                        <label>Status inicial</label>
-                        <select name="status">
-                            {% for status in status_central_bm %}
-                            <option value="{{ status }}" {% if dados.status == status %}selected{% endif %}>{{ status }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div>
-                        <label>Razão Social</label>
-                        <input type="text" name="razao_social" value="{{ dados.razao_social or '' }}" readonly>
-                    </div>
-                    <div>
-                        <label>Nome Fantasia</label>
-                        <input type="text" name="nome_fantasia" value="{{ dados.nome_fantasia or '' }}" readonly>
-                    </div>
-                    <div>
-                        <label>Nome da BM</label>
-                        <input type="text" name="nome_bm" value="{{ dados.nome_bm or '' }}" placeholder="Ex: BM Comercial 01">
-                    </div>
-                    <div>
-                        <label>Operador</label>
-                        <input type="text" name="operador" value="{{ dados.operador or usuario_logado }}">
-                    </div>
-                    <div class="full">
-                        <label>Perfil Meta vinculado</label>
-                        <select name="perfil_meta_id">
-                            <option value="">Não vincular agora</option>
-                            {% for perfil in perfis_meta %}
-                            <option value="{{ perfil.id }}" {% if dados.perfil_meta_id == perfil.id %}selected{% endif %}>{{ perfil.nome }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                </div>
-            </section>
-
-            {% if dados.site_gerado_id %}
-            <section class="bm-form-card" style="border-color:rgba(19,214,227,.30);">
-                <h2>🌐 Site gerado vinculado</h2>
-                <p style="margin:0; color:#9db5d3; line-height:1.6;">
-                    {{ dados.site_nome_arquivo or ('Site #' ~ dados.site_gerado_id) }} · {{ dados.site_modelo or 'modelo não informado' }}
-                </p>
-            </section>
-            {% endif %}
-
-            <section class="bm-form-card">
-                <h2>🌐 Domínio e contato operacional</h2>
-                <div class="bm-form-grid">
-                    <div>
-                        <label>Domínio</label>
-                        <input type="text" name="dominio" value="{{ dados.dominio or '' }}" placeholder="empresa.com ou subdomínio">
-                    </div>
-                    <div>
-                        <label>URL do site</label>
-                        <input type="text" name="url_site" value="{{ dados.url_site or '' }}" placeholder="https://...">
-                    </div>
-                    <div>
-                        <label>Telefone operacional</label>
-                        <input type="text" name="telefone_operacional" value="{{ dados.telefone_operacional or '' }}">
-                    </div>
-                    <div>
-                        <label>E-mail operacional</label>
-                        <input type="email" name="email_operacional" value="{{ dados.email_operacional or '' }}">
-                    </div>
-                    <div>
-                        <label>Número SMS</label>
-                        <input type="text" name="numero_sms" value="{{ dados.numero_sms or '' }}">
-                    </div>
-                    <div class="full">
-                        <label>Meta tag da Meta</label>
-                        <textarea name="meta_tag" placeholder="Cole a meta tag completa">{{ dados.meta_tag or '' }}</textarea>
-                    </div>
-                </div>
-            </section>
-
-            <section class="bm-form-card">
-                <h2>✅ Checklist de prontidão</h2>
-                <div class="check-grid">
-                    {% for item in checklist_central_bm %}
-                    <label class="check-item">
-                        <input type="checkbox" name="{{ item.campo }}" {% if dados[item.campo] %}checked{% endif %}>
-                        <span><strong>{{ item.label }}</strong><small>+{{ item.peso }} pontos</small></span>
-                    </label>
-                    {% endfor %}
-                </div>
-            </section>
-
-            <section class="bm-form-card">
-                <label>Observações</label>
-                <textarea name="observacoes" placeholder="Anote detalhes da tentativa, perfil, domínio, WABA ou pendências">{{ dados.observacoes or '' }}</textarea>
-            </section>
-
-            <div class="bm-actions">
-                <button type="submit" class="bm-btn bm-btn-primary">💾 Criar verificação</button>
-                <a href="/central-bm" class="bm-btn bm-btn-dark">← Voltar</a>
+        <section class="bm-cards">
+            <div class="bm-kpi"><span>Total</span><strong>{{ resumo.total }}</strong></div>
+            <div class="bm-kpi"><span>Positivas</span><strong>{{ resumo.sucesso }}</strong></div>
+            <div class="bm-kpi"><span>Problemas</span><strong>{{ resumo.problemas }}</strong></div>
+            <div class="bm-kpi"><span>Taxa sucesso</span><strong>{{ '%.1f'|format(resumo.taxa_sucesso) }}%</strong></div>
+        </section>
+        <section class="bm-card">
+            <div class="bm-actions" style="margin-top:0;">
+                <form method="post" action="/relatorio-diario-bm/txt" class="inline-form"><input type="hidden" name="data" value="{{ filtros.data }}"><input type="hidden" name="usuario" value="{{ filtros.usuario }}"><button class="bm-btn bm-btn-blue">⬇ TXT</button></form>
+                <form method="post" action="/relatorio-diario-bm/csv" class="inline-form"><input type="hidden" name="data" value="{{ filtros.data }}"><input type="hidden" name="usuario" value="{{ filtros.usuario }}"><button class="bm-btn bm-btn-blue">⬇ CSV</button></form>
+                <form method="post" action="/relatorio-diario-bm/pdf" class="inline-form"><input type="hidden" name="data" value="{{ filtros.data }}"><input type="hidden" name="usuario" value="{{ filtros.usuario }}"><button class="bm-btn bm-btn-primary">📄 PDF</button></form>
             </div>
-        </form>
+            <h2>Texto do relatório</h2><pre class="relatorio-box">{{ texto_relatorio }}</pre>
+        </section>
+        <section class="bm-card"><h2>Por operador</h2><div class="fila-table">{% for op in resumo.operadores %}<div class="fila-row" style="grid-template-columns:1fr 120px 120px 120px;"><div><h3>{{ op.operador }}</h3></div><div><p>Total</p><strong>{{ op.total }}</strong></div><div><p>Positivas</p><strong>{{ op.sucesso }}</strong></div><div><p>Problemas</p><strong>{{ op.problemas }}</strong></div></div>{% else %}<p style="color:var(--bm-muted);">Nenhum item encontrado para o dia.</p>{% endfor %}</div></section>
     </main>
 </div>
+
+<script>
+const menuToggle=document.getElementById("menuToggle");
+const sidebarOverlay=document.getElementById("sidebarOverlay");
+function fecharMenuMobile(){document.body.classList.remove("sidebar-aberta");}
+function alternarMenu(){if(window.innerWidth<=1000){document.body.classList.toggle("sidebar-aberta");}else{document.body.classList.toggle("sidebar-fechada");}}
+if(menuToggle)menuToggle.addEventListener("click",alternarMenu);
+if(sidebarOverlay)sidebarOverlay.addEventListener("click",fecharMenuMobile);
+</script>
+
 </body>
 </html>

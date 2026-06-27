@@ -3202,14 +3202,41 @@ STATUS_CENTRAL_BM_PROBLEMAS = [
 ]
 
 CHECKLIST_CENTRAL_BM = [
-    {"campo": "checklist_cnpj", "label": "CNPJ selecionado e conferido", "peso": 15},
-    {"campo": "checklist_site", "label": "Site publicado e abrindo", "peso": 20},
-    {"campo": "checklist_meta_tag", "label": "Meta tag adicionada no head", "peso": 20},
-    {"campo": "checklist_dominio", "label": "Domínio/URL conferido", "peso": 15},
-    {"campo": "checklist_documento", "label": "Documento/cartão CNPJ separado", "peso": 10},
-    {"campo": "checklist_2fa", "label": "2FA ativo no perfil/BM", "peso": 10},
-    {"campo": "checklist_waba", "label": "WABA preparada ou criada", "peso": 10}
+    {"campo": "checklist_cnpj", "label": "CNPJ selecionado e conferido", "peso": 10, "etapa": "Preparação"},
+    {"campo": "checklist_perfil_meta", "label": "Perfil Meta vinculado", "peso": 8, "etapa": "Preparação"},
+    {"campo": "checklist_site_gerado", "label": "Site gerado e vinculado", "peso": 8, "etapa": "Preparação"},
+    {"campo": "checklist_meta_tag", "label": "Meta tag adicionada", "peso": 9, "etapa": "Preparação"},
+
+    {"campo": "checklist_site", "label": "Site publicado e abrindo", "peso": 8, "etapa": "Domínio"},
+    {"campo": "checklist_dominio", "label": "Domínio/URL conferido", "peso": 8, "etapa": "Domínio"},
+    {"campo": "checklist_https", "label": "HTTPS ativo", "peso": 6, "etapa": "Domínio"},
+    {"campo": "checklist_cnpj_site", "label": "CNPJ encontrado no site", "peso": 4, "etapa": "Domínio"},
+    {"campo": "checklist_razao_site", "label": "Razão social encontrada no site", "peso": 4, "etapa": "Domínio"},
+
+    {"campo": "checklist_documento", "label": "Documento/cartão CNPJ separado", "peso": 7, "etapa": "Envio Meta"},
+    {"campo": "checklist_2fa", "label": "2FA ativo no perfil/BM", "peso": 6, "etapa": "Envio Meta"},
+    {"campo": "checklist_bm_enviada", "label": "BM enviada para análise", "peso": 7, "etapa": "Envio Meta"},
+    {"campo": "checklist_waba", "label": "WABA preparada ou criada", "peso": 5, "etapa": "Envio Meta"},
+
+    {"campo": "checklist_status_atualizado", "label": "Status atualizado no sistema", "peso": 4, "etapa": "Resultado"},
+    {"campo": "checklist_print_salvo", "label": "Print/evidência salvo", "peso": 3, "etapa": "Resultado"},
+    {"campo": "checklist_observacao", "label": "Observação operacional registrada", "peso": 3, "etapa": "Resultado"}
 ]
+
+CHECKLIST_CAMPOS_CENTRAL_BM = [item["campo"] for item in CHECKLIST_CENTRAL_BM]
+
+
+def checklist_central_bm_por_etapa():
+    etapas = []
+    mapa = {}
+    for item in CHECKLIST_CENTRAL_BM:
+        etapa = item.get("etapa", "Checklist")
+        if etapa not in mapa:
+            grupo = {"etapa": etapa, "itens": []}
+            mapa[etapa] = grupo
+            etapas.append(grupo)
+        mapa[etapa]["itens"].append(item)
+    return etapas
 
 
 def bool_form(nome):
@@ -3259,6 +3286,15 @@ def criar_tabelas_central_bm():
                 checklist_documento BOOLEAN DEFAULT FALSE,
                 checklist_2fa BOOLEAN DEFAULT FALSE,
                 checklist_waba BOOLEAN DEFAULT FALSE,
+                checklist_perfil_meta BOOLEAN DEFAULT FALSE,
+                checklist_site_gerado BOOLEAN DEFAULT FALSE,
+                checklist_https BOOLEAN DEFAULT FALSE,
+                checklist_cnpj_site BOOLEAN DEFAULT FALSE,
+                checklist_razao_site BOOLEAN DEFAULT FALSE,
+                checklist_bm_enviada BOOLEAN DEFAULT FALSE,
+                checklist_status_atualizado BOOLEAN DEFAULT FALSE,
+                checklist_print_salvo BOOLEAN DEFAULT FALSE,
+                checklist_observacao BOOLEAN DEFAULT FALSE,
                 score_prontidao INTEGER DEFAULT 0,
                 risco TEXT DEFAULT 'Alto risco',
                 ultimo_teste_status TEXT,
@@ -3313,6 +3349,15 @@ def criar_tabelas_central_bm():
                 checklist_documento BOOLEAN DEFAULT 0,
                 checklist_2fa BOOLEAN DEFAULT 0,
                 checklist_waba BOOLEAN DEFAULT 0,
+                checklist_perfil_meta BOOLEAN DEFAULT 0,
+                checklist_site_gerado BOOLEAN DEFAULT 0,
+                checklist_https BOOLEAN DEFAULT 0,
+                checklist_cnpj_site BOOLEAN DEFAULT 0,
+                checklist_razao_site BOOLEAN DEFAULT 0,
+                checklist_bm_enviada BOOLEAN DEFAULT 0,
+                checklist_status_atualizado BOOLEAN DEFAULT 0,
+                checklist_print_salvo BOOLEAN DEFAULT 0,
+                checklist_observacao BOOLEAN DEFAULT 0,
                 score_prontidao INTEGER DEFAULT 0,
                 risco TEXT DEFAULT 'Alto risco',
                 ultimo_teste_status TEXT,
@@ -3365,6 +3410,15 @@ def criar_tabelas_central_bm():
             "checklist_documento": "BOOLEAN DEFAULT FALSE" if dialect_name == "postgresql" else "BOOLEAN DEFAULT 0",
             "checklist_2fa": "BOOLEAN DEFAULT FALSE" if dialect_name == "postgresql" else "BOOLEAN DEFAULT 0",
             "checklist_waba": "BOOLEAN DEFAULT FALSE" if dialect_name == "postgresql" else "BOOLEAN DEFAULT 0",
+            "checklist_perfil_meta": "BOOLEAN DEFAULT FALSE" if dialect_name == "postgresql" else "BOOLEAN DEFAULT 0",
+            "checklist_site_gerado": "BOOLEAN DEFAULT FALSE" if dialect_name == "postgresql" else "BOOLEAN DEFAULT 0",
+            "checklist_https": "BOOLEAN DEFAULT FALSE" if dialect_name == "postgresql" else "BOOLEAN DEFAULT 0",
+            "checklist_cnpj_site": "BOOLEAN DEFAULT FALSE" if dialect_name == "postgresql" else "BOOLEAN DEFAULT 0",
+            "checklist_razao_site": "BOOLEAN DEFAULT FALSE" if dialect_name == "postgresql" else "BOOLEAN DEFAULT 0",
+            "checklist_bm_enviada": "BOOLEAN DEFAULT FALSE" if dialect_name == "postgresql" else "BOOLEAN DEFAULT 0",
+            "checklist_status_atualizado": "BOOLEAN DEFAULT FALSE" if dialect_name == "postgresql" else "BOOLEAN DEFAULT 0",
+            "checklist_print_salvo": "BOOLEAN DEFAULT FALSE" if dialect_name == "postgresql" else "BOOLEAN DEFAULT 0",
+            "checklist_observacao": "BOOLEAN DEFAULT FALSE" if dialect_name == "postgresql" else "BOOLEAN DEFAULT 0",
             "score_prontidao": "INTEGER DEFAULT 0",
             "risco": "TEXT DEFAULT 'Alto risco'",
             "ultimo_teste_status": "TEXT",
@@ -3405,13 +3459,17 @@ def linha_para_dict(linha):
 
 
 def calcular_score_prontidao_bm(dados):
-    score = 0
+    pontos = 0
+    total_peso = 0
 
     for item in CHECKLIST_CENTRAL_BM:
+        peso = int(item.get("peso", 0) or 0)
+        total_peso += peso
         if bool_valor(dados.get(item["campo"], False)):
-            score += item["peso"]
+            pontos += peso
 
-    score = max(0, min(100, int(score)))
+    score = int(round((pontos / total_peso) * 100)) if total_peso else 0
+    score = max(0, min(100, score))
 
     if score >= 80:
         risco = "Pronto"
@@ -3597,6 +3655,24 @@ def dados_verificacao_do_form(empresa=None, verificacao_atual=None):
     if dados["url_site"] or dados["dominio"]:
         dados["checklist_dominio"] = True
 
+    if dados.get("perfil_meta_id"):
+        dados["checklist_perfil_meta"] = True
+
+    if dados.get("site_gerado_id"):
+        dados["checklist_site_gerado"] = True
+
+    if str(dados.get("url_site", "")).startswith("https://"):
+        dados["checklist_https"] = True
+
+    if dados.get("status") and dados.get("status") != "Preparando":
+        dados["checklist_status_atualizado"] = True
+
+    if dados.get("status") in ["BM em Análise"] + STATUS_CENTRAL_BM_SUCESSO + STATUS_CENTRAL_BM_PROBLEMAS:
+        dados["checklist_bm_enviada"] = True
+
+    if dados.get("observacoes"):
+        dados["checklist_observacao"] = True
+
     dados["score_prontidao"], dados["risco"] = calcular_score_prontidao_bm(dados)
     return dados
 
@@ -3659,10 +3735,8 @@ def criar_verificacao_bm(dados):
         "usuario", "cnpj", "cnpj_formatado", "razao_social", "nome_fantasia",
         "site_gerado_id", "site_nome_arquivo", "site_modelo",
         "perfil_meta_id", "perfil_meta_nome", "nome_bm", "dominio", "url_site", "meta_tag",
-        "status", "operador", "telefone_operacional", "email_operacional", "numero_sms",
-        "checklist_cnpj", "checklist_site", "checklist_meta_tag", "checklist_dominio",
-        "checklist_documento", "checklist_2fa", "checklist_waba", "score_prontidao", "risco", "observacoes"
-    ]
+        "status", "operador", "telefone_operacional", "email_operacional", "numero_sms"
+    ] + CHECKLIST_CAMPOS_CENTRAL_BM + ["score_prontidao", "risco", "observacoes"]
 
     params = {campo: dados.get(campo) for campo in campos}
 
@@ -3737,10 +3811,8 @@ def atualizar_verificacao_bm(verificacao_id, dados):
         "cnpj", "cnpj_formatado", "razao_social", "nome_fantasia",
         "site_gerado_id", "site_nome_arquivo", "site_modelo",
         "perfil_meta_id", "perfil_meta_nome", "nome_bm", "dominio", "url_site", "meta_tag",
-        "status", "operador", "telefone_operacional", "email_operacional", "numero_sms",
-        "checklist_cnpj", "checklist_site", "checklist_meta_tag", "checklist_dominio",
-        "checklist_documento", "checklist_2fa", "checklist_waba", "score_prontidao", "risco", "observacoes"
-    ]
+        "status", "operador", "telefone_operacional", "email_operacional", "numero_sms"
+    ] + CHECKLIST_CAMPOS_CENTRAL_BM + ["score_prontidao", "risco", "observacoes"]
 
     params = {campo: dados.get(campo) for campo in campos}
     params["id"] = verificacao_id
@@ -4011,7 +4083,10 @@ def testar_dominio_verificacao(verificacao):
             "detalhes": "\n".join(detalhes),
             "checklist_site": online,
             "checklist_meta_tag": meta_encontrada,
-            "checklist_dominio": online and https_ok
+            "checklist_dominio": online and https_ok,
+            "checklist_https": https_ok,
+            "checklist_cnpj_site": cnpj_ok,
+            "checklist_razao_site": nome_ok
         }
 
     except Exception as erro:
@@ -4134,9 +4209,11 @@ def montar_dados_verificacao_por_site(site):
         "telefone_operacional": valor_texto(site.get("telefone_exibicao", "")) or valor_texto(site.get("telefone", "")),
         "email_operacional": valor_texto(site.get("email_exibicao", "")) or valor_texto(site.get("email", "")),
         "checklist_cnpj": True,
+        "checklist_site_gerado": True,
         "checklist_site": bool(url_site),
         "checklist_meta_tag": bool(meta_tag),
         "checklist_dominio": bool(url_site),
+        "checklist_https": bool(url_site and url_site.startswith("https://")),
     })
 
     dados["score_prontidao"], dados["risco"] = calcular_score_prontidao_bm(dados)
@@ -4162,8 +4239,10 @@ def atualizar_verificacoes_do_site_publicado(site_id, cloudflare_url, slug_perso
             dados = dict(linha)
             dados["url_site"] = cloudflare_url
             dados["dominio"] = dominio
+            dados["checklist_site_gerado"] = True
             dados["checklist_site"] = True
             dados["checklist_dominio"] = True
+            dados["checklist_https"] = str(cloudflare_url).startswith("https://")
             if dados.get("meta_tag"):
                 dados["checklist_meta_tag"] = True
             dados["score_prontidao"], dados["risco"] = calcular_score_prontidao_bm(dados)
@@ -4177,6 +4256,8 @@ def atualizar_verificacoes_do_site_publicado(site_id, cloudflare_url, slug_perso
                         checklist_site = :checklist_site,
                         checklist_dominio = :checklist_dominio,
                         checklist_meta_tag = :checklist_meta_tag,
+                        checklist_site_gerado = :checklist_site_gerado,
+                        checklist_https = :checklist_https,
                         score_prontidao = :score_prontidao,
                         risco = :risco,
                         atualizado_em = CURRENT_TIMESTAMP
@@ -4189,6 +4270,8 @@ def atualizar_verificacoes_do_site_publicado(site_id, cloudflare_url, slug_perso
                         "checklist_site": dados.get("checklist_site"),
                         "checklist_dominio": dados.get("checklist_dominio"),
                         "checklist_meta_tag": dados.get("checklist_meta_tag"),
+                        "checklist_site_gerado": dados.get("checklist_site_gerado"),
+                        "checklist_https": dados.get("checklist_https"),
                         "score_prontidao": dados.get("score_prontidao"),
                         "risco": dados.get("risco")
                     }
@@ -4444,6 +4527,8 @@ def montar_radar_bm():
     sucesso_total = len([item for item in verificacoes if item.get("status") in STATUS_CENTRAL_BM_SUCESSO])
     taxa_sucesso = (sucesso_total / total * 100) if total else 0
 
+    alertas_criticos = gerar_alertas_gerais_bm(verificacoes, 10)
+
     return {
         "gerado_em": agora.strftime("%d/%m/%Y %H:%M"),
         "cards": {
@@ -4458,6 +4543,7 @@ def montar_radar_bm():
             "sites_sem_bm": len(sites_sem_bm),
             "meta_ausente": len(meta_ausente),
             "site_ausente": len(site_ausente),
+            "alertas_criticos": len([a for a in alertas_criticos if a.get("nivel") == "critico"]),
             "taxa_sucesso": taxa_sucesso
         },
         "listas": {
@@ -4470,9 +4556,736 @@ def montar_radar_bm():
             "sites_sem_bm": sites_sem_bm[:12],
             "acoes": acoes[:14],
             "status_ranking": status_ranking[:10],
-            "operadores": operadores[:10]
+            "operadores": operadores[:10],
+            "alertas": alertas_criticos
         }
     }
+
+
+
+# ============================================================
+# ALERTAS, FILA, RELATÓRIO DIÁRIO E DOSSIÊ BM
+# ============================================================
+
+STATUS_TAREFA_FILA_BM = ["Pendente", "Em andamento", "Concluída", "Problema", "Ignorada"]
+
+
+def criar_tabela_fila_bm():
+    dialect_name = getattr(getattr(engine, "dialect", None), "name", "postgresql")
+
+    if dialect_name == "postgresql":
+        sql = """
+        CREATE TABLE IF NOT EXISTS fila_bm_tarefas (
+            id SERIAL PRIMARY KEY,
+            task_key TEXT UNIQUE NOT NULL,
+            verificacao_id INTEGER,
+            site_gerado_id INTEGER,
+            cnpj TEXT,
+            cnpj_formatado TEXT,
+            razao_social TEXT,
+            tipo_tarefa TEXT,
+            prioridade TEXT,
+            status_tarefa TEXT DEFAULT 'Pendente',
+            operador TEXT,
+            acao_url TEXT,
+            observacao TEXT,
+            criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            concluido_em TIMESTAMP
+        )
+        """
+        add_column = "ALTER TABLE fila_bm_tarefas ADD COLUMN IF NOT EXISTS {coluna} {tipo}"
+    else:
+        sql = """
+        CREATE TABLE IF NOT EXISTS fila_bm_tarefas (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            task_key TEXT UNIQUE NOT NULL,
+            verificacao_id INTEGER,
+            site_gerado_id INTEGER,
+            cnpj TEXT,
+            cnpj_formatado TEXT,
+            razao_social TEXT,
+            tipo_tarefa TEXT,
+            prioridade TEXT,
+            status_tarefa TEXT DEFAULT 'Pendente',
+            operador TEXT,
+            acao_url TEXT,
+            observacao TEXT,
+            criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            concluido_em TIMESTAMP
+        )
+        """
+        add_column = None
+
+    colunas = {
+        "task_key": "TEXT",
+        "verificacao_id": "INTEGER",
+        "site_gerado_id": "INTEGER",
+        "cnpj": "TEXT",
+        "cnpj_formatado": "TEXT",
+        "razao_social": "TEXT",
+        "tipo_tarefa": "TEXT",
+        "prioridade": "TEXT",
+        "status_tarefa": "TEXT DEFAULT 'Pendente'",
+        "operador": "TEXT",
+        "acao_url": "TEXT",
+        "observacao": "TEXT",
+        "criado_em": "TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
+        "atualizado_em": "TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
+        "concluido_em": "TIMESTAMP"
+    }
+
+    try:
+        with engine.begin() as conn:
+            conn.execute(text(sql))
+            if dialect_name == "postgresql":
+                for coluna, tipo in colunas.items():
+                    conn.execute(text(add_column.format(coluna=coluna, tipo=tipo)))
+            else:
+                existentes = conn.execute(text("PRAGMA table_info(fila_bm_tarefas)")).fetchall()
+                colunas_existentes = {linha[1] for linha in existentes}
+                for coluna, tipo in colunas.items():
+                    if coluna not in colunas_existentes:
+                        conn.execute(text(f"ALTER TABLE fila_bm_tarefas ADD COLUMN {coluna} {tipo}"))
+    except Exception as erro:
+        print("Erro ao criar tabela da Fila BM:", erro)
+
+
+def prioridade_ordem_bm(prioridade):
+    return {"alta": 1, "média": 2, "media": 2, "baixa": 3}.get(str(prioridade or "").lower(), 4)
+
+
+def montar_tarefa_fila(task_key, tipo, prioridade, titulo, acao_url, verificacao=None, site=None, observacao=""):
+    verificacao = verificacao or {}
+    site = site or {}
+    cnpj = limpar_cnpj(verificacao.get("cnpj") or site.get("cnpj") or "")
+    return {
+        "task_key": task_key,
+        "verificacao_id": verificacao.get("id"),
+        "site_gerado_id": site.get("id") or verificacao.get("site_gerado_id"),
+        "cnpj": cnpj,
+        "cnpj_formatado": formatar_cnpj(cnpj) if cnpj else (verificacao.get("cnpj_formatado") or site.get("cnpj_formatado") or ""),
+        "razao_social": titulo,
+        "tipo_tarefa": tipo,
+        "prioridade": prioridade,
+        "operador": verificacao.get("operador") or site.get("usuario") or usuario_atual(),
+        "acao_url": acao_url,
+        "observacao": observacao
+    }
+
+
+def gerar_tarefas_automaticas_fila_bm():
+    verificacoes = listar_verificacoes_bm({})
+    tarefas = []
+
+    for item in verificacoes:
+        item["tem_url_ou_dominio"] = bool(valor_texto(item.get("url_site", "")) or valor_texto(item.get("dominio", "")))
+        item["dominio_testado_pronto"] = str(item.get("ultimo_teste_status", "")).strip().lower() == "pronto"
+        item["em_status_final"] = item.get("status") in (STATUS_CENTRAL_BM_SUCESSO + STATUS_CENTRAL_BM_PROBLEMAS)
+        item["horas_desde_atualizacao"] = horas_desde_bm(item.get("atualizado_em") or item.get("criado_em"))
+        titulo = titulo_verificacao_radar(item)
+        url = f"/central-bm/{item.get('id')}"
+
+        if item.get("em_status_final"):
+            continue
+
+        if item.get("status") == "BM em Análise" and item.get("horas_desde_atualizacao", 0) >= 48:
+            tarefas.append(montar_tarefa_fila(
+                f"analise-48h-{item.get('id')}", "+48h em análise", "Alta", titulo, url, item,
+                observacao=f"Está em análise há aproximadamente {item.get('horas_desde_atualizacao', 0)}h."
+            ))
+
+        if item.get("tem_url_ou_dominio") and not item.get("dominio_testado_pronto") and item.get("status") != "BM em Análise":
+            tarefas.append(montar_tarefa_fila(
+                f"testar-dominio-{item.get('id')}", "Testar domínio", "Alta", titulo, url, item,
+                observacao="URL/domínio informado, mas sem pré-check pronto."
+            ))
+
+        if item.get("risco") == "Pronto" and item.get("status") in ["Preparando", "Pronto para verificar domínio", "Domínio verificado"]:
+            tarefas.append(montar_tarefa_fila(
+                f"pronta-analise-{item.get('id')}", "Pronta para análise", "Alta", titulo, url, item,
+                observacao="Score pronto para seguir para análise, revise e avance o status."
+            ))
+
+        if not bool_valor(item.get("checklist_meta_tag")) or not valor_texto(item.get("meta_tag", "")):
+            tarefas.append(montar_tarefa_fila(
+                f"meta-ausente-{item.get('id')}", "Corrigir meta tag", "Média", titulo, url, item,
+                observacao="Meta tag ausente ou checklist não marcado."
+            ))
+
+        if item.get("risco") == "Alto risco":
+            tarefas.append(montar_tarefa_fila(
+                f"score-baixo-{item.get('id')}", "Revisar score baixo", "Média", titulo, url, item,
+                observacao="Score abaixo de 50. Revise checklist, domínio e dados antes de enviar."
+            ))
+
+        if not item.get("operador"):
+            tarefas.append(montar_tarefa_fila(
+                f"sem-operador-{item.get('id')}", "Definir operador", "Baixa", titulo, url, item,
+                observacao="Verificação sem operador definido."
+            ))
+
+    try:
+        sites = enriquecer_sites_com_verificacao_bm(listar_sites_gerados())
+    except Exception:
+        sites = []
+
+    for site in sites:
+        if site.get("verificacao_bm_id"):
+            continue
+        titulo = site.get("nome_empresarial") or site.get("nome_fantasia") or site.get("nome_arquivo") or "Site gerado"
+        tarefas.append(montar_tarefa_fila(
+            f"site-sem-bm-{site.get('id')}", "Criar BM do site", "Média", titulo, f"/site-gerado/{site.get('id')}", site=site,
+            observacao="Site gerado ainda não vinculado à Central BM."
+        ))
+
+    tarefas = sorted(tarefas, key=lambda t: (prioridade_ordem_bm(t.get("prioridade")), t.get("tipo_tarefa", ""), t.get("razao_social", "")))
+    return tarefas
+
+
+def sincronizar_fila_bm():
+    criar_tabela_fila_bm()
+    tarefas = gerar_tarefas_automaticas_fila_bm()
+
+    try:
+        with engine.begin() as conn:
+            for tarefa in tarefas:
+                existente = conn.execute(
+                    text("SELECT id, status_tarefa FROM fila_bm_tarefas WHERE task_key = :task_key"),
+                    {"task_key": tarefa["task_key"]}
+                ).fetchone()
+
+                if existente:
+                    status_atual = linha_para_dict(existente).get("status_tarefa")
+                    if status_atual not in ["Concluída", "Ignorada"]:
+                        conn.execute(
+                            text("""
+                            UPDATE fila_bm_tarefas
+                            SET verificacao_id = :verificacao_id,
+                                site_gerado_id = :site_gerado_id,
+                                cnpj = :cnpj,
+                                cnpj_formatado = :cnpj_formatado,
+                                razao_social = :razao_social,
+                                tipo_tarefa = :tipo_tarefa,
+                                prioridade = :prioridade,
+                                operador = :operador,
+                                acao_url = :acao_url,
+                                observacao = :observacao,
+                                atualizado_em = CURRENT_TIMESTAMP
+                            WHERE task_key = :task_key
+                            """),
+                            tarefa
+                        )
+                else:
+                    params = dict(tarefa)
+                    params["status_tarefa"] = "Pendente"
+                    conn.execute(
+                        text("""
+                        INSERT INTO fila_bm_tarefas
+                        (task_key, verificacao_id, site_gerado_id, cnpj, cnpj_formatado, razao_social, tipo_tarefa, prioridade, status_tarefa, operador, acao_url, observacao)
+                        VALUES
+                        (:task_key, :verificacao_id, :site_gerado_id, :cnpj, :cnpj_formatado, :razao_social, :tipo_tarefa, :prioridade, :status_tarefa, :operador, :acao_url, :observacao)
+                        """),
+                        params
+                    )
+    except Exception as erro:
+        print("Erro ao sincronizar Fila BM:", erro)
+
+
+def listar_tarefas_fila_bm(filtros=None):
+    sincronizar_fila_bm()
+    filtros = filtros or {}
+    where = []
+    params = {}
+
+    if tipo_usuario() != "admin":
+        where.append("(operador = :operador_usuario OR operador IS NULL OR operador = '')")
+        params["operador_usuario"] = usuario_atual()
+
+    busca = valor_texto(filtros.get("busca", ""))
+    prioridade = valor_texto(filtros.get("prioridade", ""))
+    status_tarefa = valor_texto(filtros.get("status_tarefa", "")) or "Pendente"
+    operador = valor_texto(filtros.get("operador", ""))
+
+    if busca:
+        params["busca"] = f"%{busca.upper()}%"
+        where.append("""
+        (
+            UPPER(COALESCE(cnpj, '')) LIKE :busca OR
+            UPPER(COALESCE(cnpj_formatado, '')) LIKE :busca OR
+            UPPER(COALESCE(razao_social, '')) LIKE :busca OR
+            UPPER(COALESCE(tipo_tarefa, '')) LIKE :busca OR
+            UPPER(COALESCE(observacao, '')) LIKE :busca
+        )
+        """)
+
+    if prioridade:
+        where.append("prioridade = :prioridade")
+        params["prioridade"] = prioridade
+
+    if status_tarefa:
+        where.append("status_tarefa = :status_tarefa")
+        params["status_tarefa"] = status_tarefa
+
+    if operador:
+        where.append("operador = :operador")
+        params["operador"] = operador
+
+    where_sql = "WHERE " + " AND ".join(where) if where else ""
+
+    with engine.connect() as conn:
+        linhas = conn.execute(
+            text(f"""
+            SELECT *
+            FROM fila_bm_tarefas
+            {where_sql}
+            ORDER BY
+                CASE LOWER(COALESCE(prioridade,'')) WHEN 'alta' THEN 1 WHEN 'média' THEN 2 WHEN 'media' THEN 2 WHEN 'baixa' THEN 3 ELSE 4 END,
+                id DESC
+            LIMIT 500
+            """),
+            params
+        ).fetchall()
+
+    return [linha_para_dict(linha) for linha in linhas]
+
+
+def estatisticas_fila_bm():
+    criar_tabela_fila_bm()
+    sincronizar_fila_bm()
+
+    with engine.connect() as conn:
+        linhas = conn.execute(text("SELECT status_tarefa, prioridade, operador, concluido_em FROM fila_bm_tarefas")).fetchall()
+
+    hoje = datetime.now().date()
+    stats = {"total": 0, "pendentes": 0, "alta": 0, "sem_responsavel": 0, "concluidas_hoje": 0, "problemas": 0}
+    operadores = {}
+
+    for linha in linhas:
+        item = linha_para_dict(linha)
+        stats["total"] += 1
+        if item.get("status_tarefa") in ["Pendente", "Em andamento"]:
+            stats["pendentes"] += 1
+        if str(item.get("prioridade", "")).lower() == "alta" and item.get("status_tarefa") in ["Pendente", "Em andamento"]:
+            stats["alta"] += 1
+        if not item.get("operador") and item.get("status_tarefa") in ["Pendente", "Em andamento"]:
+            stats["sem_responsavel"] += 1
+        if item.get("status_tarefa") == "Problema":
+            stats["problemas"] += 1
+        data_concluida = parse_datetime_bm(item.get("concluido_em"))
+        if item.get("status_tarefa") == "Concluída" and data_concluida and data_concluida.date() == hoje:
+            stats["concluidas_hoje"] += 1
+
+        operador = item.get("operador") or "Sem responsável"
+        operadores[operador] = operadores.get(operador, 0) + 1
+
+    stats["operadores"] = sorted([{"operador": k, "total": v} for k, v in operadores.items()], key=lambda x: x["total"], reverse=True)[:10]
+    return stats
+
+
+def atualizar_status_tarefa_fila(tarefa_id, status_tarefa, observacao=""):
+    criar_tabela_fila_bm()
+    if status_tarefa not in STATUS_TAREFA_FILA_BM:
+        status_tarefa = "Pendente"
+
+    complemento = ", concluido_em = CURRENT_TIMESTAMP" if status_tarefa == "Concluída" else ""
+
+    with engine.begin() as conn:
+        conn.execute(
+            text(f"""
+            UPDATE fila_bm_tarefas
+            SET status_tarefa = :status_tarefa,
+                observacao = CASE WHEN :observacao <> '' THEN :observacao ELSE observacao END,
+                atualizado_em = CURRENT_TIMESTAMP
+                {complemento}
+            WHERE id = :id
+            """),
+            {"id": tarefa_id, "status_tarefa": status_tarefa, "observacao": observacao}
+        )
+
+
+def gerar_alertas_verificacao_bm(item):
+    alertas = []
+    if not item:
+        return alertas
+
+    finalizado = item.get("status") in (STATUS_CENTRAL_BM_SUCESSO + STATUS_CENTRAL_BM_PROBLEMAS)
+    horas = horas_desde_bm(item.get("atualizado_em") or item.get("criado_em"))
+
+    def add(nivel, titulo, texto):
+        alertas.append({"nivel": nivel, "titulo": titulo, "texto": texto})
+
+    if not finalizado and item.get("status") == "BM em Análise" and horas >= 48:
+        add("critico", "+48h em análise", f"Está sem atualização há aproximadamente {horas}h.")
+    if not finalizado and not valor_texto(item.get("url_site", "")) and not valor_texto(item.get("dominio", "")):
+        add("critico", "Sem URL/domínio", "Informe a URL publicada ou domínio antes de seguir.")
+    if not finalizado and (not item.get("meta_tag") or not bool_valor(item.get("checklist_meta_tag"))):
+        add("critico", "Meta tag pendente", "Meta tag ausente ou ainda não validada no checklist.")
+    if not finalizado and item.get("risco") == "Alto risco":
+        add("atencao", "Score baixo", "Score de prontidão abaixo de 50.")
+    if not finalizado and valor_texto(item.get("url_site", "")).endswith(".workers.dev"):
+        add("atencao", "Workers.dev detectado", "URL de preview/Workers detectada. Revise se é o domínio esperado para a operação.")
+    if not finalizado and not item.get("operador"):
+        add("atencao", "Sem operador", "Defina o responsável pela verificação.")
+    if finalizado and not bool_valor(item.get("checklist_observacao")):
+        add("info", "Sem observação final", "Registre uma observação para fechar o histórico operacional.")
+
+    return alertas
+
+
+def gerar_alertas_gerais_bm(verificacoes=None, limite=12):
+    verificacoes = verificacoes if verificacoes is not None else listar_verificacoes_bm({})
+    alertas = []
+    for item in verificacoes:
+        for alerta in gerar_alertas_verificacao_bm(item):
+            alerta = dict(alerta)
+            alerta["verificacao_id"] = item.get("id")
+            alerta["titulo_bm"] = titulo_verificacao_radar(item)
+            alerta["url"] = f"/central-bm/{item.get('id')}"
+            alertas.append(alerta)
+
+    ordem = {"critico": 1, "atencao": 2, "info": 3}
+    return sorted(alertas, key=lambda a: ordem.get(a.get("nivel"), 9))[:limite]
+
+
+def texto_pdf_seguro(texto):
+    texto = str(texto or "")
+    texto = unicodedata.normalize("NFKD", texto).encode("ascii", "ignore").decode("ascii")
+    return texto.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+
+
+def gerar_pdf_simples(titulo, linhas):
+    largura, altura = 595, 842
+    margem_x, y_inicial = 46, 792
+    linhas_pdf = []
+    y = y_inicial
+
+    def add_linha(txt, tamanho=10, negrito=False):
+        nonlocal y
+        if y < 60:
+            y = y_inicial
+            linhas_pdf.append("__NOVA_PAGINA__")
+        fonte = "F2" if negrito else "F1"
+        linhas_pdf.append(f"BT /{fonte} {tamanho} Tf {margem_x} {y} Td ({texto_pdf_seguro(txt)}) Tj ET")
+        y -= int(tamanho * 1.55)
+
+    add_linha(titulo, 16, True)
+    add_linha("LTDAFinder Pro", 10, False)
+    add_linha("", 8, False)
+
+    for linha in linhas:
+        linha = str(linha or "")
+        if len(linha) <= 92:
+            add_linha(linha, 10, linha.isupper() and len(linha) < 60)
+        else:
+            atual = linha
+            while len(atual) > 92:
+                corte = atual.rfind(" ", 0, 92)
+                if corte <= 0:
+                    corte = 92
+                add_linha(atual[:corte], 10, False)
+                atual = atual[corte:].strip()
+            if atual:
+                add_linha(atual, 10, False)
+
+    paginas = [[]]
+    for cmd in linhas_pdf:
+        if cmd == "__NOVA_PAGINA__":
+            paginas.append([])
+        else:
+            paginas[-1].append(cmd)
+
+    objetos = []
+    objetos.append("<< /Type /Catalog /Pages 2 0 R >>")
+    kids = " ".join([f"{3+i*2} 0 R" for i in range(len(paginas))])
+    objetos.append(f"<< /Type /Pages /Kids [{kids}] /Count {len(paginas)} >>")
+
+    for i, comandos in enumerate(paginas):
+        page_obj_num = 3 + i * 2
+        content_obj_num = page_obj_num + 1
+        objetos.append(f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {largura} {altura}] /Resources << /Font << /F1 1 0 R /F2 2 0 R >> >> /Contents {content_obj_num} 0 R >>")
+        stream = "\n".join(comandos)
+        objetos.append(f"<< /Length {len(stream.encode('latin1', errors='ignore'))} >>\nstream\n{stream}\nendstream")
+
+    # Reorganiza fontes nos objetos 1 e 2 da forma correta para PDF simples.
+    kids_pdf = " ".join([f"{5+i*2} 0 R" for i in range(len(paginas))])
+    objetos_pdf = [
+        "<< /Type /Catalog /Pages 4 0 R >>",
+        "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+        "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>",
+        f"<< /Type /Pages /Kids [{kids_pdf}] /Count {len(paginas)} >>"
+    ]
+
+    for i, comandos in enumerate(paginas):
+        page_obj_num = 5 + i * 2
+        content_obj_num = page_obj_num + 1
+        objetos_pdf.append(f"<< /Type /Page /Parent 4 0 R /MediaBox [0 0 {largura} {altura}] /Resources << /Font << /F1 2 0 R /F2 3 0 R >> >> /Contents {content_obj_num} 0 R >>")
+        stream = "\n".join(comandos)
+        objetos_pdf.append(f"<< /Length {len(stream.encode('latin1', errors='ignore'))} >>\nstream\n{stream}\nendstream")
+
+    pdf = "%PDF-1.4\n"
+    offsets = []
+    for idx, obj in enumerate(objetos_pdf, start=1):
+        offsets.append(len(pdf.encode('latin1', errors='ignore')))
+        pdf += f"{idx} 0 obj\n{obj}\nendobj\n"
+    xref = len(pdf.encode('latin1', errors='ignore'))
+    pdf += f"xref\n0 {len(objetos_pdf)+1}\n0000000000 65535 f \n"
+    for off in offsets:
+        pdf += f"{off:010d} 00000 n \n"
+    pdf += f"trailer\n<< /Size {len(objetos_pdf)+1} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF"
+    return pdf.encode("latin1", errors="ignore")
+
+
+def linhas_dossie_bm(verificacao, historico):
+    linhas = [
+        "Documento interno gerado pelo LTDAFinder Pro.",
+        "Nao substitui documentos oficiais emitidos por orgaos publicos.",
+        "",
+        "DADOS DA EMPRESA",
+        f"CNPJ: {verificacao.get('cnpj_formatado') or formatar_cnpj(verificacao.get('cnpj', ''))}",
+        f"Razao social: {verificacao.get('razao_social', '')}",
+        f"Nome fantasia: {verificacao.get('nome_fantasia', '')}",
+        "",
+        "OPERACAO BM",
+        f"Status: {verificacao.get('status', '')}",
+        f"Operador: {verificacao.get('operador', '')}",
+        f"Perfil Meta: {verificacao.get('perfil_meta_nome', '')}",
+        f"Nome BM: {verificacao.get('nome_bm', '')}",
+        f"Score: {verificacao.get('score_prontidao', 0)}/100 - {verificacao.get('risco', '')}",
+        "",
+        "DOMINIO E SITE",
+        f"URL: {verificacao.get('url_site', '')}",
+        f"Dominio: {verificacao.get('dominio', '')}",
+        f"Site vinculado: {verificacao.get('site_nome_arquivo', '')}",
+        f"Modelo: {verificacao.get('site_modelo', '')}",
+        "",
+        "CONTATOS OPERACIONAIS",
+        f"Telefone: {verificacao.get('telefone_operacional', '')}",
+        f"E-mail: {verificacao.get('email_operacional', '')}",
+        f"Numero SMS: {verificacao.get('numero_sms', '')}",
+        "",
+        "CHECKLIST"
+    ]
+
+    for item in CHECKLIST_CENTRAL_BM:
+        marcado = "SIM" if bool_valor(verificacao.get(item['campo'])) else "NAO"
+        linhas.append(f"[{marcado}] {item.get('etapa', '')} - {item.get('label', '')}")
+
+    linhas.extend(["", "ULTIMO TESTE DE DOMINIO"])
+    linhas.append(f"Status: {verificacao.get('ultimo_teste_status', '')}")
+    linhas.append(f"Mensagem: {verificacao.get('ultimo_teste_mensagem', '')}")
+    linhas.append("",)
+    linhas.append("OBSERVACOES")
+    linhas.append(verificacao.get('observacoes', '') or "Sem observacoes.")
+    linhas.append("")
+    linhas.append("HISTORICO")
+
+    for item in historico[:40]:
+        linhas.append(f"{item.get('criado_em', '')} - {item.get('acao', '')}: {item.get('status_anterior', '')} -> {item.get('status_novo', '')} | {item.get('observacao', '')}")
+
+    return linhas
+
+
+def resumo_relatorio_diario_central(data_iso=None, usuario_filtro=""):
+    data_iso = data_iso or data_hoje()
+    verificacoes = listar_verificacoes_bm({})
+    itens_dia = []
+
+    for item in verificacoes:
+        data_ref = parse_datetime_bm(item.get("atualizado_em") or item.get("criado_em"))
+        if not data_ref or data_ref.strftime("%Y-%m-%d") != data_iso:
+            continue
+        if usuario_filtro and (item.get("operador") or item.get("usuario")) != usuario_filtro:
+            continue
+        itens_dia.append(item)
+
+    contagem = {status: 0 for status in STATUS_CENTRAL_BM}
+    operadores = {}
+
+    for item in itens_dia:
+        status = item.get("status") or "Preparando"
+        if status not in contagem:
+            contagem[status] = 0
+        contagem[status] += 1
+        operador = item.get("operador") or item.get("usuario") or "Sem operador"
+        if operador not in operadores:
+            operadores[operador] = {"operador": operador, "total": 0, "sucesso": 0, "problemas": 0}
+        operadores[operador]["total"] += 1
+        if status in STATUS_CENTRAL_BM_SUCESSO:
+            operadores[operador]["sucesso"] += 1
+        if status in STATUS_CENTRAL_BM_PROBLEMAS:
+            operadores[operador]["problemas"] += 1
+
+    sucesso = sum(contagem.get(status, 0) for status in STATUS_CENTRAL_BM_SUCESSO)
+    problemas = sum(contagem.get(status, 0) for status in STATUS_CENTRAL_BM_PROBLEMAS)
+    total = len(itens_dia)
+
+    operadores_lista = []
+    for op in operadores.values():
+        op["taxa_sucesso"] = (op["sucesso"] / op["total"] * 100) if op["total"] else 0
+        operadores_lista.append(op)
+
+    return {
+        "data": data_iso,
+        "total": total,
+        "sucesso": sucesso,
+        "problemas": problemas,
+        "taxa_sucesso": (sucesso / total * 100) if total else 0,
+        "contagem": contagem,
+        "operadores": sorted(operadores_lista, key=lambda x: (x["sucesso"], x["total"]), reverse=True),
+        "itens": itens_dia
+    }
+
+
+def gerar_texto_relatorio_diario_central(resumo):
+    data_br = formatar_data_relatorio(resumo.get("data", data_hoje()))
+    linhas = [
+        "RELATORIO OPERACIONAL BM",
+        f"Data: {data_br}",
+        "",
+        f"Total trabalhadas/atualizadas: {resumo.get('total', 0)}",
+        f"Resultados positivos: {resumo.get('sucesso', 0)}",
+        f"Problemas: {resumo.get('problemas', 0)}",
+        f"Taxa de sucesso: {resumo.get('taxa_sucesso', 0):.1f}%",
+        "",
+        "RESULTADOS POR STATUS:"
+    ]
+
+    for status, qtd in resumo.get("contagem", {}).items():
+        if qtd:
+            linhas.append(f"- {status}: {qtd}")
+
+    linhas.append("")
+    linhas.append("POR OPERADOR:")
+    for op in resumo.get("operadores", []):
+        linhas.append(f"- {op['operador']}: {op['total']} trabalhadas | {op['sucesso']} positivas | {op['problemas']} problemas | {op['taxa_sucesso']:.1f}%")
+
+    linhas.append("")
+    linhas.append("ITENS DO DIA:")
+    for item in resumo.get("itens", []):
+        linhas.append(f"- {item.get('cnpj_formatado', '')} | {item.get('razao_social', '')} | {item.get('status', '')} | {item.get('operador', '')}")
+
+    return "\n".join(linhas)
+
+
+@app.route("/fila-bm", methods=["GET"])
+@login_obrigatorio
+def fila_bm():
+    filtros = {
+        "busca": request.args.get("busca", ""),
+        "prioridade": request.args.get("prioridade", ""),
+        "status_tarefa": request.args.get("status_tarefa", "Pendente"),
+        "operador": request.args.get("operador", "")
+    }
+    tarefas = listar_tarefas_fila_bm(filtros)
+    estatisticas = estatisticas_fila_bm()
+    usuarios = sorted(carregar_usuarios().keys()) if tipo_usuario() == "admin" else [usuario_atual()]
+
+    return render_template(
+        "fila_bm.html",
+        usuario_logado=usuario_atual(),
+        tipo_usuario=tipo_usuario(),
+        tarefas=tarefas,
+        estatisticas=estatisticas,
+        filtros=filtros,
+        usuarios=usuarios,
+        status_tarefa_fila=STATUS_TAREFA_FILA_BM
+    )
+
+
+@app.route("/fila-bm/<int:tarefa_id>/status", methods=["POST"])
+@login_obrigatorio
+def fila_bm_status(tarefa_id):
+    status_tarefa = request.form.get("status_tarefa", "Pendente")
+    observacao = request.form.get("observacao", "").strip()
+    atualizar_status_tarefa_fila(tarefa_id, status_tarefa, observacao)
+    return redirect(request.referrer or url_for("fila_bm"))
+
+
+@app.route("/central-bm/<int:verificacao_id>/dossie-pdf", methods=["GET"])
+@login_obrigatorio
+def dossie_bm_pdf(verificacao_id):
+    verificacao = buscar_verificacao_bm(verificacao_id)
+    if not verificacao:
+        abort(404)
+    if tipo_usuario() != "admin" and verificacao.get("usuario") != usuario_atual():
+        abort(403)
+
+    historico = historico_verificacao_bm(verificacao_id)
+    linhas = linhas_dossie_bm(verificacao, historico)
+    pdf = gerar_pdf_simples("Dossie BM", linhas)
+    nome = f"dossie_bm_{limpar_cnpj(verificacao.get('cnpj', ''))}.pdf"
+    return send_file(io.BytesIO(pdf), download_name=nome, as_attachment=True, mimetype="application/pdf")
+
+
+@app.route("/relatorio-diario-bm", methods=["GET"])
+@login_obrigatorio
+def relatorio_diario_bm():
+    data = request.args.get("data", data_hoje())
+    usuario_filtro = request.args.get("usuario", "").strip().lower()
+    if tipo_usuario() != "admin":
+        usuario_filtro = usuario_atual()
+    resumo = resumo_relatorio_diario_central(data, usuario_filtro)
+    texto_relatorio = gerar_texto_relatorio_diario_central(resumo)
+    usuarios = sorted(carregar_usuarios().keys()) if tipo_usuario() == "admin" else [usuario_atual()]
+    return render_template(
+        "relatorio_diario_bm.html",
+        usuario_logado=usuario_atual(),
+        tipo_usuario=tipo_usuario(),
+        usuarios=usuarios,
+        filtros={"data": data, "usuario": usuario_filtro},
+        resumo=resumo,
+        texto_relatorio=texto_relatorio
+    )
+
+
+@app.route("/relatorio-diario-bm/txt", methods=["POST"])
+@login_obrigatorio
+def relatorio_diario_bm_txt():
+    data = request.form.get("data", data_hoje())
+    usuario_filtro = request.form.get("usuario", "").strip().lower()
+    if tipo_usuario() != "admin":
+        usuario_filtro = usuario_atual()
+    resumo = resumo_relatorio_diario_central(data, usuario_filtro)
+    texto_relatorio = gerar_texto_relatorio_diario_central(resumo)
+    return send_file(io.BytesIO(texto_relatorio.encode("utf-8")), download_name=f"relatorio_diario_bm_{data}.txt", as_attachment=True, mimetype="text/plain; charset=utf-8")
+
+
+@app.route("/relatorio-diario-bm/csv", methods=["POST"])
+@login_obrigatorio
+def relatorio_diario_bm_csv():
+    data = request.form.get("data", data_hoje())
+    usuario_filtro = request.form.get("usuario", "").strip().lower()
+    if tipo_usuario() != "admin":
+        usuario_filtro = usuario_atual()
+    resumo = resumo_relatorio_diario_central(data, usuario_filtro)
+    linhas = ["cnpj;razao_social;status;operador;score;risco"]
+    for item in resumo.get("itens", []):
+        valores = [
+            item.get("cnpj_formatado", ""),
+            item.get("razao_social", ""),
+            item.get("status", ""),
+            item.get("operador", ""),
+            str(item.get("score_prontidao", "")),
+            item.get("risco", "")
+        ]
+        linhas.append(";".join([str(v).replace(";", ",") for v in valores]))
+    conteudo = "\n".join(linhas)
+    return send_file(io.BytesIO(conteudo.encode("utf-8-sig")), download_name=f"relatorio_diario_bm_{data}.csv", as_attachment=True, mimetype="text/csv; charset=utf-8")
+
+
+@app.route("/relatorio-diario-bm/pdf", methods=["POST"])
+@login_obrigatorio
+def relatorio_diario_bm_pdf():
+    data = request.form.get("data", data_hoje())
+    usuario_filtro = request.form.get("usuario", "").strip().lower()
+    if tipo_usuario() != "admin":
+        usuario_filtro = usuario_atual()
+    resumo = resumo_relatorio_diario_central(data, usuario_filtro)
+    linhas = gerar_texto_relatorio_diario_central(resumo).splitlines()
+    pdf = gerar_pdf_simples("Relatorio Diario BM", linhas)
+    return send_file(io.BytesIO(pdf), download_name=f"relatorio_diario_bm_{data}.pdf", as_attachment=True, mimetype="application/pdf")
 
 
 @app.route("/radar-bm", methods=["GET"])
@@ -4510,7 +5323,8 @@ def central_bm():
         estatisticas=estatisticas,
         status_central_bm=STATUS_CENTRAL_BM,
         filtros=filtros,
-        usuarios=usuarios
+        usuarios=usuarios,
+        alertas=gerar_alertas_gerais_bm(verificacoes, 10)
     )
 
 
@@ -4543,6 +5357,7 @@ def nova_verificacao_bm():
         perfis_meta=perfis_meta_para_select(),
         status_central_bm=STATUS_CENTRAL_BM,
         checklist_central_bm=CHECKLIST_CENTRAL_BM,
+        checklist_etapas=checklist_central_bm_por_etapa(),
         erro=erro
     )
 
@@ -4568,6 +5383,7 @@ def detalhe_verificacao_bm(verificacao_id):
         return redirect(url_for("detalhe_verificacao_bm", verificacao_id=verificacao_id, sucesso="Dados salvos com sucesso."))
 
     historico = historico_verificacao_bm(verificacao_id)
+    alertas = gerar_alertas_verificacao_bm(verificacao)
 
     return render_template(
         "bm_verificacao.html",
@@ -4578,6 +5394,8 @@ def detalhe_verificacao_bm(verificacao_id):
         perfis_meta=perfis_meta_para_select(),
         status_central_bm=STATUS_CENTRAL_BM,
         checklist_central_bm=CHECKLIST_CENTRAL_BM,
+        checklist_etapas=checklist_central_bm_por_etapa(),
+        alertas=alertas,
         erro=erro,
         sucesso=sucesso
     )
@@ -4624,6 +5442,9 @@ def central_bm_testar_dominio(verificacao_id):
     verificacao_atualizada["checklist_site"] = resultado.get("checklist_site", verificacao.get("checklist_site", False))
     verificacao_atualizada["checklist_meta_tag"] = resultado.get("checklist_meta_tag", verificacao.get("checklist_meta_tag", False))
     verificacao_atualizada["checklist_dominio"] = resultado.get("checklist_dominio", verificacao.get("checklist_dominio", False))
+    verificacao_atualizada["checklist_https"] = resultado.get("checklist_https", verificacao.get("checklist_https", False))
+    verificacao_atualizada["checklist_cnpj_site"] = resultado.get("checklist_cnpj_site", verificacao.get("checklist_cnpj_site", False))
+    verificacao_atualizada["checklist_razao_site"] = resultado.get("checklist_razao_site", verificacao.get("checklist_razao_site", False))
     verificacao_atualizada["score_prontidao"], verificacao_atualizada["risco"] = calcular_score_prontidao_bm(verificacao_atualizada)
 
     with engine.begin() as conn:
@@ -4633,6 +5454,9 @@ def central_bm_testar_dominio(verificacao_id):
             SET checklist_site = :checklist_site,
                 checklist_meta_tag = :checklist_meta_tag,
                 checklist_dominio = :checklist_dominio,
+                checklist_https = :checklist_https,
+                checklist_cnpj_site = :checklist_cnpj_site,
+                checklist_razao_site = :checklist_razao_site,
                 score_prontidao = :score_prontidao,
                 risco = :risco,
                 ultimo_teste_status = :ultimo_teste_status,
@@ -4647,6 +5471,9 @@ def central_bm_testar_dominio(verificacao_id):
                 "checklist_site": verificacao_atualizada["checklist_site"],
                 "checklist_meta_tag": verificacao_atualizada["checklist_meta_tag"],
                 "checklist_dominio": verificacao_atualizada["checklist_dominio"],
+                "checklist_https": verificacao_atualizada["checklist_https"],
+                "checklist_cnpj_site": verificacao_atualizada["checklist_cnpj_site"],
+                "checklist_razao_site": verificacao_atualizada["checklist_razao_site"],
                 "score_prontidao": verificacao_atualizada["score_prontidao"],
                 "risco": verificacao_atualizada["risco"],
                 "ultimo_teste_status": resultado.get("status", "erro"),

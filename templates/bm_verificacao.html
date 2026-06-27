@@ -219,8 +219,11 @@
                 <a class="menu-item" href="/favoritos">⭐ Favoritos</a>
                 <a class="menu-item" href="/perfis-meta">👤 Perfis Meta</a>
                 <a class="menu-item active" href="/central-bm">🧭 Central BM</a>
+                <a class="menu-item" href="/fila-bm">🧭 Fila BM</a>
                 <a class="menu-item" href="/radar-bm">📡 Radar BM</a>
+                <a class="menu-item" href="/fila-bm">🧭 Fila BM</a>
                 <a class="menu-item" href="/relatorios-bm">📄 Relatórios BM</a>
+                <a class="menu-item" href="/relatorio-diario-bm">🗓️ Relatório Diário</a>
                 <a class="menu-item" href="/sites">🌐 Gerador de Sites</a>
                 <a class="menu-item" href="/historico">📜 Histórico</a>
                 <a class="menu-item" href="/estatisticas">📈 Estatísticas</a>
@@ -240,16 +243,33 @@
         {% if sucesso %}<div class="alerta alerta-sucesso">{{ sucesso }}</div>{% endif %}
         {% if erro %}<div class="alerta alerta-erro">{{ erro }}</div>{% endif %}
 
+        {% if alertas %}
+        <section class="bm-card" style="border-color:rgba(255,193,7,.28);">
+            <h2>⚠️ Alertas inteligentes</h2>
+            <div class="site-list" style="display:grid; gap:10px;">
+                {% for alerta in alertas %}
+                <div class="teste-box">
+                    <strong>{{ alerta.titulo }}</strong><br>
+                    <span>{{ alerta.texto }}</span>
+                </div>
+                {% endfor %}
+            </div>
+        </section>
+        {% endif %}
+
         <section class="score-panel">
             <div class="score-big score-{{ (verificacao.risco or 'Alto risco')|replace(' ', '-') }}">{{ verificacao.score_prontidao or 0 }}</div>
             <div>
                 <h2>Prontidão: {{ verificacao.risco or 'Alto risco' }}</h2>
-                <p>O score é calculado pelo checklist: CNPJ, site, meta tag, domínio, documento, 2FA e WABA.</p>
+                <p>O score é calculado por etapa: preparação, domínio, envio Meta e resultado.</p>
                 <span class="badge">Status: {{ verificacao.status }}</span>
             </div>
-            <form method="post" action="/central-bm/{{ verificacao.id }}/testar-dominio">
-                <button type="submit" class="bm-btn bm-btn-warn">🧪 Testar prontidão do domínio</button>
-            </form>
+            <div class="bm-actions" style="margin:0;">
+                <form method="post" action="/central-bm/{{ verificacao.id }}/testar-dominio" style="margin:0;">
+                    <button type="submit" class="bm-btn bm-btn-warn">🧪 Testar prontidão do domínio</button>
+                </form>
+                <a href="/central-bm/{{ verificacao.id }}/dossie-pdf" class="bm-btn bm-btn-blue">📄 Baixar Dossiê BM</a>
+            </div>
         </section>
 
         {% if verificacao.site_gerado_id %}
@@ -353,15 +373,20 @@
             </section>
 
             <section class="bm-card">
-                <h2>✅ Checklist</h2>
-                <div class="check-grid">
-                    {% for item in checklist_central_bm %}
-                    <label class="check-item">
-                        <input type="checkbox" name="{{ item.campo }}" {% if verificacao[item.campo] %}checked{% endif %}>
-                        <span><strong>{{ item.label }}</strong><small>+{{ item.peso }} pontos</small></span>
-                    </label>
-                    {% endfor %}
+                <h2>✅ Checklist avançado</h2>
+                {% for etapa in checklist_etapas %}
+                <div style="margin-bottom:18px;">
+                    <h3 style="margin:0 0 10px 0; color:#eaf7ff;">{{ etapa.etapa }}</h3>
+                    <div class="check-grid">
+                        {% for item in etapa.itens %}
+                        <label class="check-item">
+                            <input type="checkbox" name="{{ item.campo }}" {% if verificacao[item.campo] %}checked{% endif %}>
+                            <span><strong>{{ item.label }}</strong><small>+{{ item.peso }} pontos</small></span>
+                        </label>
+                        {% endfor %}
+                    </div>
                 </div>
+                {% endfor %}
             </section>
 
             <section class="bm-card">
