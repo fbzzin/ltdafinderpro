@@ -4206,6 +4206,288 @@ def atualizar_verificacoes_do_site_publicado(site_id, cloudflare_url, slug_perso
     except Exception as erro:
         print("Erro ao sincronizar site publicado com Central BM:", erro)
 
+
+
+def parse_datetime_bm(valor):
+    if not valor:
+        return None
+
+    if isinstance(valor, datetime):
+        return valor
+
+    valor = str(valor).strip()
+
+    if not valor:
+        return None
+
+    formatos = [
+        "%Y-%m-%d %H:%M:%S.%f",
+        "%Y-%m-%d %H:%M:%S",
+        "%Y-%m-%dT%H:%M:%S.%f",
+        "%Y-%m-%dT%H:%M:%S",
+        "%d/%m/%Y %H:%M",
+        "%d/%m/%Y",
+        "%Y-%m-%d"
+    ]
+
+    valor_limpo = valor.replace("Z", "").split("+")[0].strip()
+
+    for formato in formatos:
+        try:
+            return datetime.strptime(valor_limpo[:26], formato)
+        except Exception:
+            pass
+
+    return None
+
+
+def horas_desde_bm(valor):
+    data = parse_datetime_bm(valor)
+
+    if not data:
+        return 0
+
+    try:
+        return max(0, int((datetime.now() - data).total_seconds() // 3600))
+    except Exception:
+        return 0
+
+
+def data_bm_eh_hoje(valor):
+    data = parse_datetime_bm(valor)
+    return bool(data and data.date() == datetime.now().date())
+
+
+def primeiro_texto_bm(item, *chaves):
+    for chave in chaves:
+        valor = valor_texto(item.get(chave, ""))
+        if valor:
+            return valor
+    return ""
+
+
+def titulo_verificacao_radar(item):
+    nome = primeiro_texto_bm(item, "razao_social", "nome_fantasia", "nome_bm")
+    cnpj = primeiro_texto_bm(item, "cnpj_formatado", "cnpj")
+
+    if nome and cnpj:
+        return f"{nome} · {cnpj}"
+
+    return nome or cnpj or "Verificação BM"
+
+
+def montar_acao_radar(tipo, titulo, descricao, url, prioridade="media"):
+    return {
+        "tipo": tipo,
+        "titulo": titulo,
+        "descricao": descricao,
+        "url": url,
+        "prioridade": prioridade
+    }
+
+
+def montar_radar_bm():
+    verificacoes = listar_verificacoes_bm({})
+    agora = datetime.now()
+
+    for item in verificacoes:
+        data_ref = item.get("atualizado_em") or item.get("criado_em")
+        item["horas_desde_atualizacao"] = horas_desde_bm(data_ref)
+        item["atualizado_hoje"] = data_bm_eh_hoje(data_ref)
+        item["titulo_radar"] = titulo_verificacao_radar(item)
+        item["tem_url_ou_dominio"] = bool(valor_texto(item.get("url_site", "")) or valor_texto(item.get("dominio", "")))
+        item["dominio_testado_pronto"] = str(item.get("ultimo_teste_status", "")).strip().lower() == "pronto"
+        item["em_status_final"] = item.get("status") in (STATUS_CENTRAL_BM_SUCESSO + STATUS_CENTRAL_BM_PROBLEMAS)
+
+    abertas = [item for item in verificacoes if not item.get("em_status_final")]
+
+    prontas_para_analise = [
+        item for item in abertas
+        if item.get("risco") == "Pronto"
+        and item.get("status") in ["Preparando", "Pronto para verificar domínio", "Domínio verificado"]
+    ]
+
+    precisam_teste = [
+        item for item in abertas
+        if item.get("tem_url_ou_dominio")
+        and not item.get("dominio_testado_pronto")
+        and item.get("status") not in ["BM em Análise"]
+    ]
+
+    pendentes = [
+        item for item in abertas
+        if item.get("status") != "BM em Análise"
+        and (
+            item.get("risco") != "Pronto"
+            or not bool_valor(item.get("checklist_site"))
+            or not bool_valor(item.get("checklist_meta_tag"))
+            or not bool_valor(item.get("checklist_dominio"))
+        )
+    ]
+
+    em_analise_48h = [
+        item for item in abertas
+        if item.get("status") == "BM em Análise"
+        and item.get("horas_desde_atualizacao", 0) >= 48
+    ]
+
+    em_analise = [item for item in abertas if item.get("status") == "BM em Análise"]
+
+    verificaram_hoje = [
+        item for item in verificacoes
+        if item.get("status") in STATUS_CENTRAL_BM_SUCESSO
+        and item.get("atualizado_hoje")
+    ]
+
+    problemas = [item for item in verificacoes if item.get("status") in STATUS_CENTRAL_BM_PROBLEMAS]
+    problemas_hoje = [item for item in problemas if item.get("atualizado_hoje")]
+
+    meta_ausente = [
+        item for item in abertas
+        if not valor_texto(item.get("meta_tag", ""))
+        or not bool_valor(item.get("checklist_meta_tag"))
+    ]
+
+    site_ausente = [
+        item for item in abertas
+        if not valor_texto(item.get("url_site", ""))
+        and not valor_texto(item.get("dominio", ""))
+    ]
+
+    status_contagem = {}
+    operador_contagem = {}
+
+    for item in verificacoes:
+        status = item.get("status") or "Sem status"
+        status_contagem[status] = status_contagem.get(status, 0) + 1
+
+        operador = item.get("operador") or item.get("usuario") or "Sem operador"
+        if operador not in operador_contagem:
+            operador_contagem[operador] = {"operador": operador, "total": 0, "sucesso": 0, "problemas": 0, "taxa": 0}
+
+        operador_contagem[operador]["total"] += 1
+        if item.get("status") in STATUS_CENTRAL_BM_SUCESSO:
+            operador_contagem[operador]["sucesso"] += 1
+        if item.get("status") in STATUS_CENTRAL_BM_PROBLEMAS:
+            operador_contagem[operador]["problemas"] += 1
+
+    operadores = []
+    for item in operador_contagem.values():
+        item["taxa"] = (item["sucesso"] / item["total"] * 100) if item["total"] else 0
+        operadores.append(item)
+
+    operadores = sorted(operadores, key=lambda item: (item["sucesso"], item["total"]), reverse=True)
+    status_ranking = sorted([
+        {"status": status, "total": total}
+        for status, total in status_contagem.items()
+    ], key=lambda item: item["total"], reverse=True)
+
+    try:
+        sites = enriquecer_sites_com_verificacao_bm(listar_sites_gerados())
+    except Exception:
+        sites = []
+
+    sites_sem_bm = [
+        site for site in sites
+        if not site.get("verificacao_bm_id")
+        and (site.get("cloudflare_url") or site.get("nome_arquivo"))
+    ]
+
+    acoes = []
+
+    for site in sites_sem_bm[:5]:
+        acoes.append(montar_acao_radar(
+            "Site sem BM",
+            site.get("nome_empresarial") or site.get("nome_fantasia") or "Site gerado",
+            f"Site {site.get('nome_arquivo', '')} ainda não está vinculado a uma verificação BM.",
+            f"/site-gerado/{site.get('id')}",
+            "alta"
+        ))
+
+    for item in precisam_teste[:5]:
+        acoes.append(montar_acao_radar(
+            "Testar domínio",
+            item.get("titulo_radar"),
+            "URL/domínio informado, mas ainda sem teste pronto. Rode o pré-check antes de enviar para análise.",
+            f"/central-bm/{item.get('id')}",
+            "alta"
+        ))
+
+    for item in em_analise_48h[:5]:
+        acoes.append(montar_acao_radar(
+            "+48h em análise",
+            item.get("titulo_radar"),
+            f"Está em BM em Análise há aproximadamente {item.get('horas_desde_atualizacao', 0)}h.",
+            f"/central-bm/{item.get('id')}",
+            "media"
+        ))
+
+    for item in pendentes[:5]:
+        faltando = []
+        if not bool_valor(item.get("checklist_site")):
+            faltando.append("site")
+        if not bool_valor(item.get("checklist_meta_tag")):
+            faltando.append("meta tag")
+        if not bool_valor(item.get("checklist_dominio")):
+            faltando.append("domínio")
+
+        complemento = ", ".join(faltando) if faltando else "checklist/score"
+        acoes.append(montar_acao_radar(
+            "Pendência",
+            item.get("titulo_radar"),
+            f"Revisar {complemento} antes de seguir.",
+            f"/central-bm/{item.get('id')}",
+            "media"
+        ))
+
+    total = len(verificacoes)
+    sucesso_total = len([item for item in verificacoes if item.get("status") in STATUS_CENTRAL_BM_SUCESSO])
+    taxa_sucesso = (sucesso_total / total * 100) if total else 0
+
+    return {
+        "gerado_em": agora.strftime("%d/%m/%Y %H:%M"),
+        "cards": {
+            "total": total,
+            "prontas_para_analise": len(prontas_para_analise),
+            "pendentes": len(pendentes),
+            "precisam_teste": len(precisam_teste),
+            "em_analise": len(em_analise),
+            "em_analise_48h": len(em_analise_48h),
+            "verificaram_hoje": len(verificaram_hoje),
+            "problemas_hoje": len(problemas_hoje),
+            "sites_sem_bm": len(sites_sem_bm),
+            "meta_ausente": len(meta_ausente),
+            "site_ausente": len(site_ausente),
+            "taxa_sucesso": taxa_sucesso
+        },
+        "listas": {
+            "prontas_para_analise": prontas_para_analise[:12],
+            "pendentes": pendentes[:12],
+            "precisam_teste": precisam_teste[:12],
+            "em_analise_48h": em_analise_48h[:12],
+            "verificaram_hoje": verificaram_hoje[:12],
+            "problemas": problemas[:12],
+            "sites_sem_bm": sites_sem_bm[:12],
+            "acoes": acoes[:14],
+            "status_ranking": status_ranking[:10],
+            "operadores": operadores[:10]
+        }
+    }
+
+
+@app.route("/radar-bm", methods=["GET"])
+@login_obrigatorio
+def radar_bm():
+    radar = montar_radar_bm()
+
+    return render_template(
+        "radar_bm.html",
+        usuario_logado=usuario_atual(),
+        tipo_usuario=tipo_usuario(),
+        radar=radar
+    )
+
+
 @app.route("/central-bm", methods=["GET"])
 @login_obrigatorio
 def central_bm():

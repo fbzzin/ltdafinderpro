@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>Radar BM - LtdaFinder Pro</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        :root{
+            --bm-bg:#050b16;
+            --bm-panel:#0f1b2e;
+            --bm-panel-2:#13233b;
+            --bm-panel-3:#172a45;
+            --bm-border:#203653;
+            --bm-border-soft:#29415f;
+            --bm-text:#f8fafc;
+            --bm-muted:#9fb1c9;
+            --bm-muted-2:#cbd5e1;
+            --bm-green:#22c55e;
+            --bm-blue:#38bdf8;
+            --bm-yellow:#facc15;
+            --bm-red:#fb7185;
+            --bm-purple:#a78bfa;
+            --bm-shadow:0 20px 45px rgba(0,0,0,.24);
+        }
+
+        .main{color:var(--bm-text);}
+
+        .radar-hero{
+            position:relative;
+            overflow:hidden;
+            background:
+                radial-gradient(circle at top left, rgba(56,189,248,.20), transparent 34%),
+                radial-gradient(circle at bottom right, rgba(34,197,94,.16), transparent 32%),
+                linear-gradient(135deg,#0f1b2e,#15243a 52%,#101827);
+            border:1px solid var(--bm-border);
+            border-radius:22px;
+            padding:28px;
+            color:var(--bm-text);
+            margin-bottom:22px;
+            box-shadow:var(--bm-shadow);
+        }
+
+        .radar-hero::after{
+            content:"";
+            position:absolute;
+            inset:0;
+            background:linear-gradient(90deg,rgba(255,255,255,.05),transparent 44%);
+            pointer-events:none;
+        }
+
+        .radar-hero h1{position:relative;margin:0 0 8px;font-size:32px;letter-spacing:-.03em;color:#fff;}
+        .radar-hero p{position:relative;margin:0;color:var(--bm-muted-2);font-size:14px;line-height:1.55;}
+        .radar-hero-actions{position:relative;display:flex;gap:12px;flex-wrap:wrap;margin-top:20px;}
+
+        .bm-btn{
+            display:inline-flex;
+            align-items:center;
+            justify-content:center;
+            gap:8px;
+            border:1px solid transparent;
+            border-radius:14px;
+            padding:12px 16px;
+            font-weight:900;
+            text-decoration:none;
+            cursor:pointer;
+            line-height:1;
+            transition:.18s ease;
+            box-shadow:0 12px 24px rgba(0,0,0,.16);
+        }
+        .bm-btn:hover{transform:translateY(-1px);filter:brightness(1.05);}
+        .bm-btn-primary{background:linear-gradient(135deg,#22c55e,#16a34a);color:#04130a;}
+        .bm-btn-dark{background:#020617;color:#fff;border-color:#1e293b;}
+        .bm-btn-soft{background:#f8fafc;color:#0f172a;}
+        .bm-btn-blue{background:#0f3558;color:#dbeafe;border-color:#1d4ed8;}
+        .bm-btn-warn{background:#4a3b0b;color:#fef9c3;border-color:#a16207;}
+
+        .radar-grid{
+            display:grid;
+            grid-template-columns:repeat(6,minmax(130px,1fr));
+            gap:14px;
+            margin-bottom:20px;
+        }
+
+        .radar-card,
+        .radar-panel,
+        .radar-action,
+        .radar-mini-row{
+            background:linear-gradient(180deg,var(--bm-panel),#0b1525);
+            border:1px solid var(--bm-border);
+            color:var(--bm-text);
+            box-shadow:0 16px 34px rgba(0,0,0,.22);
+        }
+
+        .radar-card{border-radius:18px;padding:18px;position:relative;overflow:hidden;}
+        .radar-card::before{content:"";position:absolute;inset:0 0 auto 0;height:3px;background:#334155;}
+        .radar-card.green::before{background:var(--bm-green);}
+        .radar-card.blue::before{background:var(--bm-blue);}
+        .radar-card.yellow::before{background:var(--bm-yellow);}
+        .radar-card.red::before{background:var(--bm-red);}
+        .radar-card.purple::before{background:var(--bm-purple);}
+        .radar-card span{display:block;color:var(--bm-muted);font-size:12px;font-weight:900;text-transform:uppercase;letter-spacing:.04em;}
+        .radar-card strong{display:block;font-size:28px;margin-top:8px;color:#fff;}
+        .radar-card small{display:block;margin-top:8px;color:var(--bm-muted);line-height:1.35;}
+
+        .radar-main{
+            display:grid;
+            grid-template-columns:1.15fr .85fr;
+            gap:18px;
+            align-items:start;
+        }
+
+        .radar-panel{border-radius:20px;padding:20px;margin-bottom:18px;}
+        .radar-panel h2{margin:0 0 14px;color:#fff;letter-spacing:-.02em;font-size:22px;}
+        .radar-panel p{color:var(--bm-muted);line-height:1.55;}
+
+        .radar-actions-list,
+        .radar-list{display:grid;gap:12px;}
+
+        .radar-action{border-radius:18px;padding:16px;display:grid;grid-template-columns:1fr auto;gap:14px;align-items:center;border-left:4px solid #38bdf8;}
+        .radar-action.alta{border-left-color:var(--bm-red);}
+        .radar-action.media{border-left-color:var(--bm-yellow);}
+        .radar-action.baixa{border-left-color:var(--bm-green);}
+        .radar-action h3{margin:0 0 6px;color:#fff;font-size:16px;}
+        .radar-action p{margin:0;color:var(--bm-muted-2);font-size:13px;line-height:1.45;}
+        .radar-tag{display:inline-flex;margin-bottom:8px;border-radius:999px;padding:6px 10px;background:#111827;color:#cbd5e1;font-weight:950;font-size:11px;border:1px solid #334155;}
+
+        .radar-mini-row{border-radius:16px;padding:14px;display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;}
+        .radar-mini-row h3{margin:0 0 5px;color:#fff;font-size:15px;}
+        .radar-mini-row p{margin:0;color:var(--bm-muted);font-size:12px;line-height:1.45;}
+        .radar-score{width:48px;height:48px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#0b1220;border:4px solid #334155;font-weight:950;color:#e2e8f0;}
+        .radar-score.Pronto{background:#052e16;border-color:#22c55e;color:#86efac;}
+        .radar-score.Atenção{background:#422006;border-color:#facc15;color:#fde68a;}
+        .radar-score.Alto-risco{background:#450a0a;border-color:#fb7185;color:#fecdd3;}
+
+        .radar-two{
+            display:grid;
+            grid-template-columns:repeat(2,minmax(0,1fr));
+            gap:18px;
+        }
+
+        .ranking-row{display:grid;grid-template-columns:1fr auto;gap:10px;padding:11px 0;border-bottom:1px solid rgba(148,163,184,.12);}
+        .ranking-row:last-child{border-bottom:0;}
+        .ranking-row strong{color:#fff;}
+        .ranking-row span{color:var(--bm-muted);font-size:13px;}
+
+        .vazio{
+            background:linear-gradient(180deg,var(--bm-panel),#0b1525);
+            border:1px dashed var(--bm-border-soft);
+            border-radius:18px;
+            padding:26px;
+            text-align:center;
+            color:var(--bm-muted);
+        }
+        .vazio strong{display:block;color:#fff;margin-bottom:6px;}
+
+        @media(max-width:1260px){.radar-grid{grid-template-columns:repeat(3,1fr)}.radar-main{grid-template-columns:1fr}.radar-two{grid-template-columns:1fr}}
+        @media(max-width:760px){.radar-grid{grid-template-columns:1fr}.radar-action,.radar-mini-row{grid-template-columns:1fr}.radar-hero h1{font-size:25px}}
+    </style>
+</head>
+<body>
+
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+<div class="layout">
+    <aside class="sidebar">
+        <div>
+            <div class="sidebar-logo">
+                <img src="{{ url_for('static', filename='logo.png') }}" alt="LtdaFinder Pro">
+            </div>
+
+            <div class="usuario-box">
+                <span>Usuário logado</span>
+                <strong>👤 {{ usuario_logado }}</strong>
+            </div>
+
+            <nav class="menu">
+                <a class="menu-item" href="/">🔎 Minerar CNPJs</a>
+                <a class="menu-item" href="/master">📊 Dashboard Master</a>
+                <a class="menu-item" href="/usados">📌 Meus CNPJs Usados</a>
+                <a class="menu-item" href="/favoritos">⭐ Favoritos</a>
+                <a class="menu-item" href="/perfis-meta">👤 Perfis Meta</a>
+                <a class="menu-item" href="/central-bm">🧭 Central BM</a>
+                <a class="menu-item active" href="/radar-bm">📡 Radar BM</a>
+                <a class="menu-item" href="/relatorios-bm">📄 Relatórios BM</a>
+                <a class="menu-item" href="/sites">🌐 Gerador de Sites</a>
+                <a class="menu-item" href="/historico">📜 Histórico</a>
+                <a class="menu-item" href="/estatisticas">📈 Estatísticas</a>
+                {% if tipo_usuario == "admin" %}
+                <a class="menu-item" href="/admin">👑 Painel Admin</a>
+                {% endif %}
+                <a class="menu-item sair" href="/logout">🚪 Sair</a>
+            </nav>
+        </div>
+
+        <div class="sidebar-footer">
+            <span>Versão Local</span>
+            <strong>V1.0</strong>
+        </div>
+    </aside>
+
+    <main class="main">
+        <section class="radar-hero">
+            <h1>📡 Radar BM</h1>
+            <p>Painel diário para enxergar o que está pronto, o que está travado e onde atacar primeiro. Atualizado em {{ radar.gerado_em }}.</p>
+            <div class="radar-hero-actions">
+                <a href="/central-bm/nova" class="bm-btn bm-btn-primary">➕ Nova verificação</a>
+                <a href="/central-bm" class="bm-btn bm-btn-soft">🧭 Central BM</a>
+                <a href="/sites" class="bm-btn bm-btn-soft">🌐 Sites gerados</a>
+                <a href="/radar-bm" class="bm-btn bm-btn-blue">🔄 Atualizar radar</a>
+            </div>
+        </section>
+
+        <section class="radar-grid">
+            <div class="radar-card green"><span>Prontas para análise</span><strong>{{ radar.cards.prontas_para_analise }}</strong><small>Score pronto e fluxo ainda aberto.</small></div>
+            <div class="radar-card yellow"><span>Com pendência</span><strong>{{ radar.cards.pendentes }}</strong><small>Checklist, meta tag ou domínio incompletos.</small></div>
+            <div class="radar-card blue"><span>Precisam testar domínio</span><strong>{{ radar.cards.precisam_teste }}</strong><small>URL informada, mas sem pré-check pronto.</small></div>
+            <div class="radar-card purple"><span>Em análise +48h</span><strong>{{ radar.cards.em_analise_48h }}</strong><small>Casos parados por tempo demais.</small></div>
+            <div class="radar-card green"><span>Verificaram hoje</span><strong>{{ radar.cards.verificaram_hoje }}</strong><small>Resultados positivos do dia.</small></div>
+            <div class="radar-card red"><span>Problemas hoje</span><strong>{{ radar.cards.problemas_hoje }}</strong><small>Falhas atualizadas hoje.</small></div>
+        </section>
+
+        <section class="radar-grid">
+            <div class="radar-card blue"><span>Total na Central</span><strong>{{ radar.cards.total }}</strong><small>Todos os registros da Central BM.</small></div>
+            <div class="radar-card green"><span>Taxa geral</span><strong>{{ "%.1f"|format(radar.cards.taxa_sucesso) }}%</strong><small>Sucessos sobre total de BMs registradas.</small></div>
+            <div class="radar-card yellow"><span>Sites sem BM</span><strong>{{ radar.cards.sites_sem_bm }}</strong><small>Sites gerados ainda sem verificação vinculada.</small></div>
+            <div class="radar-card red"><span>Meta tag ausente</span><strong>{{ radar.cards.meta_ausente }}</strong><small>Registros abertos com meta tag pendente.</small></div>
+            <div class="radar-card yellow"><span>Site/domínio ausente</span><strong>{{ radar.cards.site_ausente }}</strong><small>Registros sem URL ou domínio informado.</small></div>
+            <div class="radar-card blue"><span>Em análise</span><strong>{{ radar.cards.em_analise }}</strong><small>BMs aguardando resultado.</small></div>
+        </section>
+
+        <div class="radar-main">
+            <div>
+                <section class="radar-panel">
+                    <h2>⚡ Ações recomendadas</h2>
+                    {% if radar.listas.acoes %}
+                    <div class="radar-actions-list">
+                        {% for acao in radar.listas.acoes %}
+                        <article class="radar-action {{ acao.prioridade }}">
+                            <div>
+                                <span class="radar-tag">{{ acao.tipo }}</span>
+                                <h3>{{ acao.titulo }}</h3>
+                                <p>{{ acao.descricao }}</p>
+                            </div>
+                            <a href="{{ acao.url }}" class="bm-btn bm-btn-blue">Abrir</a>
+                        </article>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="vazio"><strong>Nenhuma ação urgente agora.</strong>O radar está limpo. Dá até para dormir sem a cabeça parecendo aba de navegador aberta.</div>
+                    {% endif %}
+                </section>
+
+                <div class="radar-two">
+                    <section class="radar-panel">
+                        <h2>🟢 Prontas para análise</h2>
+                        <div class="radar-list">
+                            {% if radar.listas.prontas_para_analise %}
+                                {% for item in radar.listas.prontas_para_analise %}
+                                <article class="radar-mini-row">
+                                    <div>
+                                        <h3>{{ item.titulo_radar }}</h3>
+                                        <p>Status: {{ item.status }} · {{ item.url_site or item.dominio or 'Sem URL' }}</p>
+                                    </div>
+                                    <a href="/central-bm/{{ item.id }}" class="bm-btn bm-btn-dark">Abrir</a>
+                                </article>
+                                {% endfor %}
+                            {% else %}
+                                <div class="vazio"><strong>Nenhuma pronta agora.</strong>Quando passar no checklist, ela aparece aqui.</div>
+                            {% endif %}
+                        </div>
+                    </section>
+
+                    <section class="radar-panel">
+                        <h2>🧪 Precisam testar domínio</h2>
+                        <div class="radar-list">
+                            {% if radar.listas.precisam_teste %}
+                                {% for item in radar.listas.precisam_teste %}
+                                <article class="radar-mini-row">
+                                    <div>
+                                        <h3>{{ item.titulo_radar }}</h3>
+                                        <p>Último teste: {{ item.ultimo_teste_status or 'não testado' }} · Score {{ item.score_prontidao or 0 }}</p>
+                                    </div>
+                                    <a href="/central-bm/{{ item.id }}" class="bm-btn bm-btn-blue">Testar</a>
+                                </article>
+                                {% endfor %}
+                            {% else %}
+                                <div class="vazio"><strong>Nada para testar.</strong>URLs com pré-check pendente aparecerão aqui.</div>
+                            {% endif %}
+                        </div>
+                    </section>
+                </div>
+
+                <div class="radar-two">
+                    <section class="radar-panel">
+                        <h2>🕒 Em análise há +48h</h2>
+                        <div class="radar-list">
+                            {% if radar.listas.em_analise_48h %}
+                                {% for item in radar.listas.em_analise_48h %}
+                                <article class="radar-mini-row">
+                                    <div>
+                                        <h3>{{ item.titulo_radar }}</h3>
+                                        <p>Aproximadamente {{ item.horas_desde_atualizacao }}h sem atualização.</p>
+                                    </div>
+                                    <a href="/central-bm/{{ item.id }}" class="bm-btn bm-btn-warn">Revisar</a>
+                                </article>
+                                {% endfor %}
+                            {% else %}
+                                <div class="vazio"><strong>Nenhuma travada +48h.</strong>Boa, o pântano está calmo.</div>
+                            {% endif %}
+                        </div>
+                    </section>
+
+                    <section class="radar-panel">
+                        <h2>🏆 Verificaram hoje</h2>
+                        <div class="radar-list">
+                            {% if radar.listas.verificaram_hoje %}
+                                {% for item in radar.listas.verificaram_hoje %}
+                                <article class="radar-mini-row">
+                                    <div>
+                                        <h3>{{ item.titulo_radar }}</h3>
+                                        <p>Status: {{ item.status }} · Operador: {{ item.operador or item.usuario }}</p>
+                                    </div>
+                                    <a href="/central-bm/{{ item.id }}" class="bm-btn bm-btn-primary">Ver</a>
+                                </article>
+                                {% endfor %}
+                            {% else %}
+                                <div class="vazio"><strong>Nenhuma verificada hoje ainda.</strong>O placar abre quando você atualizar os status.</div>
+                            {% endif %}
+                        </div>
+                    </section>
+                </div>
+            </div>
+
+            <aside>
+                <section class="radar-panel">
+                    <h2>📌 Pendências</h2>
+                    <div class="radar-list">
+                        {% if radar.listas.pendentes %}
+                            {% for item in radar.listas.pendentes %}
+                            <article class="radar-mini-row">
+                                <div>
+                                    <h3>{{ item.titulo_radar }}</h3>
+                                    <p>{{ item.risco }} · Score {{ item.score_prontidao or 0 }} · {{ item.status }}</p>
+                                </div>
+                                <div class="radar-score {{ item.risco|replace(' ', '-') }}">{{ item.score_prontidao or 0 }}</div>
+                            </article>
+                            {% endfor %}
+                        {% else %}
+                            <div class="vazio"><strong>Sem pendências.</strong>Checklist limpo por aqui.</div>
+                        {% endif %}
+                    </div>
+                </section>
+
+                <section class="radar-panel">
+                    <h2>🌐 Sites sem BM</h2>
+                    <div class="radar-list">
+                        {% if radar.listas.sites_sem_bm %}
+                            {% for site in radar.listas.sites_sem_bm %}
+                            <article class="radar-mini-row">
+                                <div>
+                                    <h3>{{ site.nome_empresarial or site.nome_fantasia or 'Site gerado' }}</h3>
+                                    <p>{{ site.cnpj_formatado }} · {{ site.nome_arquivo }}</p>
+                                </div>
+                                <a href="/site-gerado/{{ site.id }}" class="bm-btn bm-btn-blue">Abrir</a>
+                            </article>
+                            {% endfor %}
+                        {% else %}
+                            <div class="vazio"><strong>Nenhum site solto.</strong>Todos os sites recentes estão vinculados ou a lista está vazia.</div>
+                        {% endif %}
+                    </div>
+                </section>
+
+                <section class="radar-panel">
+                    <h2>📊 Ranking de status</h2>
+                    {% if radar.listas.status_ranking %}
+                        {% for item in radar.listas.status_ranking %}
+                        <div class="ranking-row">
+                            <span>{{ item.status }}</span>
+                            <strong>{{ item.total }}</strong>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="vazio"><strong>Sem dados.</strong>Crie verificações para alimentar o ranking.</div>
+                    {% endif %}
+                </section>
+
+                <section class="radar-panel">
+                    <h2>👥 Operadores</h2>
+                    {% if radar.listas.operadores %}
+                        {% for item in radar.listas.operadores %}
+                        <div class="ranking-row">
+                            <span>{{ item.operador }}<br><small>{{ item.sucesso }} sucesso · {{ item.problemas }} problemas</small></span>
+                            <strong>{{ "%.0f"|format(item.taxa) }}%</strong>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="vazio"><strong>Sem operadores.</strong>Quando a Central BM tiver registros, aparece aqui.</div>
+                    {% endif %}
+                </section>
+            </aside>
+        </div>
+    </main>
+</div>
+
+<script>
+    const menuToggle = document.getElementById("menuToggle");
+    const sidebarOverlay = document.getElementById("sidebarOverlay");
+    function fecharMenuMobile(){document.body.classList.remove("sidebar-aberta");}
+    function alternarMenu(){document.body.classList.toggle("sidebar-aberta");}
+    if(menuToggle){menuToggle.addEventListener("click", alternarMenu);}
+    if(sidebarOverlay){sidebarOverlay.addEventListener("click", fecharMenuMobile);}
+</script>
+
+</body>
+</html>
