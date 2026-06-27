@@ -544,7 +544,16 @@
             <div class="preview-actions">
                 <button type="button" class="btn-site-main" id="btnCopiarHtml">📋 Copiar HTML</button>
                 <a class="btn-site-secondary" href="/site-gerado/{{ site.id }}/download">⬇ Baixar index.html</a>
-                <form method="post" action="/site-gerado/{{ site.id }}/publicar-cloudflare" style="display:inline-flex; margin:0;">
+                <form method="post" action="/site-gerado/{{ site.id }}/publicar-cloudflare" style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin:0;">
+                    <input
+                        type="text"
+                        name="cloudflare_slug"
+                        value="{{ site.cloudflare_slug_personalizado or site.cloudflare_worker_name or sugestao_worker }}"
+                        placeholder="nome-do-dominio"
+                        pattern="[a-zA-Z0-9-]{3,63}"
+                        title="Use apenas letras, números e hífens. Mínimo 3 e máximo 63 caracteres."
+                        style="min-width:240px; border:1px solid rgba(112,175,255,.24); border-radius:15px; padding:13px 14px; background:rgba(4,16,30,.90); color:#eef7ff;"
+                    >
                     <button type="submit" class="btn-site-main">☁️ Publicar na Cloudflare</button>
                 </form>
                 {% if site.cloudflare_url %}
@@ -562,10 +571,21 @@
         <section class="site-box">
             <h2>Cloudflare Workers</h2>
 
+            <div class="site-list-card" style="margin-bottom:14px; border-color:rgba(70,229,193,.22);">
+                <div>
+                    <h3>Nome escolhido para o domínio</h3>
+                    <p>Antes de publicar, você pode escolher o nome que vem antes de <strong style="color:#fff;">.{{ cloudflare_subdomain }}.workers.dev</strong>.</p>
+                    <p>Exemplo: <strong style="color:#fff;">perolla</strong> vira <strong style="color:#fff;">perolla.{{ cloudflare_subdomain }}.workers.dev</strong>.</p>
+                </div>
+            </div>
+
             <div class="site-list-card" style="margin-bottom:14px;">
                 <div>
                     <h3>Status</h3>
                     <p>{{ site.cloudflare_status or "Não publicado" }}</p>
+                    {% if site.cloudflare_slug_personalizado %}
+                    <p>Nome escolhido: {{ site.cloudflare_slug_personalizado }}</p>
+                    {% endif %}
                     {% if site.cloudflare_worker_name %}
                     <p>Worker: {{ site.cloudflare_worker_name }}</p>
                     {% endif %}

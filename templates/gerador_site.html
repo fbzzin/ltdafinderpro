@@ -599,6 +599,22 @@
                     </div>
 
                     <div>
+                        <label>Nome do domínio Cloudflare</label>
+                        <input
+                            type="text"
+                            name="cloudflare_slug"
+                            value="{{ cloudflare_slug }}"
+                            placeholder="Ex: perolla"
+                            pattern="[a-zA-Z0-9-]{3,63}"
+                            title="Use apenas letras, números e hífens. Mínimo 3 e máximo 63 caracteres."
+                        >
+                        <small style="display:block; margin-top:7px; color:var(--site-muted); line-height:1.45;">
+                            O link ficará assim: <strong style="color:#fff;">{{ cloudflare_slug or 'nome-escolhido' }}.{{ cloudflare_subdomain }}.workers.dev</strong>.
+                            Se você digitar <strong style="color:#fff;">perolla</strong>, o domínio será só <strong style="color:#fff;">perolla.{{ cloudflare_subdomain }}.workers.dev</strong>.
+                        </small>
+                    </div>
+
+                    <div>
                         <label>Endereço exibido</label>
                         <textarea name="endereco_site" style="min-height:88px;" placeholder="Endereço que será exibido no site">{{ endereco_site }}</textarea>
                     </div>

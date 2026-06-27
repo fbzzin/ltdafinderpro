@@ -595,6 +595,9 @@
                             <span class="site-badge">{{ modelo_site_nome(site.modelo_site) }}</span>
                             <p style="margin-top:8px;">{{ site.categoria_cnae }}</p>
                             <p style="margin-top:8px;">☁️ {{ site.cloudflare_status or "Não publicado" }}</p>
+                            {% if site.cloudflare_slug_personalizado %}
+                            <p style="margin-top:8px;">🔗 {{ site.cloudflare_slug_personalizado }}</p>
+                            {% endif %}
                         </div>
 
                         <div class="preview-actions" style="margin:0;">

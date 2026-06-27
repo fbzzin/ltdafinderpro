@@ -1562,6 +1562,7 @@ def criar_tabela_sites_gerados():
             "whatsapp_exibicao": "TEXT",
             "email_exibicao": "TEXT",
             "endereco_exibicao": "TEXT",
+            "cloudflare_slug_personalizado": "TEXT",
             "cloudflare_worker_name": "TEXT",
             "cloudflare_url": "TEXT",
             "cloudflare_status": "TEXT DEFAULT 'Não publicado'",
@@ -2624,7 +2625,54 @@ def aplicar_personalizacao_site(empresa, nome_site="", telefone_site="", email_s
     return empresa_site
 
 
-def gerar_nome_worker_site(site):
+def normalizar_nome_worker_cloudflare(texto):
+    texto = valor_texto(texto, "").lower()
+    texto = unicodedata.normalize("NFKD", texto)
+    texto = texto.encode("ascii", "ignore").decode("ascii")
+    texto = re.sub(r"[^a-z0-9-]+", "-", texto)
+    texto = re.sub(r"-+", "-", texto).strip("-")
+
+    if len(texto) > 63:
+        texto = texto[:63].strip("-")
+
+    return texto
+
+
+def sugerir_nome_worker_site(empresa_ou_site):
+    base = (
+        valor_texto(empresa_ou_site.get("nome_exibicao", ""))
+        or valor_texto(empresa_ou_site.get("nome_site", ""))
+        or valor_texto(empresa_ou_site.get("nome_fantasia", ""))
+        or valor_texto(empresa_ou_site.get("nome_empresarial", ""))
+        or valor_texto(empresa_ou_site.get("razao_social", ""))
+        or "site"
+    )
+
+    slug = normalizar_nome_worker_cloudflare(base)
+
+    if not slug or slug == "empresa":
+        slug = "site"
+
+    return slug
+
+
+def gerar_nome_worker_site(site, nome_personalizado=""):
+    personalizado = (
+        valor_texto(nome_personalizado, "")
+        or valor_texto(site.get("cloudflare_slug_personalizado", ""))
+    )
+
+    if personalizado:
+        nome = normalizar_nome_worker_cloudflare(personalizado)
+
+        if not nome:
+            raise RuntimeError("Nome do domínio Cloudflare inválido. Use letras, números e hífens.")
+
+        if len(nome) < 3:
+            raise RuntimeError("Nome do domínio Cloudflare precisa ter pelo menos 3 caracteres.")
+
+        return nome
+
     base = (
         valor_texto(site.get("nome_exibicao", ""))
         or valor_texto(site.get("nome_fantasia", ""))
@@ -2642,14 +2690,10 @@ def gerar_nome_worker_site(site):
         partes.append(sufixo_id)
 
     nome = "-".join(partes)
-    nome = re.sub(r"[^a-z0-9-]+", "-", nome.lower()).strip("-")
-    nome = re.sub(r"-+", "-", nome)
+    nome = normalizar_nome_worker_cloudflare(nome)
 
     if not nome:
         nome = f"site-{sufixo_cnpj}"
-
-    if len(nome) > 63:
-        nome = nome[:63].strip("-")
 
     return nome or f"site-{sufixo_cnpj}"
 
@@ -2742,7 +2786,7 @@ def resumir_erros_cloudflare(payload, texto_resposta=""):
     return " | ".join([m for m in mensagens if m]) or "Erro desconhecido na Cloudflare"
 
 
-def atualizar_publicacao_cloudflare_site(site_id, status, worker_name="", cloudflare_url="", erro=""):
+def atualizar_publicacao_cloudflare_site(site_id, status, worker_name="", cloudflare_url="", erro="", slug_personalizado=""):
     criar_tabela_sites_gerados()
 
     with engine.begin() as conn:
@@ -2750,6 +2794,10 @@ def atualizar_publicacao_cloudflare_site(site_id, status, worker_name="", cloudf
             text("""
                 UPDATE sites_gerados
                 SET
+                    cloudflare_slug_personalizado = CASE
+                        WHEN :slug_personalizado != '' THEN :slug_personalizado
+                        ELSE cloudflare_slug_personalizado
+                    END,
                     cloudflare_worker_name = :worker_name,
                     cloudflare_url = :cloudflare_url,
                     cloudflare_status = :status,
@@ -2761,6 +2809,7 @@ def atualizar_publicacao_cloudflare_site(site_id, status, worker_name="", cloudf
                 WHERE id = :site_id
             """),
             {
+                "slug_personalizado": slug_personalizado,
                 "worker_name": worker_name,
                 "cloudflare_url": cloudflare_url,
                 "status": status,
@@ -2770,9 +2819,9 @@ def atualizar_publicacao_cloudflare_site(site_id, status, worker_name="", cloudf
         )
 
 
-def publicar_site_na_cloudflare(site):
+def publicar_site_na_cloudflare(site, nome_personalizado=""):
     config = validar_config_cloudflare()
-    worker_name = gerar_nome_worker_site(site)
+    worker_name = gerar_nome_worker_site(site, nome_personalizado)
     worker_js = gerar_worker_js_site(site.get("html_gerado", ""))
 
     headers = {
@@ -2906,6 +2955,7 @@ def salvar_site_gerado(dados):
         "whatsapp_exibicao",
         "email_exibicao",
         "endereco_exibicao",
+        "cloudflare_slug_personalizado",
         "cloudflare_worker_name",
         "cloudflare_url",
         "cloudflare_status",
@@ -2978,6 +3028,8 @@ def listar_sites_gerados(modelo_site="", busca=""):
                 OR LOWER(nome_fantasia) LIKE :busca
                 OR LOWER(modelo_site) LIKE :busca
                 OR LOWER(COALESCE(cloudflare_url, '')) LIKE :busca
+                OR LOWER(COALESCE(cloudflare_worker_name, '')) LIKE :busca
+                OR LOWER(COALESCE(cloudflare_slug_personalizado, '')) LIKE :busca
             )
         """)
         params["busca"] = f"%{busca.lower()}%"
@@ -3012,6 +3064,7 @@ def listar_sites_gerados(modelo_site="", busca=""):
                     whatsapp_exibicao,
                     email_exibicao,
                     endereco_exibicao,
+                    cloudflare_slug_personalizado,
                     cloudflare_worker_name,
                     cloudflare_url,
                     cloudflare_status,
@@ -3924,12 +3977,14 @@ def gerador_site(cnpj):
         whatsapp_site = request.form.get("whatsapp_site", "").strip()
         email_site = request.form.get("email_site", "").strip()
         endereco_site = request.form.get("endereco_site", "").strip()
+        cloudflare_slug = normalizar_nome_worker_cloudflare(request.form.get("cloudflare_slug", ""))
     else:
         nome_site = nome_exibicao_empresa(empresa)
         telefone_site = valor_texto(empresa.get("telefone_formatado", ""))
         whatsapp_site = telefone_site
         email_site = valor_texto(empresa.get("email", ""))
         endereco_site = montar_endereco_empresa(empresa)
+        cloudflare_slug = sugerir_nome_worker_site(empresa)
 
     if modelo_site not in MODELOS_SITE_DICT:
         modelo_site = "institucional"
@@ -3939,6 +3994,8 @@ def gerador_site(cnpj):
             erro = "Cole a meta tag da Meta antes de gerar o site."
         elif "<meta" not in meta_tag.lower():
             erro = "A meta tag parece inválida. Cole a tag completa começando com <meta."
+        elif cloudflare_slug and len(cloudflare_slug) < 3:
+            erro = "O nome do domínio Cloudflare precisa ter pelo menos 3 caracteres."
         else:
             cnpj_limpo = limpar_cnpj(empresa.get("cnpj_limpo", empresa.get("cnpj", cnpj)))
             empresa_site = aplicar_personalizacao_site(empresa, nome_site, telefone_site, email_site, endereco_site, whatsapp_site)
@@ -3961,6 +4018,7 @@ def gerador_site(cnpj):
                 "whatsapp_exibicao": valor_texto(whatsapp_site),
                 "email_exibicao": valor_texto(email_site),
                 "endereco_exibicao": valor_texto(endereco_site),
+                "cloudflare_slug_personalizado": valor_texto(cloudflare_slug),
                 "cloudflare_status": "Não publicado",
                 "meta_tag": meta_tag,
                 "modelo_site": modelo_site,
@@ -3991,6 +4049,8 @@ def gerador_site(cnpj):
         email_site=email_site,
         whatsapp_site=whatsapp_site,
         endereco_site=endereco_site,
+        cloudflare_slug=cloudflare_slug,
+        cloudflare_subdomain=obter_config_cloudflare().get("subdomain") or "portalempresarial",
         erro=erro
     )
 
@@ -4009,6 +4069,8 @@ def site_gerado_preview(site_id):
         tipo_usuario=tipo_usuario(),
         site=site,
         modelo_site_nome=modelo_site_nome,
+        sugestao_worker=sugerir_nome_worker_site(site),
+        cloudflare_subdomain=obter_config_cloudflare().get("subdomain") or "portalempresarial",
         cloudflare_msg=request.args.get("cloudflare_msg", ""),
         cloudflare_erro=request.args.get("cloudflare_erro", "")
     )
@@ -4022,11 +4084,16 @@ def site_gerado_publicar_cloudflare(site_id):
     if not site:
         abort(404)
 
-    worker_name = site.get("cloudflare_worker_name", "") or gerar_nome_worker_site(site)
-    cloudflare_url = site.get("cloudflare_url", "")
+    slug_personalizado = normalizar_nome_worker_cloudflare(request.form.get("cloudflare_slug", ""))
+
+    if not slug_personalizado:
+        slug_personalizado = normalizar_nome_worker_cloudflare(site.get("cloudflare_slug_personalizado", ""))
+
+    worker_name = gerar_nome_worker_site(site, slug_personalizado) if slug_personalizado else (site.get("cloudflare_worker_name", "") or gerar_nome_worker_site(site))
+    cloudflare_url = "" if slug_personalizado else site.get("cloudflare_url", "")
 
     try:
-        resultado = publicar_site_na_cloudflare(site)
+        resultado = publicar_site_na_cloudflare(site, slug_personalizado)
         worker_name = resultado["worker_name"]
         cloudflare_url = resultado["cloudflare_url"]
         aviso = resultado.get("aviso", "")
@@ -4036,7 +4103,8 @@ def site_gerado_publicar_cloudflare(site_id):
             "Publicado",
             worker_name,
             cloudflare_url,
-            aviso
+            aviso,
+            slug_personalizado
         )
 
         try:
@@ -4054,7 +4122,8 @@ def site_gerado_publicar_cloudflare(site_id):
             "Erro",
             worker_name,
             cloudflare_url,
-            mensagem
+            mensagem,
+            slug_personalizado
         )
 
         return redirect(url_for("site_gerado_preview", site_id=site_id, cloudflare_erro=mensagem))
