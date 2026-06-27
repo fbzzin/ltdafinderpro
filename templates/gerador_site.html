@@ -603,14 +603,15 @@
                         <input
                             type="text"
                             name="cloudflare_slug"
+                            id="cloudflareSlugInput"
                             value="{{ cloudflare_slug }}"
                             placeholder="Ex: perolla"
                             pattern="[a-zA-Z0-9-]{3,63}"
                             title="Use apenas letras, números e hífens. Mínimo 3 e máximo 63 caracteres."
+                            data-subdomain="{{ cloudflare_subdomain }}"
                         >
                         <small style="display:block; margin-top:7px; color:var(--site-muted); line-height:1.45;">
-                            O link ficará assim: <strong style="color:#fff;">{{ cloudflare_slug or 'nome-escolhido' }}.{{ cloudflare_subdomain }}.workers.dev</strong>.
-                            Se você digitar <strong style="color:#fff;">perolla</strong>, o domínio será só <strong style="color:#fff;">perolla.{{ cloudflare_subdomain }}.workers.dev</strong>.
+                            O link ficará assim: <strong id="cloudflareSlugPreview" style="color:#fff;">{{ cloudflare_slug or 'nome-escolhido' }}.{{ cloudflare_subdomain }}.workers.dev</strong>.
                         </small>
                     </div>
 
@@ -661,6 +662,41 @@
             input.closest(".modelo-card").classList.add("selecionado");
         });
     });
+
+    const cloudflareSlugInput = document.getElementById("cloudflareSlugInput");
+    const cloudflareSlugPreview = document.getElementById("cloudflareSlugPreview");
+
+    function limparSlugCloudflare(valor) {
+        return String(valor || "")
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "")
+            .toLowerCase()
+            .replace(/[^a-z0-9-]+/g, "-")
+            .replace(/-+/g, "-")
+            .replace(/^-|-$/g, "")
+            .slice(0, 63);
+    }
+
+    function atualizarPreviewCloudflare() {
+        if (!cloudflareSlugInput || !cloudflareSlugPreview) return;
+
+        const subdomain = cloudflareSlugInput.dataset.subdomain || "portalempresarial";
+        const slugLimpo = limparSlugCloudflare(cloudflareSlugInput.value) || "nome-escolhido";
+
+        cloudflareSlugPreview.textContent = `${slugLimpo}.${subdomain}.workers.dev`;
+    }
+
+    if (cloudflareSlugInput) {
+        cloudflareSlugInput.addEventListener("input", atualizarPreviewCloudflare);
+        cloudflareSlugInput.addEventListener("blur", () => {
+            const slugLimpo = limparSlugCloudflare(cloudflareSlugInput.value);
+            if (slugLimpo) {
+                cloudflareSlugInput.value = slugLimpo;
+            }
+            atualizarPreviewCloudflare();
+        });
+        atualizarPreviewCloudflare();
+    }
 </script>
 
 </body>

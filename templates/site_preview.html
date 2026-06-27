@@ -545,15 +545,22 @@
                 <button type="button" class="btn-site-main" id="btnCopiarHtml">📋 Copiar HTML</button>
                 <a class="btn-site-secondary" href="/site-gerado/{{ site.id }}/download">⬇ Baixar index.html</a>
                 <form method="post" action="/site-gerado/{{ site.id }}/publicar-cloudflare" style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin:0;">
-                    <input
-                        type="text"
-                        name="cloudflare_slug"
-                        value="{{ site.cloudflare_slug_personalizado or site.cloudflare_worker_name or sugestao_worker }}"
-                        placeholder="nome-do-dominio"
-                        pattern="[a-zA-Z0-9-]{3,63}"
-                        title="Use apenas letras, números e hífens. Mínimo 3 e máximo 63 caracteres."
-                        style="min-width:240px; border:1px solid rgba(112,175,255,.24); border-radius:15px; padding:13px 14px; background:rgba(4,16,30,.90); color:#eef7ff;"
-                    >
+                    <div style="display:flex; flex-direction:column; gap:7px; min-width:280px; flex:1;">
+                        <input
+                            type="text"
+                            name="cloudflare_slug"
+                            id="cloudflareSlugInput"
+                            value="{{ site.cloudflare_slug_personalizado or site.cloudflare_worker_name or sugestao_worker }}"
+                            placeholder="nome-do-dominio"
+                            pattern="[a-zA-Z0-9-]{3,63}"
+                            title="Use apenas letras, números e hífens. Mínimo 3 e máximo 63 caracteres."
+                            data-subdomain="{{ cloudflare_subdomain }}"
+                            style="width:100%; border:1px solid rgba(112,175,255,.24); border-radius:15px; padding:13px 14px; background:rgba(4,16,30,.90); color:#eef7ff;"
+                        >
+                        <small style="color:var(--site-muted); line-height:1.45;">
+                            O link ficará assim: <strong id="cloudflareSlugPreview" style="color:#fff;">{{ (site.cloudflare_slug_personalizado or site.cloudflare_worker_name or sugestao_worker) }}.{{ cloudflare_subdomain }}.workers.dev</strong>
+                        </small>
+                    </div>
                     <button type="submit" class="btn-site-main">☁️ Publicar na Cloudflare</button>
                 </form>
                 {% if site.cloudflare_url %}
@@ -575,7 +582,6 @@
                 <div>
                     <h3>Nome escolhido para o domínio</h3>
                     <p>Antes de publicar, você pode escolher o nome que vem antes de <strong style="color:#fff;">.{{ cloudflare_subdomain }}.workers.dev</strong>.</p>
-                    <p>Exemplo: <strong style="color:#fff;">perolla</strong> vira <strong style="color:#fff;">perolla.{{ cloudflare_subdomain }}.workers.dev</strong>.</p>
                 </div>
             </div>
 
@@ -673,6 +679,41 @@
                 btnCopiarHtml.textContent = "📋 Copiar HTML";
             }, 1800);
         });
+    }
+
+    const cloudflareSlugInput = document.getElementById("cloudflareSlugInput");
+    const cloudflareSlugPreview = document.getElementById("cloudflareSlugPreview");
+
+    function limparSlugCloudflare(valor) {
+        return String(valor || "")
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "")
+            .toLowerCase()
+            .replace(/[^a-z0-9-]+/g, "-")
+            .replace(/-+/g, "-")
+            .replace(/^-|-$/g, "")
+            .slice(0, 63);
+    }
+
+    function atualizarPreviewCloudflare() {
+        if (!cloudflareSlugInput || !cloudflareSlugPreview) return;
+
+        const subdomain = cloudflareSlugInput.dataset.subdomain || "portalempresarial";
+        const slugLimpo = limparSlugCloudflare(cloudflareSlugInput.value) || "nome-do-dominio";
+
+        cloudflareSlugPreview.textContent = `${slugLimpo}.${subdomain}.workers.dev`;
+    }
+
+    if (cloudflareSlugInput) {
+        cloudflareSlugInput.addEventListener("input", atualizarPreviewCloudflare);
+        cloudflareSlugInput.addEventListener("blur", () => {
+            const slugLimpo = limparSlugCloudflare(cloudflareSlugInput.value);
+            if (slugLimpo) {
+                cloudflareSlugInput.value = slugLimpo;
+            }
+            atualizarPreviewCloudflare();
+        });
+        atualizarPreviewCloudflare();
     }
 </script>
 
