@@ -6,6 +6,7 @@ from functools import wraps
 from datetime import datetime, timedelta
 from html import escape
 import requests
+from urllib.parse import urlparse
 from sqlalchemy import text
 from database import engine
 
@@ -50,13 +51,16 @@ STATUS_OPCOES = [
     "Verificou 2k",
     "Verificou 100k",
     "Precisa de mais informações",
+    "Análise permanente",
     "Restrito",
+    "WABA restrita",
+    "Conta desabilitada",
     "Checkpoint",
     "Descartado"
 ]
 
 STATUS_SUCESSO = ["Verificou 250", "Verificou 2k", "Verificou 100k"]
-STATUS_NEGATIVOS = ["Restrito", "Checkpoint", "Descartado", "Precisa de mais informações"]
+STATUS_NEGATIVOS = ["Restrito", "WABA restrita", "Conta desabilitada", "Checkpoint", "Descartado", "Precisa de mais informações", "Análise permanente"]
 
 
 def executar_backup():
@@ -485,7 +489,10 @@ def resumo_perfis_meta(perfis):
         "Verificou 2k": 0,
         "Verificou 100k": 0,
         "Precisa de mais informações": 0,
+        "Análise permanente": 0,
         "Restrito": 0,
+        "WABA restrita": 0,
+        "Conta desabilitada": 0,
         "Checkpoint": 0,
         "Descartado": 0
     }
@@ -504,7 +511,10 @@ def resumo_perfis_meta(perfis):
 
     problemas = (
         contagem.get("Precisa de mais informações", 0) +
+        contagem.get("Análise permanente", 0) +
         contagem.get("Restrito", 0) +
+        contagem.get("WABA restrita", 0) +
+        contagem.get("Conta desabilitada", 0) +
         contagem.get("Checkpoint", 0) +
         contagem.get("Descartado", 0)
     )
@@ -880,10 +890,19 @@ def avaliar_ia_empresa(empresa):
     elif status_bm == "Precisa de mais informações":
         score -= 40
         pontos_atencao.append("Histórico de precisa de mais informações")
+    elif status_bm == "Análise permanente":
+        score -= 45
+        pontos_atencao.append("Histórico de análise permanente")
+    elif status_bm == "WABA restrita":
+        score -= 50
+        pontos_atencao.append("Histórico de WABA restrita")
+    elif status_bm == "Conta desabilitada":
+        score -= 55
+        pontos_atencao.append("Histórico de conta desabilitada")
 
     score = max(0, min(100, int(score)))
 
-    if status_bm in ["Restrito", "Checkpoint", "Descartado", "Precisa de mais informações"]:
+    if status_bm in ["Restrito", "WABA restrita", "Conta desabilitada", "Checkpoint", "Descartado", "Precisa de mais informações", "Análise permanente"]:
         recomendacao = "🔴 Evitar"
         classe = "evitar"
     elif status_bm != STATUS_PADRAO or usado_global:
@@ -3146,6 +3165,1017 @@ try:
     criar_tabela_sites_gerados()
 except Exception:
     pass
+
+
+
+
+# ============================================================
+# CENTRAL DE VERIFICAÇÃO BM
+# Implementação em SQL/PostgreSQL via database.engine.
+# Não usa JSON como armazenamento ativo.
+# ============================================================
+
+STATUS_CENTRAL_BM = [
+    "Preparando",
+    "Pronto para verificar domínio",
+    "Domínio verificado",
+    "BM em Análise",
+    "Verificou 250",
+    "Verificou 2k",
+    "Verificou 100k",
+    "Precisa de mais informações",
+    "Análise permanente",
+    "Checkpoint",
+    "WABA restrita",
+    "Conta desabilitada",
+    "Descartado"
+]
+
+STATUS_CENTRAL_BM_SUCESSO = ["Verificou 250", "Verificou 2k", "Verificou 100k"]
+STATUS_CENTRAL_BM_PROBLEMAS = [
+    "Precisa de mais informações",
+    "Análise permanente",
+    "Checkpoint",
+    "WABA restrita",
+    "Conta desabilitada",
+    "Descartado"
+]
+
+CHECKLIST_CENTRAL_BM = [
+    {"campo": "checklist_cnpj", "label": "CNPJ selecionado e conferido", "peso": 15},
+    {"campo": "checklist_site", "label": "Site publicado e abrindo", "peso": 20},
+    {"campo": "checklist_meta_tag", "label": "Meta tag adicionada no head", "peso": 20},
+    {"campo": "checklist_dominio", "label": "Domínio/URL conferido", "peso": 15},
+    {"campo": "checklist_documento", "label": "Documento/cartão CNPJ separado", "peso": 10},
+    {"campo": "checklist_2fa", "label": "2FA ativo no perfil/BM", "peso": 10},
+    {"campo": "checklist_waba", "label": "WABA preparada ou criada", "peso": 10}
+]
+
+
+def bool_form(nome):
+    return request.form.get(nome) in ["on", "1", "true", "True", "sim", "Sim"]
+
+
+def bool_valor(valor):
+    if isinstance(valor, bool):
+        return valor
+    if isinstance(valor, int):
+        return valor == 1
+    return str(valor).strip().lower() in ["1", "true", "sim", "on", "yes"]
+
+
+def criar_tabelas_central_bm():
+    try:
+        dialect = getattr(engine, "dialect", None)
+        dialect_name = getattr(dialect, "name", "postgresql")
+
+        if dialect_name == "postgresql":
+            sql_verificacoes = """
+            CREATE TABLE IF NOT EXISTS bm_verificacoes (
+                id SERIAL PRIMARY KEY,
+                usuario TEXT NOT NULL,
+                cnpj TEXT NOT NULL,
+                cnpj_formatado TEXT,
+                razao_social TEXT,
+                nome_fantasia TEXT,
+                perfil_meta_id TEXT,
+                perfil_meta_nome TEXT,
+                nome_bm TEXT,
+                dominio TEXT,
+                url_site TEXT,
+                meta_tag TEXT,
+                status TEXT DEFAULT 'Preparando',
+                operador TEXT,
+                telefone_operacional TEXT,
+                email_operacional TEXT,
+                numero_sms TEXT,
+                checklist_cnpj BOOLEAN DEFAULT FALSE,
+                checklist_site BOOLEAN DEFAULT FALSE,
+                checklist_meta_tag BOOLEAN DEFAULT FALSE,
+                checklist_dominio BOOLEAN DEFAULT FALSE,
+                checklist_documento BOOLEAN DEFAULT FALSE,
+                checklist_2fa BOOLEAN DEFAULT FALSE,
+                checklist_waba BOOLEAN DEFAULT FALSE,
+                score_prontidao INTEGER DEFAULT 0,
+                risco TEXT DEFAULT 'Alto risco',
+                ultimo_teste_status TEXT,
+                ultimo_teste_mensagem TEXT,
+                ultimo_teste_detalhes TEXT,
+                ultimo_teste_em TIMESTAMP,
+                observacoes TEXT,
+                criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+            sql_historico = """
+            CREATE TABLE IF NOT EXISTS bm_verificacoes_historico (
+                id SERIAL PRIMARY KEY,
+                verificacao_id INTEGER REFERENCES bm_verificacoes(id) ON DELETE CASCADE,
+                cnpj TEXT,
+                acao TEXT,
+                status_anterior TEXT,
+                status_novo TEXT,
+                observacao TEXT,
+                operador TEXT,
+                criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        else:
+            sql_verificacoes = """
+            CREATE TABLE IF NOT EXISTS bm_verificacoes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                usuario TEXT NOT NULL,
+                cnpj TEXT NOT NULL,
+                cnpj_formatado TEXT,
+                razao_social TEXT,
+                nome_fantasia TEXT,
+                perfil_meta_id TEXT,
+                perfil_meta_nome TEXT,
+                nome_bm TEXT,
+                dominio TEXT,
+                url_site TEXT,
+                meta_tag TEXT,
+                status TEXT DEFAULT 'Preparando',
+                operador TEXT,
+                telefone_operacional TEXT,
+                email_operacional TEXT,
+                numero_sms TEXT,
+                checklist_cnpj BOOLEAN DEFAULT 0,
+                checklist_site BOOLEAN DEFAULT 0,
+                checklist_meta_tag BOOLEAN DEFAULT 0,
+                checklist_dominio BOOLEAN DEFAULT 0,
+                checklist_documento BOOLEAN DEFAULT 0,
+                checklist_2fa BOOLEAN DEFAULT 0,
+                checklist_waba BOOLEAN DEFAULT 0,
+                score_prontidao INTEGER DEFAULT 0,
+                risco TEXT DEFAULT 'Alto risco',
+                ultimo_teste_status TEXT,
+                ultimo_teste_mensagem TEXT,
+                ultimo_teste_detalhes TEXT,
+                ultimo_teste_em TIMESTAMP,
+                observacoes TEXT,
+                criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+            sql_historico = """
+            CREATE TABLE IF NOT EXISTS bm_verificacoes_historico (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                verificacao_id INTEGER,
+                cnpj TEXT,
+                acao TEXT,
+                status_anterior TEXT,
+                status_novo TEXT,
+                observacao TEXT,
+                operador TEXT,
+                criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+
+        colunas_verificacoes = {
+            "usuario": "TEXT NOT NULL DEFAULT ''",
+            "cnpj": "TEXT NOT NULL DEFAULT ''",
+            "cnpj_formatado": "TEXT",
+            "razao_social": "TEXT",
+            "nome_fantasia": "TEXT",
+            "perfil_meta_id": "TEXT",
+            "perfil_meta_nome": "TEXT",
+            "nome_bm": "TEXT",
+            "dominio": "TEXT",
+            "url_site": "TEXT",
+            "meta_tag": "TEXT",
+            "status": "TEXT DEFAULT 'Preparando'",
+            "operador": "TEXT",
+            "telefone_operacional": "TEXT",
+            "email_operacional": "TEXT",
+            "numero_sms": "TEXT",
+            "checklist_cnpj": "BOOLEAN DEFAULT FALSE" if dialect_name == "postgresql" else "BOOLEAN DEFAULT 0",
+            "checklist_site": "BOOLEAN DEFAULT FALSE" if dialect_name == "postgresql" else "BOOLEAN DEFAULT 0",
+            "checklist_meta_tag": "BOOLEAN DEFAULT FALSE" if dialect_name == "postgresql" else "BOOLEAN DEFAULT 0",
+            "checklist_dominio": "BOOLEAN DEFAULT FALSE" if dialect_name == "postgresql" else "BOOLEAN DEFAULT 0",
+            "checklist_documento": "BOOLEAN DEFAULT FALSE" if dialect_name == "postgresql" else "BOOLEAN DEFAULT 0",
+            "checklist_2fa": "BOOLEAN DEFAULT FALSE" if dialect_name == "postgresql" else "BOOLEAN DEFAULT 0",
+            "checklist_waba": "BOOLEAN DEFAULT FALSE" if dialect_name == "postgresql" else "BOOLEAN DEFAULT 0",
+            "score_prontidao": "INTEGER DEFAULT 0",
+            "risco": "TEXT DEFAULT 'Alto risco'",
+            "ultimo_teste_status": "TEXT",
+            "ultimo_teste_mensagem": "TEXT",
+            "ultimo_teste_detalhes": "TEXT",
+            "ultimo_teste_em": "TIMESTAMP",
+            "observacoes": "TEXT",
+            "criado_em": "TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
+            "atualizado_em": "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
+        }
+
+        with engine.begin() as conn:
+            conn.execute(text(sql_verificacoes))
+            conn.execute(text(sql_historico))
+
+            if dialect_name == "postgresql":
+                for coluna, tipo in colunas_verificacoes.items():
+                    conn.execute(text(f"ALTER TABLE bm_verificacoes ADD COLUMN IF NOT EXISTS {coluna} {tipo}"))
+            else:
+                existentes = conn.execute(text("PRAGMA table_info(bm_verificacoes)")).fetchall()
+                colunas_existentes = {linha[1] for linha in existentes}
+
+                for coluna, tipo in colunas_verificacoes.items():
+                    if coluna not in colunas_existentes:
+                        conn.execute(text(f"ALTER TABLE bm_verificacoes ADD COLUMN {coluna} {tipo}"))
+
+    except Exception as erro:
+        print("Erro ao criar tabelas da Central BM:", erro)
+
+
+def linha_para_dict(linha):
+    if not linha:
+        return None
+    try:
+        return dict(linha._mapping)
+    except Exception:
+        return dict(linha)
+
+
+def calcular_score_prontidao_bm(dados):
+    score = 0
+
+    for item in CHECKLIST_CENTRAL_BM:
+        if bool_valor(dados.get(item["campo"], False)):
+            score += item["peso"]
+
+    score = max(0, min(100, int(score)))
+
+    if score >= 80:
+        risco = "Pronto"
+    elif score >= 50:
+        risco = "Atenção"
+    else:
+        risco = "Alto risco"
+
+    return score, risco
+
+
+def perfil_meta_por_id(perfil_id):
+    perfil_id = str(perfil_id or "").strip()
+
+    if not perfil_id:
+        return None
+
+    for perfil in carregar_perfis_meta():
+        if str(perfil.get("id", "")).strip() == perfil_id:
+            return perfil
+
+    return None
+
+
+def nome_perfil_meta(perfil):
+    if not perfil:
+        return ""
+
+    partes = []
+
+    for chave in ["nome", "login", "telefone"]:
+        valor = valor_texto(perfil.get(chave, ""))
+        if valor:
+            partes.append(valor)
+
+    return " | ".join(partes)
+
+
+def perfis_meta_para_select():
+    perfis = carregar_perfis_meta()
+    itens = []
+
+    for perfil in perfis:
+        itens.append({
+            "id": str(perfil.get("id", "")),
+            "nome": nome_perfil_meta(perfil) or "Perfil sem identificação",
+            "cnpj_limpo": str(perfil.get("cnpj_limpo", "")),
+            "status_bm": str(perfil.get("status_bm", ""))
+        })
+
+    return sorted(itens, key=lambda item: item["nome"].lower())
+
+
+def obter_site_recente_do_cnpj(cnpj):
+    criar_tabela_sites_gerados()
+    cnpj_limpo = limpar_cnpj(cnpj)
+
+    try:
+        with engine.connect() as conn:
+            linha = conn.execute(
+                text("""
+                SELECT id, cloudflare_url, meta_tag, nome_exibicao, telefone_exibicao, email_exibicao, endereco_exibicao
+                FROM sites_gerados
+                WHERE cnpj = :cnpj
+                ORDER BY id DESC
+                LIMIT 1
+                """),
+                {"cnpj": cnpj_limpo}
+            ).fetchone()
+
+        return linha_para_dict(linha)
+    except Exception:
+        return None
+
+
+def montar_dados_verificacao_form(empresa=None, verificacao=None):
+    dados = {}
+
+    if empresa:
+        cnpj_limpo = limpar_cnpj(empresa.get("cnpj_limpo", empresa.get("cnpj", "")))
+        dados.update({
+            "cnpj": cnpj_limpo,
+            "cnpj_formatado": formatar_cnpj(cnpj_limpo),
+            "razao_social": valor_texto(empresa.get("razao_social", "")),
+            "nome_fantasia": valor_texto(empresa.get("nome_fantasia", "")),
+            "telefone_operacional": valor_texto(empresa.get("telefone_formatado", "")),
+            "email_operacional": valor_texto(empresa.get("email", "")),
+            "checklist_cnpj": True
+        })
+
+        site = obter_site_recente_do_cnpj(cnpj_limpo)
+        if site:
+            dados["url_site"] = valor_texto(site.get("cloudflare_url", ""))
+            dados["meta_tag"] = valor_texto(site.get("meta_tag", ""))
+            dados["checklist_site"] = bool(dados.get("url_site"))
+            dados["checklist_meta_tag"] = bool(dados.get("meta_tag"))
+            dados["checklist_dominio"] = bool(dados.get("url_site"))
+
+            if site.get("telefone_exibicao"):
+                dados["telefone_operacional"] = valor_texto(site.get("telefone_exibicao", ""))
+            if site.get("email_exibicao"):
+                dados["email_operacional"] = valor_texto(site.get("email_exibicao", ""))
+
+    if verificacao:
+        dados.update(verificacao)
+
+    for item in CHECKLIST_CENTRAL_BM:
+        dados[item["campo"]] = bool_valor(dados.get(item["campo"], False))
+
+    dados.setdefault("status", "Preparando")
+    dados.setdefault("operador", usuario_atual())
+    dados.setdefault("nome_bm", "")
+    dados.setdefault("dominio", "")
+    dados.setdefault("url_site", "")
+    dados.setdefault("meta_tag", "")
+    dados.setdefault("perfil_meta_id", "")
+    dados.setdefault("perfil_meta_nome", "")
+    dados.setdefault("telefone_operacional", "")
+    dados.setdefault("email_operacional", "")
+    dados.setdefault("numero_sms", "")
+    dados.setdefault("observacoes", "")
+    dados.setdefault("score_prontidao", 0)
+    dados.setdefault("risco", "Alto risco")
+
+    return dados
+
+
+def dados_verificacao_do_form(empresa=None, verificacao_atual=None):
+    cnpj_form = request.form.get("cnpj", "").strip()
+    cnpj_base = cnpj_form or (empresa or {}).get("cnpj_limpo", "") or (verificacao_atual or {}).get("cnpj", "")
+    cnpj_limpo = limpar_cnpj(cnpj_base)
+
+    razao_social = valor_texto(request.form.get("razao_social", "")) or valor_texto((empresa or {}).get("razao_social", "")) or valor_texto((verificacao_atual or {}).get("razao_social", ""))
+    nome_fantasia = valor_texto(request.form.get("nome_fantasia", "")) or valor_texto((empresa or {}).get("nome_fantasia", "")) or valor_texto((verificacao_atual or {}).get("nome_fantasia", ""))
+    perfil_id = request.form.get("perfil_meta_id", "").strip()
+    perfil = perfil_meta_por_id(perfil_id)
+    perfil_nome = nome_perfil_meta(perfil) if perfil else request.form.get("perfil_meta_nome", "").strip()
+    status = request.form.get("status", "Preparando").strip()
+
+    if status not in STATUS_CENTRAL_BM:
+        status = "Preparando"
+
+    dados = {
+        "usuario": usuario_atual(),
+        "cnpj": cnpj_limpo,
+        "cnpj_formatado": formatar_cnpj(cnpj_limpo),
+        "razao_social": razao_social,
+        "nome_fantasia": nome_fantasia,
+        "perfil_meta_id": perfil_id,
+        "perfil_meta_nome": perfil_nome,
+        "nome_bm": request.form.get("nome_bm", "").strip(),
+        "dominio": request.form.get("dominio", "").strip(),
+        "url_site": request.form.get("url_site", "").strip(),
+        "meta_tag": request.form.get("meta_tag", "").strip(),
+        "status": status,
+        "operador": request.form.get("operador", usuario_atual()).strip() or usuario_atual(),
+        "telefone_operacional": request.form.get("telefone_operacional", "").strip(),
+        "email_operacional": request.form.get("email_operacional", "").strip(),
+        "numero_sms": request.form.get("numero_sms", "").strip(),
+        "observacoes": request.form.get("observacoes", "").strip(),
+    }
+
+    for item in CHECKLIST_CENTRAL_BM:
+        dados[item["campo"]] = bool_form(item["campo"])
+
+    if dados["meta_tag"] and "<meta" in dados["meta_tag"].lower():
+        dados["checklist_meta_tag"] = True
+
+    if dados["url_site"] or dados["dominio"]:
+        dados["checklist_dominio"] = True
+
+    dados["score_prontidao"], dados["risco"] = calcular_score_prontidao_bm(dados)
+    return dados
+
+
+def registrar_historico_verificacao(verificacao_id, acao, status_antigo="", status_novo="", observacao="", operador="", cnpj=""):
+    criar_tabelas_central_bm()
+
+    try:
+        with engine.begin() as conn:
+            conn.execute(
+                text("""
+                INSERT INTO bm_verificacoes_historico
+                (verificacao_id, cnpj, acao, status_anterior, status_novo, observacao, operador)
+                VALUES
+                (:verificacao_id, :cnpj, :acao, :status_anterior, :status_novo, :observacao, :operador)
+                """),
+                {
+                    "verificacao_id": verificacao_id,
+                    "cnpj": cnpj,
+                    "acao": acao,
+                    "status_anterior": status_antigo,
+                    "status_novo": status_novo,
+                    "observacao": observacao,
+                    "operador": operador or usuario_atual()
+                }
+            )
+    except Exception as erro:
+        print("Erro ao registrar histórico da Central BM:", erro)
+
+
+def salvar_status_operacional_por_central(verificacao, status_antigo, status_novo):
+    if not verificacao or status_novo not in STATUS_OPCOES:
+        return
+
+    usuario = verificacao.get("operador") or verificacao.get("usuario") or usuario_atual()
+    cnpj = limpar_cnpj(verificacao.get("cnpj", ""))
+
+    if not cnpj:
+        return
+
+    try:
+        if status_novo == STATUS_PADRAO:
+            remover_status(usuario, cnpj)
+            remover_data_uso_cnpj(usuario, cnpj)
+        else:
+            salvar_status(usuario, cnpj, status_novo)
+            registrar_data_uso_cnpj(usuario, cnpj, status_novo)
+
+        registrar_historico_producao(usuario, status_antigo or STATUS_PADRAO, status_novo)
+        registrar_evento(usuario, formatar_cnpj(cnpj), status_antigo or STATUS_PADRAO, f"{status_novo} via Central BM")
+    except Exception as erro:
+        print("Erro ao sincronizar status operacional pela Central BM:", erro)
+
+
+def criar_verificacao_bm(dados):
+    criar_tabelas_central_bm()
+    dialect_name = getattr(getattr(engine, "dialect", None), "name", "postgresql")
+
+    campos = [
+        "usuario", "cnpj", "cnpj_formatado", "razao_social", "nome_fantasia",
+        "perfil_meta_id", "perfil_meta_nome", "nome_bm", "dominio", "url_site", "meta_tag",
+        "status", "operador", "telefone_operacional", "email_operacional", "numero_sms",
+        "checklist_cnpj", "checklist_site", "checklist_meta_tag", "checklist_dominio",
+        "checklist_documento", "checklist_2fa", "checklist_waba", "score_prontidao", "risco", "observacoes"
+    ]
+
+    params = {campo: dados.get(campo) for campo in campos}
+
+    colunas_sql = ", ".join(campos)
+    valores_sql = ", ".join([f":{campo}" for campo in campos])
+
+    with engine.begin() as conn:
+        if dialect_name == "postgresql":
+            linha = conn.execute(
+                text(f"""
+                INSERT INTO bm_verificacoes ({colunas_sql})
+                VALUES ({valores_sql})
+                RETURNING id
+                """),
+                params
+            ).fetchone()
+            verificacao_id = int(linha[0])
+        else:
+            conn.execute(
+                text(f"""
+                INSERT INTO bm_verificacoes ({colunas_sql})
+                VALUES ({valores_sql})
+                """),
+                params
+            )
+            verificacao_id = int(conn.execute(text("SELECT last_insert_rowid() AS id")).fetchone()[0])
+
+    registrar_historico_verificacao(
+        verificacao_id,
+        "Criação",
+        "",
+        dados.get("status", "Preparando"),
+        "Verificação BM criada",
+        dados.get("operador", usuario_atual()),
+        dados.get("cnpj", "")
+    )
+
+    salvar_status_operacional_por_central(dados, STATUS_PADRAO, dados.get("status", "Preparando"))
+    return verificacao_id
+
+
+def buscar_verificacao_bm(verificacao_id):
+    criar_tabelas_central_bm()
+
+    with engine.connect() as conn:
+        linha = conn.execute(
+            text("""
+            SELECT *
+            FROM bm_verificacoes
+            WHERE id = :id
+            """),
+            {"id": verificacao_id}
+        ).fetchone()
+
+    verificacao = linha_para_dict(linha)
+
+    if verificacao:
+        for item in CHECKLIST_CENTRAL_BM:
+            verificacao[item["campo"]] = bool_valor(verificacao.get(item["campo"], False))
+
+    return verificacao
+
+
+def atualizar_verificacao_bm(verificacao_id, dados):
+    criar_tabelas_central_bm()
+    atual = buscar_verificacao_bm(verificacao_id)
+
+    if not atual:
+        return False
+
+    campos = [
+        "cnpj", "cnpj_formatado", "razao_social", "nome_fantasia",
+        "perfil_meta_id", "perfil_meta_nome", "nome_bm", "dominio", "url_site", "meta_tag",
+        "status", "operador", "telefone_operacional", "email_operacional", "numero_sms",
+        "checklist_cnpj", "checklist_site", "checklist_meta_tag", "checklist_dominio",
+        "checklist_documento", "checklist_2fa", "checklist_waba", "score_prontidao", "risco", "observacoes"
+    ]
+
+    params = {campo: dados.get(campo) for campo in campos}
+    params["id"] = verificacao_id
+
+    set_sql = ",\n                    ".join([f"{campo} = :{campo}" for campo in campos])
+
+    with engine.begin() as conn:
+        conn.execute(
+            text(f"""
+            UPDATE bm_verificacoes
+            SET {set_sql},
+                atualizado_em = CURRENT_TIMESTAMP
+            WHERE id = :id
+            """),
+            params
+        )
+
+    status_antigo = atual.get("status", "Preparando")
+    status_novo = dados.get("status", "Preparando")
+
+    if status_antigo != status_novo:
+        registrar_historico_verificacao(
+            verificacao_id,
+            "Status",
+            status_antigo,
+            status_novo,
+            dados.get("observacoes", ""),
+            dados.get("operador", usuario_atual()),
+            dados.get("cnpj", "")
+        )
+        salvar_status_operacional_por_central(dados, status_antigo, status_novo)
+    else:
+        registrar_historico_verificacao(
+            verificacao_id,
+            "Atualização",
+            status_antigo,
+            status_novo,
+            "Dados/checklist atualizados",
+            dados.get("operador", usuario_atual()),
+            dados.get("cnpj", "")
+        )
+
+    return True
+
+
+def historico_verificacao_bm(verificacao_id):
+    criar_tabelas_central_bm()
+
+    with engine.connect() as conn:
+        linhas = conn.execute(
+            text("""
+            SELECT *
+            FROM bm_verificacoes_historico
+            WHERE verificacao_id = :id
+            ORDER BY id DESC
+            LIMIT 100
+            """),
+            {"id": verificacao_id}
+        ).fetchall()
+
+    return [linha_para_dict(linha) for linha in linhas]
+
+
+def listar_verificacoes_bm(filtros=None):
+    criar_tabelas_central_bm()
+    filtros = filtros or {}
+    usuario = usuario_atual()
+    params = {}
+    where = []
+
+    if tipo_usuario() != "admin":
+        where.append("usuario = :usuario")
+        params["usuario"] = usuario
+
+    busca = filtros.get("busca", "").strip()
+    status = filtros.get("status", "").strip()
+    risco = filtros.get("risco", "").strip()
+    operador = filtros.get("operador", "").strip()
+
+    if busca:
+        params["busca"] = f"%{busca.upper()}%"
+        where.append("""
+        (
+            UPPER(COALESCE(cnpj, '')) LIKE :busca OR
+            UPPER(COALESCE(cnpj_formatado, '')) LIKE :busca OR
+            UPPER(COALESCE(razao_social, '')) LIKE :busca OR
+            UPPER(COALESCE(nome_fantasia, '')) LIKE :busca OR
+            UPPER(COALESCE(nome_bm, '')) LIKE :busca OR
+            UPPER(COALESCE(dominio, '')) LIKE :busca OR
+            UPPER(COALESCE(url_site, '')) LIKE :busca OR
+            UPPER(COALESCE(perfil_meta_nome, '')) LIKE :busca
+        )
+        """)
+
+    if status:
+        where.append("status = :status")
+        params["status"] = status
+
+    if risco:
+        where.append("risco = :risco")
+        params["risco"] = risco
+
+    if operador:
+        where.append("operador = :operador")
+        params["operador"] = operador
+
+    where_sql = "WHERE " + " AND ".join(where) if where else ""
+
+    with engine.connect() as conn:
+        linhas = conn.execute(
+            text(f"""
+            SELECT *
+            FROM bm_verificacoes
+            {where_sql}
+            ORDER BY id DESC
+            LIMIT 500
+            """),
+            params
+        ).fetchall()
+
+    itens = [linha_para_dict(linha) for linha in linhas]
+
+    for item in itens:
+        for checklist in CHECKLIST_CENTRAL_BM:
+            item[checklist["campo"]] = bool_valor(item.get(checklist["campo"], False))
+
+    return itens
+
+
+def estatisticas_central_bm(verificacoes):
+    total = len(verificacoes)
+    sucesso = len([item for item in verificacoes if item.get("status") in STATUS_CENTRAL_BM_SUCESSO])
+    problemas = len([item for item in verificacoes if item.get("status") in STATUS_CENTRAL_BM_PROBLEMAS])
+    prontas = len([item for item in verificacoes if item.get("risco") == "Pronto"])
+    atencao = len([item for item in verificacoes if item.get("risco") == "Atenção"])
+    alto_risco = len([item for item in verificacoes if item.get("risco") == "Alto risco"])
+    em_analise = len([item for item in verificacoes if item.get("status") == "BM em Análise"])
+    taxa_sucesso = (sucesso / total * 100) if total else 0
+
+    return {
+        "total": total,
+        "sucesso": sucesso,
+        "problemas": problemas,
+        "prontas": prontas,
+        "atencao": atencao,
+        "alto_risco": alto_risco,
+        "em_analise": em_analise,
+        "taxa_sucesso": taxa_sucesso
+    }
+
+
+def normalizar_url_teste(url):
+    url = valor_texto(url, "")
+
+    if not url:
+        return ""
+
+    if not url.startswith(("http://", "https://")):
+        url = "https://" + url
+
+    return url
+
+
+def extrair_codigo_meta(meta_tag):
+    meta_tag = valor_texto(meta_tag, "")
+
+    if not meta_tag:
+        return ""
+
+    match = re.search(r'content=["\']([^"\']+)["\']', meta_tag, flags=re.I)
+    if match:
+        return match.group(1).strip()
+
+    return ""
+
+
+def texto_normalizado_busca(texto):
+    texto = valor_texto(texto, "").lower()
+    texto = unicodedata.normalize("NFKD", texto)
+    texto = texto.encode("ascii", "ignore").decode("ascii")
+    return re.sub(r"\s+", " ", texto).strip()
+
+
+def testar_dominio_verificacao(verificacao):
+    url_alvo = normalizar_url_teste(verificacao.get("url_site") or verificacao.get("dominio"))
+    detalhes = []
+
+    if not url_alvo:
+        return {
+            "status": "erro",
+            "mensagem": "Informe uma URL ou domínio antes de testar.",
+            "detalhes": "URL/domínio vazio."
+        }
+
+    try:
+        resposta = requests.get(
+            url_alvo,
+            timeout=15,
+            allow_redirects=True,
+            headers={
+                "User-Agent": "LTDAFinder-Pro-Domain-Checker/1.0"
+            }
+        )
+
+        html = resposta.text or ""
+        url_final = resposta.url or url_alvo
+        codigo_http = resposta.status_code
+        html_limpo = texto_normalizado_busca(html)
+        html_digitos = re.sub(r"\D+", "", html)
+        head_match = re.search(r"<head[^>]*>(.*?)</head>", html, flags=re.I | re.S)
+        head_html = head_match.group(1) if head_match else ""
+
+        online = codigo_http < 400
+        https_ok = url_final.startswith("https://")
+        meta_tag = valor_texto(verificacao.get("meta_tag", ""))
+        codigo_meta = extrair_codigo_meta(meta_tag)
+        meta_encontrada = False
+        meta_no_head = False
+
+        if meta_tag:
+            meta_encontrada = meta_tag in html
+            meta_no_head = meta_tag in head_html
+
+        if codigo_meta:
+            meta_encontrada = meta_encontrada or (codigo_meta in html)
+            meta_no_head = meta_no_head or (codigo_meta in head_html)
+
+        tem_facebook_meta = "facebook-domain-verification" in html.lower()
+        meta_encontrada = meta_encontrada or tem_facebook_meta
+        meta_no_head = meta_no_head or ("facebook-domain-verification" in head_html.lower())
+
+        cnpj = limpar_cnpj(verificacao.get("cnpj", ""))
+        cnpj_ok = bool(cnpj and cnpj in html_digitos)
+
+        razao = texto_normalizado_busca(verificacao.get("razao_social", ""))
+        nome_ok = False
+        if razao:
+            palavras = [palavra for palavra in razao.split() if len(palavra) >= 3]
+            if palavras:
+                acertos = sum(1 for palavra in palavras[:4] if palavra in html_limpo)
+                nome_ok = acertos >= max(1, min(2, len(palavras)))
+
+        detalhes.append(f"URL testada: {url_alvo}")
+        detalhes.append(f"URL final: {url_final}")
+        detalhes.append(f"HTTP: {codigo_http}")
+        detalhes.append("HTTPS: OK" if https_ok else "HTTPS: atenção")
+        detalhes.append("Meta tag: encontrada" if meta_encontrada else "Meta tag: não encontrada")
+        detalhes.append("Meta tag no head: sim" if meta_no_head else "Meta tag no head: não")
+        detalhes.append("CNPJ no HTML: sim" if cnpj_ok else "CNPJ no HTML: não encontrado")
+        detalhes.append("Razão social no HTML: sim" if nome_ok else "Razão social no HTML: não encontrada")
+
+        if not online:
+            status = "erro"
+            mensagem = f"Site respondeu HTTP {codigo_http}. Não tente verificar ainda."
+        elif online and https_ok and meta_encontrada and meta_no_head:
+            status = "pronto"
+            mensagem = "Domínio tecnicamente pronto para tentativa de verificação na Meta."
+        elif online and meta_encontrada:
+            status = "atencao"
+            mensagem = "Site online e meta tag encontrada, mas há pontos de atenção antes de tentar."
+        else:
+            status = "erro"
+            mensagem = "Site online, mas a meta tag da Meta não foi encontrada."
+
+        return {
+            "status": status,
+            "mensagem": mensagem,
+            "detalhes": "\n".join(detalhes),
+            "checklist_site": online,
+            "checklist_meta_tag": meta_encontrada,
+            "checklist_dominio": online and https_ok
+        }
+
+    except Exception as erro:
+        detalhes.append(f"Erro: {erro}")
+        return {
+            "status": "erro",
+            "mensagem": "Não consegui acessar o domínio/URL informado.",
+            "detalhes": "\n".join(detalhes)
+        }
+
+
+@app.route("/central-bm", methods=["GET"])
+@login_obrigatorio
+def central_bm():
+    filtros = {
+        "busca": request.args.get("busca", ""),
+        "status": request.args.get("status", ""),
+        "risco": request.args.get("risco", ""),
+        "operador": request.args.get("operador", "")
+    }
+
+    verificacoes = listar_verificacoes_bm(filtros)
+    estatisticas = estatisticas_central_bm(verificacoes)
+    usuarios = sorted(carregar_usuarios().keys()) if tipo_usuario() == "admin" else [usuario_atual()]
+
+    return render_template(
+        "central_bm.html",
+        usuario_logado=usuario_atual(),
+        tipo_usuario=tipo_usuario(),
+        verificacoes=verificacoes,
+        estatisticas=estatisticas,
+        status_central_bm=STATUS_CENTRAL_BM,
+        filtros=filtros,
+        usuarios=usuarios
+    )
+
+
+@app.route("/central-bm/nova", methods=["GET", "POST"])
+@login_obrigatorio
+def nova_verificacao_bm():
+    erro = ""
+    cnpj = request.values.get("cnpj", "").strip()
+    empresa = buscar_empresa_por_cnpj(cnpj) if cnpj else None
+    dados = montar_dados_verificacao_form(empresa)
+
+    if request.method == "POST":
+        cnpj_post = request.form.get("cnpj", "").strip()
+        empresa = buscar_empresa_por_cnpj(cnpj_post)
+
+        if not empresa:
+            erro = "CNPJ não encontrado na base do LTDAFinder. Confira o número e tente novamente."
+            dados = dados_verificacao_do_form(None, None)
+        else:
+            dados = dados_verificacao_do_form(empresa, None)
+            verificacao_id = criar_verificacao_bm(dados)
+            return redirect(url_for("detalhe_verificacao_bm", verificacao_id=verificacao_id))
+
+    return render_template(
+        "nova_verificacao_bm.html",
+        usuario_logado=usuario_atual(),
+        tipo_usuario=tipo_usuario(),
+        empresa=empresa,
+        dados=dados,
+        perfis_meta=perfis_meta_para_select(),
+        status_central_bm=STATUS_CENTRAL_BM,
+        checklist_central_bm=CHECKLIST_CENTRAL_BM,
+        erro=erro
+    )
+
+
+@app.route("/central-bm/<int:verificacao_id>", methods=["GET", "POST"])
+@login_obrigatorio
+def detalhe_verificacao_bm(verificacao_id):
+    verificacao = buscar_verificacao_bm(verificacao_id)
+
+    if not verificacao:
+        abort(404)
+
+    if tipo_usuario() != "admin" and verificacao.get("usuario") != usuario_atual():
+        abort(403)
+
+    erro = ""
+    sucesso = request.args.get("sucesso", "")
+
+    if request.method == "POST":
+        empresa = buscar_empresa_por_cnpj(verificacao.get("cnpj", ""))
+        dados = dados_verificacao_do_form(empresa, verificacao)
+        atualizar_verificacao_bm(verificacao_id, dados)
+        return redirect(url_for("detalhe_verificacao_bm", verificacao_id=verificacao_id, sucesso="Dados salvos com sucesso."))
+
+    historico = historico_verificacao_bm(verificacao_id)
+
+    return render_template(
+        "bm_verificacao.html",
+        usuario_logado=usuario_atual(),
+        tipo_usuario=tipo_usuario(),
+        verificacao=verificacao,
+        historico=historico,
+        perfis_meta=perfis_meta_para_select(),
+        status_central_bm=STATUS_CENTRAL_BM,
+        checklist_central_bm=CHECKLIST_CENTRAL_BM,
+        erro=erro,
+        sucesso=sucesso
+    )
+
+
+@app.route("/central-bm/<int:verificacao_id>/status", methods=["POST"])
+@login_obrigatorio
+def central_bm_status(verificacao_id):
+    verificacao = buscar_verificacao_bm(verificacao_id)
+
+    if not verificacao:
+        abort(404)
+
+    if tipo_usuario() != "admin" and verificacao.get("usuario") != usuario_atual():
+        abort(403)
+
+    novo_status = request.form.get("status", "Preparando").strip()
+
+    if novo_status not in STATUS_CENTRAL_BM:
+        novo_status = "Preparando"
+
+    dados = montar_dados_verificacao_form(verificacao=verificacao)
+    dados["status"] = novo_status
+    dados["score_prontidao"], dados["risco"] = calcular_score_prontidao_bm(dados)
+    atualizar_verificacao_bm(verificacao_id, dados)
+
+    return redirect(request.referrer or url_for("central_bm"))
+
+
+@app.route("/central-bm/<int:verificacao_id>/testar-dominio", methods=["POST"])
+@login_obrigatorio
+def central_bm_testar_dominio(verificacao_id):
+    verificacao = buscar_verificacao_bm(verificacao_id)
+
+    if not verificacao:
+        abort(404)
+
+    if tipo_usuario() != "admin" and verificacao.get("usuario") != usuario_atual():
+        abort(403)
+
+    resultado = testar_dominio_verificacao(verificacao)
+
+    verificacao_atualizada = dict(verificacao)
+    verificacao_atualizada["checklist_site"] = resultado.get("checklist_site", verificacao.get("checklist_site", False))
+    verificacao_atualizada["checklist_meta_tag"] = resultado.get("checklist_meta_tag", verificacao.get("checklist_meta_tag", False))
+    verificacao_atualizada["checklist_dominio"] = resultado.get("checklist_dominio", verificacao.get("checklist_dominio", False))
+    verificacao_atualizada["score_prontidao"], verificacao_atualizada["risco"] = calcular_score_prontidao_bm(verificacao_atualizada)
+
+    with engine.begin() as conn:
+        conn.execute(
+            text("""
+            UPDATE bm_verificacoes
+            SET checklist_site = :checklist_site,
+                checklist_meta_tag = :checklist_meta_tag,
+                checklist_dominio = :checklist_dominio,
+                score_prontidao = :score_prontidao,
+                risco = :risco,
+                ultimo_teste_status = :ultimo_teste_status,
+                ultimo_teste_mensagem = :ultimo_teste_mensagem,
+                ultimo_teste_detalhes = :ultimo_teste_detalhes,
+                ultimo_teste_em = CURRENT_TIMESTAMP,
+                atualizado_em = CURRENT_TIMESTAMP
+            WHERE id = :id
+            """),
+            {
+                "id": verificacao_id,
+                "checklist_site": verificacao_atualizada["checklist_site"],
+                "checklist_meta_tag": verificacao_atualizada["checklist_meta_tag"],
+                "checklist_dominio": verificacao_atualizada["checklist_dominio"],
+                "score_prontidao": verificacao_atualizada["score_prontidao"],
+                "risco": verificacao_atualizada["risco"],
+                "ultimo_teste_status": resultado.get("status", "erro"),
+                "ultimo_teste_mensagem": resultado.get("mensagem", ""),
+                "ultimo_teste_detalhes": resultado.get("detalhes", "")
+            }
+        )
+
+    registrar_historico_verificacao(
+        verificacao_id,
+        "Teste de domínio",
+        verificacao.get("status", ""),
+        verificacao.get("status", ""),
+        resultado.get("mensagem", ""),
+        usuario_atual(),
+        verificacao.get("cnpj", "")
+    )
+
+    return redirect(url_for("detalhe_verificacao_bm", verificacao_id=verificacao_id))
 
 
 @app.route("/login", methods=["GET", "POST"])

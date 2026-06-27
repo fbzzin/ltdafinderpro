@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>Central BM - LtdaFinder Pro</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        .central-hero{background:linear-gradient(135deg,#111827,#1e293b);border-radius:22px;padding:26px;color:#fff;margin-bottom:22px;box-shadow:0 18px 45px rgba(15,23,42,.18)}
+        .central-hero h1{margin:0 0 6px;font-size:30px}.central-hero p{margin:0;color:#cbd5e1}.central-hero-actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:20px}
+        .bm-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:0;border-radius:14px;padding:12px 16px;font-weight:800;text-decoration:none;cursor:pointer;background:#e5e7eb;color:#111827}
+        .bm-btn-primary{background:#22c55e;color:#06230f}.bm-btn-dark{background:#020617;color:#fff}.bm-btn-soft{background:#f8fafc;color:#0f172a}.bm-btn-danger{background:#fee2e2;color:#991b1b}.bm-btn-blue{background:#dbeafe;color:#1d4ed8}
+        .bm-stats{display:grid;grid-template-columns:repeat(6,minmax(130px,1fr));gap:14px;margin-bottom:20px}.bm-stat{background:#fff;border-radius:18px;padding:18px;box-shadow:0 12px 28px rgba(15,23,42,.08);border:1px solid #e5e7eb}.bm-stat span{display:block;color:#64748b;font-size:12px;font-weight:800;text-transform:uppercase}.bm-stat strong{display:block;font-size:26px;margin-top:8px;color:#111827}
+        .bm-filtros{background:#fff;border-radius:18px;padding:18px;margin-bottom:20px;border:1px solid #e5e7eb;box-shadow:0 12px 28px rgba(15,23,42,.06)}.bm-filtros-grid{display:grid;grid-template-columns:2fr 1fr 1fr 1fr auto;gap:12px;align-items:end}.bm-filtros label{font-size:12px;text-transform:uppercase;font-weight:800;color:#64748b}.bm-filtros input,.bm-filtros select{width:100%;height:44px;border:1px solid #cbd5e1;border-radius:12px;padding:0 12px;background:#fff}
+        .bm-lista{display:grid;gap:14px}.bm-row{background:#fff;border:1px solid #e5e7eb;border-radius:20px;padding:18px;display:grid;grid-template-columns:1.7fr 1fr 1fr 1fr auto;gap:14px;align-items:center;box-shadow:0 14px 32px rgba(15,23,42,.07)}.bm-cnpj{font-weight:900;color:#0f172a}.bm-nome{font-weight:800;margin:5px 0;color:#111827}.bm-mini{font-size:12px;color:#64748b;line-height:1.45}.bm-label{font-size:11px;text-transform:uppercase;font-weight:900;color:#64748b;display:block;margin-bottom:5px}
+        .score-wrap{display:flex;align-items:center;gap:10px}.score-bolha{width:52px;height:52px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:900;background:#f1f5f9;color:#0f172a;border:4px solid #e2e8f0}.risco-Pronto .score-bolha{background:#dcfce7;border-color:#22c55e;color:#166534}.risco-Atenção .score-bolha{background:#fef9c3;border-color:#eab308;color:#854d0e}.risco-Alto.risco-risco .score-bolha,.risco-Alto-risco .score-bolha{background:#fee2e2;border-color:#ef4444;color:#991b1b}
+        .badge-status{display:inline-block;border-radius:999px;padding:8px 11px;background:#f1f5f9;color:#334155;font-weight:900;font-size:12px}.badge-status.sucesso{background:#dcfce7;color:#166534}.badge-status.problema{background:#fee2e2;color:#991b1b}.badge-status.analise{background:#dbeafe;color:#1d4ed8}.badge-status.preparo{background:#fef9c3;color:#854d0e}
+        .bm-row form{margin:0}.bm-row select{height:38px;border-radius:11px;border:1px solid #cbd5e1;padding:0 8px;background:#fff;width:100%}.acoes-row{display:flex;gap:8px;align-items:center;justify-content:flex-end}.vazio{background:#fff;border:1px dashed #cbd5e1;border-radius:20px;padding:40px;text-align:center;color:#64748b}.vazio h2{color:#0f172a;margin-top:0}
+        @media(max-width:1200px){.bm-stats{grid-template-columns:repeat(3,1fr)}.bm-row{grid-template-columns:1fr}.bm-filtros-grid{grid-template-columns:1fr 1fr}.acoes-row{justify-content:flex-start}}@media(max-width:720px){.bm-stats,.bm-filtros-grid{grid-template-columns:1fr}}
+    </style>
+</head>
+<body>
+
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+<div class="layout">
+    <aside class="sidebar">
+        <div>
+            <div class="sidebar-logo">
+                <img src="{{ url_for('static', filename='logo.png') }}" alt="LtdaFinder Pro">
+            </div>
+
+            <div class="usuario-box">
+                <span>Usuário logado</span>
+                <strong>👤 {{ usuario_logado }}</strong>
+            </div>
+
+            <nav class="menu">
+                <a class="menu-item" href="/">🔎 Minerar CNPJs</a>
+                <a class="menu-item" href="/master">📊 Dashboard Master</a>
+                <a class="menu-item" href="/usados">📌 Meus CNPJs Usados</a>
+                <a class="menu-item" href="/favoritos">⭐ Favoritos</a>
+                <a class="menu-item" href="/perfis-meta">👤 Perfis Meta</a>
+                <a class="menu-item active" href="/central-bm">🧭 Central BM</a>
+                <a class="menu-item" href="/relatorios-bm">📄 Relatórios BM</a>
+                <a class="menu-item" href="/sites">🌐 Gerador de Sites</a>
+                <a class="menu-item" href="/historico">📜 Histórico</a>
+                <a class="menu-item" href="/estatisticas">📈 Estatísticas</a>
+                {% if tipo_usuario == "admin" %}
+                <a class="menu-item" href="/admin">👑 Painel Admin</a>
+                {% endif %}
+                <a class="menu-item sair" href="/logout">🚪 Sair</a>
+            </nav>
+        </div>
+
+        <div class="sidebar-footer">
+            <span>Versão Local</span>
+            <strong>V1.0</strong>
+        </div>
+    </aside>
+
+    <main class="main">
+        <section class="central-hero">
+            <h1>🧭 Central de Verificação BM</h1>
+            <p>Controle CNPJ, perfil Meta, domínio, checklist, score de prontidão e resultado da análise em uma única tela.</p>
+            <div class="central-hero-actions">
+                <a href="/central-bm/nova" class="bm-btn bm-btn-primary">➕ Nova verificação</a>
+                <a href="/sites" class="bm-btn bm-btn-soft">🌐 Sites gerados</a>
+                <a href="/relatorios-bm" class="bm-btn bm-btn-soft">📄 Relatórios BM</a>
+            </div>
+        </section>
+
+        <section class="bm-stats">
+            <div class="bm-stat"><span>Total</span><strong>{{ estatisticas.total }}</strong></div>
+            <div class="bm-stat"><span>Prontas</span><strong>{{ estatisticas.prontas }}</strong></div>
+            <div class="bm-stat"><span>Atenção</span><strong>{{ estatisticas.atencao }}</strong></div>
+            <div class="bm-stat"><span>Alto risco</span><strong>{{ estatisticas.alto_risco }}</strong></div>
+            <div class="bm-stat"><span>Em análise</span><strong>{{ estatisticas.em_analise }}</strong></div>
+            <div class="bm-stat"><span>Sucesso</span><strong>{{ "%.1f"|format(estatisticas.taxa_sucesso) }}%</strong></div>
+        </section>
+
+        <section class="bm-filtros">
+            <form method="get" action="/central-bm">
+                <div class="bm-filtros-grid">
+                    <div>
+                        <label>Busca</label>
+                        <input type="text" name="busca" value="{{ filtros.busca }}" placeholder="CNPJ, empresa, BM, domínio ou perfil">
+                    </div>
+                    <div>
+                        <label>Status</label>
+                        <select name="status">
+                            <option value="">Todos</option>
+                            {% for status in status_central_bm %}
+                            <option value="{{ status }}" {% if filtros.status == status %}selected{% endif %}>{{ status }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label>Risco</label>
+                        <select name="risco">
+                            <option value="">Todos</option>
+                            <option value="Pronto" {% if filtros.risco == "Pronto" %}selected{% endif %}>Pronto</option>
+                            <option value="Atenção" {% if filtros.risco == "Atenção" %}selected{% endif %}>Atenção</option>
+                            <option value="Alto risco" {% if filtros.risco == "Alto risco" %}selected{% endif %}>Alto risco</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label>Operador</label>
+                        <select name="operador">
+                            <option value="">Todos</option>
+                            {% for usuario in usuarios %}
+                            <option value="{{ usuario }}" {% if filtros.operador == usuario %}selected{% endif %}>{{ usuario }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <button type="submit" class="bm-btn bm-btn-dark">🔎 Filtrar</button>
+                </div>
+            </form>
+        </section>
+
+        <section class="bm-lista">
+            {% if verificacoes %}
+                {% for item in verificacoes %}
+                <article class="bm-row risco-{{ item.risco|replace(' ', '-') }}">
+                    <div>
+                        <div class="bm-cnpj">{{ item.cnpj_formatado }}</div>
+                        <div class="bm-nome">{{ item.razao_social or item.nome_fantasia or 'Empresa sem nome' }}</div>
+                        <div class="bm-mini">
+                            BM: {{ item.nome_bm or 'Não informada' }}<br>
+                            Perfil: {{ item.perfil_meta_nome or 'Não vinculado' }}<br>
+                            Operador: {{ item.operador or item.usuario }}
+                        </div>
+                    </div>
+
+                    <div>
+                        <span class="bm-label">Domínio / URL</span>
+                        <div class="bm-mini">{{ item.url_site or item.dominio or 'Não informado' }}</div>
+                        {% if item.ultimo_teste_status %}
+                        <div class="bm-mini">Último teste: {{ item.ultimo_teste_status }}</div>
+                        {% endif %}
+                    </div>
+
+                    <div class="score-wrap">
+                        <div class="score-bolha">{{ item.score_prontidao or 0 }}</div>
+                        <div>
+                            <span class="bm-label">Prontidão</span>
+                            <strong>{{ item.risco or 'Alto risco' }}</strong>
+                        </div>
+                    </div>
+
+                    <div>
+                        {% set classe_status = 'preparo' %}
+                        {% if item.status in ['Verificou 250','Verificou 2k','Verificou 100k'] %}{% set classe_status = 'sucesso' %}{% endif %}
+                        {% if item.status in ['Precisa de mais informações','Análise permanente','Checkpoint','WABA restrita','Conta desabilitada','Descartado'] %}{% set classe_status = 'problema' %}{% endif %}
+                        {% if item.status == 'BM em Análise' %}{% set classe_status = 'analise' %}{% endif %}
+                        <span class="badge-status {{ classe_status }}">{{ item.status }}</span>
+                        <form method="post" action="/central-bm/{{ item.id }}/status" style="margin-top:8px;">
+                            <select name="status" onchange="this.form.submit()">
+                                {% for status in status_central_bm %}
+                                <option value="{{ status }}" {% if item.status == status %}selected{% endif %}>{{ status }}</option>
+                                {% endfor %}
+                            </select>
+                        </form>
+                    </div>
+
+                    <div class="acoes-row">
+                        <a href="/central-bm/{{ item.id }}" class="bm-btn bm-btn-blue">Abrir</a>
+                    </div>
+                </article>
+                {% endfor %}
+            {% else %}
+                <div class="vazio">
+                    <h2>Nenhuma verificação encontrada</h2>
+                    <p>Crie a primeira verificação BM ou ajuste os filtros para encontrar registros existentes.</p>
+                    <a href="/central-bm/nova" class="bm-btn bm-btn-primary">➕ Nova verificação</a>
+                </div>
+            {% endif %}
+        </section>
+    </main>
+</div>
+
+<script>
+    const menuToggle = document.getElementById("menuToggle");
+    const sidebarOverlay = document.getElementById("sidebarOverlay");
+    function fecharMenuMobile(){document.body.classList.remove("sidebar-aberta");}
+    function alternarMenu(){document.body.classList.toggle("sidebar-aberta");}
+    if(menuToggle){menuToggle.addEventListener("click", alternarMenu);}
+    if(sidebarOverlay){sidebarOverlay.addEventListener("click", fecharMenuMobile);}
+</script>
+
+</body>
+</html>

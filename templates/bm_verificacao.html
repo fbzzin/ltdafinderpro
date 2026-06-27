@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Verificação BM - LtdaFinder Pro</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        .bm-head{background:linear-gradient(135deg,#020617,#1e293b);border-radius:22px;padding:26px;color:#fff;margin-bottom:20px}.bm-head h1{margin:0 0 6px}.bm-head p{margin:0;color:#cbd5e1}.score-panel{display:grid;grid-template-columns:160px 1fr auto;gap:18px;align-items:center;background:#fff;border:1px solid #e5e7eb;border-radius:20px;padding:18px;margin-bottom:18px;box-shadow:0 14px 35px rgba(15,23,42,.08)}.score-big{width:120px;height:120px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:34px;font-weight:900;background:#f1f5f9;border:8px solid #e2e8f0}.score-Pronto{background:#dcfce7;border-color:#22c55e;color:#166534}.score-Atenção{background:#fef9c3;border-color:#eab308;color:#854d0e}.score-Alto-risco{background:#fee2e2;border-color:#ef4444;color:#991b1b}.bm-card{background:#fff;border:1px solid #e5e7eb;border-radius:20px;padding:22px;margin-bottom:18px;box-shadow:0 14px 35px rgba(15,23,42,.07)}.bm-grid{display:grid;grid-template-columns:repeat(2,minmax(220px,1fr));gap:16px}.bm-grid .full{grid-column:1/-1}.bm-card label{display:block;font-size:12px;text-transform:uppercase;font-weight:900;color:#64748b;margin-bottom:7px}.bm-card input,.bm-card select,.bm-card textarea{width:100%;border:1px solid #cbd5e1;border-radius:13px;padding:12px;background:#fff}.bm-card textarea{min-height:110px;resize:vertical}.check-grid{display:grid;grid-template-columns:repeat(2,minmax(220px,1fr));gap:10px}.check-item{border:1px solid #e5e7eb;border-radius:14px;padding:12px;display:flex;gap:10px;align-items:flex-start;background:#f8fafc}.check-item input{width:auto;margin-top:3px}.check-item strong{display:block;color:#0f172a}.check-item small{color:#64748b}.bm-actions{display:flex;gap:12px;flex-wrap:wrap}.bm-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:0;border-radius:14px;padding:12px 16px;font-weight:900;text-decoration:none;cursor:pointer}.bm-btn-primary{background:#22c55e;color:#06230f}.bm-btn-dark{background:#020617;color:#fff}.bm-btn-blue{background:#dbeafe;color:#1d4ed8}.bm-btn-warn{background:#fef9c3;color:#854d0e}.alerta{border-radius:14px;padding:14px;margin-bottom:16px;font-weight:800}.alerta-sucesso{background:#dcfce7;color:#166534}.alerta-erro{background:#fee2e2;color:#991b1b}.teste-box{white-space:pre-wrap;background:#f8fafc;border:1px solid #e5e7eb;border-radius:15px;padding:14px;color:#334155}.historico{display:grid;gap:10px}.hist-item{border-left:4px solid #94a3b8;background:#f8fafc;border-radius:12px;padding:12px}.hist-item strong{display:block;color:#0f172a}.hist-item small{color:#64748b}.badge{display:inline-flex;border-radius:999px;padding:8px 12px;background:#f1f5f9;color:#334155;font-weight:900}@media(max-width:950px){.score-panel{grid-template-columns:1fr}.bm-grid,.check-grid{grid-template-columns:1fr}}
+    </style>
+</head>
+<body>
+
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+<div class="layout">
+    <aside class="sidebar">
+        <div>
+            <div class="sidebar-logo"><img src="{{ url_for('static', filename='logo.png') }}" alt="LtdaFinder Pro"></div>
+            <div class="usuario-box"><span>Usuário logado</span><strong>👤 {{ usuario_logado }}</strong></div>
+            <nav class="menu">
+                <a class="menu-item" href="/">🔎 Minerar CNPJs</a>
+                <a class="menu-item" href="/master">📊 Dashboard Master</a>
+                <a class="menu-item" href="/usados">📌 Meus CNPJs Usados</a>
+                <a class="menu-item" href="/favoritos">⭐ Favoritos</a>
+                <a class="menu-item" href="/perfis-meta">👤 Perfis Meta</a>
+                <a class="menu-item active" href="/central-bm">🧭 Central BM</a>
+                <a class="menu-item" href="/relatorios-bm">📄 Relatórios BM</a>
+                <a class="menu-item" href="/sites">🌐 Gerador de Sites</a>
+                <a class="menu-item" href="/historico">📜 Histórico</a>
+                <a class="menu-item" href="/estatisticas">📈 Estatísticas</a>
+                {% if tipo_usuario == "admin" %}<a class="menu-item" href="/admin">👑 Painel Admin</a>{% endif %}
+                <a class="menu-item sair" href="/logout">🚪 Sair</a>
+            </nav>
+        </div>
+        <div class="sidebar-footer"><span>Versão Local</span><strong>V1.0</strong></div>
+    </aside>
+
+    <main class="main">
+        <section class="bm-head">
+            <h1>🧭 Verificação BM #{{ verificacao.id }}</h1>
+            <p>{{ verificacao.cnpj_formatado }} · {{ verificacao.razao_social or verificacao.nome_fantasia }}</p>
+        </section>
+
+        {% if sucesso %}<div class="alerta alerta-sucesso">{{ sucesso }}</div>{% endif %}
+        {% if erro %}<div class="alerta alerta-erro">{{ erro }}</div>{% endif %}
+
+        <section class="score-panel">
+            <div class="score-big score-{{ (verificacao.risco or 'Alto risco')|replace(' ', '-') }}">{{ verificacao.score_prontidao or 0 }}</div>
+            <div>
+                <h2>Prontidão: {{ verificacao.risco or 'Alto risco' }}</h2>
+                <p>O score é calculado pelo checklist: CNPJ, site, meta tag, domínio, documento, 2FA e WABA.</p>
+                <span class="badge">Status: {{ verificacao.status }}</span>
+            </div>
+            <form method="post" action="/central-bm/{{ verificacao.id }}/testar-dominio">
+                <button type="submit" class="bm-btn bm-btn-warn">🧪 Testar prontidão do domínio</button>
+            </form>
+        </section>
+
+        {% if verificacao.ultimo_teste_mensagem %}
+        <section class="bm-card">
+            <h2>🧪 Último teste do domínio</h2>
+            <p><strong>{{ verificacao.ultimo_teste_mensagem }}</strong></p>
+            <div class="teste-box">{{ verificacao.ultimo_teste_detalhes }}</div>
+        </section>
+        {% endif %}
+
+        <form method="post" action="/central-bm/{{ verificacao.id }}">
+            <section class="bm-card">
+                <h2>🗂 Dados principais</h2>
+                <div class="bm-grid">
+                    <div>
+                        <label>CNPJ</label>
+                        <input type="text" name="cnpj" value="{{ verificacao.cnpj }}" readonly>
+                    </div>
+                    <div>
+                        <label>Status</label>
+                        <select name="status">
+                            {% for status in status_central_bm %}
+                            <option value="{{ status }}" {% if verificacao.status == status %}selected{% endif %}>{{ status }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label>Razão Social</label>
+                        <input type="text" name="razao_social" value="{{ verificacao.razao_social or '' }}" readonly>
+                    </div>
+                    <div>
+                        <label>Nome Fantasia</label>
+                        <input type="text" name="nome_fantasia" value="{{ verificacao.nome_fantasia or '' }}" readonly>
+                    </div>
+                    <div>
+                        <label>Nome da BM</label>
+                        <input type="text" name="nome_bm" value="{{ verificacao.nome_bm or '' }}">
+                    </div>
+                    <div>
+                        <label>Operador</label>
+                        <input type="text" name="operador" value="{{ verificacao.operador or usuario_logado }}">
+                    </div>
+                    <div class="full">
+                        <label>Perfil Meta vinculado</label>
+                        <select name="perfil_meta_id">
+                            <option value="">Não vinculado</option>
+                            {% for perfil in perfis_meta %}
+                            <option value="{{ perfil.id }}" {% if verificacao.perfil_meta_id == perfil.id %}selected{% endif %}>{{ perfil.nome }}</option>
+                            {% endfor %}
+                        </select>
+                        <input type="hidden" name="perfil_meta_nome" value="{{ verificacao.perfil_meta_nome or '' }}">
+                    </div>
+                </div>
+            </section>
+
+            <section class="bm-card">
+                <h2>🌐 Domínio e operação</h2>
+                <div class="bm-grid">
+                    <div>
+                        <label>Domínio</label>
+                        <input type="text" name="dominio" value="{{ verificacao.dominio or '' }}">
+                    </div>
+                    <div>
+                        <label>URL do site</label>
+                        <input type="text" name="url_site" value="{{ verificacao.url_site or '' }}">
+                    </div>
+                    <div>
+                        <label>Telefone operacional</label>
+                        <input type="text" name="telefone_operacional" value="{{ verificacao.telefone_operacional or '' }}">
+                    </div>
+                    <div>
+                        <label>E-mail operacional</label>
+                        <input type="email" name="email_operacional" value="{{ verificacao.email_operacional or '' }}">
+                    </div>
+                    <div>
+                        <label>Número SMS</label>
+                        <input type="text" name="numero_sms" value="{{ verificacao.numero_sms or '' }}">
+                    </div>
+                    <div class="full">
+                        <label>Meta tag da Meta</label>
+                        <textarea name="meta_tag">{{ verificacao.meta_tag or '' }}</textarea>
+                    </div>
+                </div>
+            </section>
+
+            <section class="bm-card">
+                <h2>✅ Checklist</h2>
+                <div class="check-grid">
+                    {% for item in checklist_central_bm %}
+                    <label class="check-item">
+                        <input type="checkbox" name="{{ item.campo }}" {% if verificacao[item.campo] %}checked{% endif %}>
+                        <span><strong>{{ item.label }}</strong><small>+{{ item.peso }} pontos</small></span>
+                    </label>
+                    {% endfor %}
+                </div>
+            </section>
+
+            <section class="bm-card">
+                <label>Observações</label>
+                <textarea name="observacoes">{{ verificacao.observacoes or '' }}</textarea>
+            </section>
+
+            <div class="bm-actions">
+                <button type="submit" class="bm-btn bm-btn-primary">💾 Salvar alterações</button>
+                <a href="/central-bm" class="bm-btn bm-btn-dark">← Voltar para Central</a>
+                <a href="/empresa/{{ verificacao.cnpj }}" class="bm-btn bm-btn-blue">🏢 Abrir empresa</a>
+            </div>
+        </form>
+
+        <section class="bm-card">
+            <h2>📜 Histórico</h2>
+            <div class="historico">
+                {% if historico %}
+                    {% for item in historico %}
+                    <div class="hist-item">
+                        <strong>{{ item.acao }}{% if item.status_novo %}: {{ item.status_novo }}{% endif %}</strong>
+                        <small>{{ item.criado_em }} · {{ item.operador }}</small>
+                        {% if item.observacao %}<p>{{ item.observacao }}</p>{% endif %}
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <p>Nenhum histórico registrado.</p>
+                {% endif %}
+            </div>
+        </section>
+    </main>
+</div>
+</body>
+</html>
