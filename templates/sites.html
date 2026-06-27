@@ -586,11 +586,15 @@
                             <h3>{{ site.nome_empresarial }}</h3>
                             <p>{{ site.cnpj_formatado }} · Arquivo: {{ site.nome_arquivo }}</p>
                             <p>Gerado por {{ site.usuario }} em {{ site.criado_em }}</p>
+                            {% if site.cloudflare_url %}
+                            <p>🌍 <a href="{{ site.cloudflare_url }}" target="_blank" rel="noopener noreferrer" style="color:#9eeeff; text-decoration:none;">{{ site.cloudflare_url }}</a></p>
+                            {% endif %}
                         </div>
 
                         <div>
                             <span class="site-badge">{{ modelo_site_nome(site.modelo_site) }}</span>
                             <p style="margin-top:8px;">{{ site.categoria_cnae }}</p>
+                            <p style="margin-top:8px;">☁️ {{ site.cloudflare_status or "Não publicado" }}</p>
                         </div>
 
                         <div class="preview-actions" style="margin:0;">

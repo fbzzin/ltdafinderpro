@@ -574,7 +574,7 @@
 
                 <h2 style="margin-top:0;">Informações que vão aparecer no site</h2>
                 <p style="margin:-8px 0 16px 0; color:var(--site-muted); font-size:14px; line-height:1.5;">
-                    Esses campos vêm preenchidos com os dados do CNPJ, mas você pode trocar antes de gerar.
+                    Esses campos vêm preenchidos com os dados do CNPJ, mas você pode trocar antes de gerar e publicar.
                 </p>
 
                 <div class="site-form-grid" style="grid-template-columns:repeat(2,minmax(0,1fr)); align-items:start;">
@@ -584,8 +584,13 @@
                     </div>
 
                     <div>
-                        <label>Telefone / WhatsApp</label>
-                        <input type="text" name="telefone_site" value="{{ telefone_site }}" placeholder="Ex: (11) 99999-9999">
+                        <label>Telefone exibido</label>
+                        <input type="text" name="telefone_site" value="{{ telefone_site }}" placeholder="Ex: (11) 3000-0000">
+                    </div>
+
+                    <div>
+                        <label>WhatsApp exibido</label>
+                        <input type="text" name="whatsapp_site" value="{{ whatsapp_site }}" placeholder="Ex: (11) 99999-9999">
                     </div>
 
                     <div>

@@ -1,10 +1,11 @@
 from flask import Flask, render_template, request, send_file, abort, jsonify, redirect, url_for, session
 import pandas as pd
 from pathlib import Path
-import zipfile, io, math, json, re, unicodedata
+import zipfile, io, math, json, re, unicodedata, os
 from functools import wraps
 from datetime import datetime, timedelta
 from html import escape
+import requests
 from sqlalchemy import text
 from database import engine
 
@@ -1555,8 +1556,33 @@ def criar_tabela_sites_gerados():
             )
             """
 
+        colunas_extras = {
+            "nome_exibicao": "TEXT",
+            "telefone_exibicao": "TEXT",
+            "whatsapp_exibicao": "TEXT",
+            "email_exibicao": "TEXT",
+            "endereco_exibicao": "TEXT",
+            "cloudflare_worker_name": "TEXT",
+            "cloudflare_url": "TEXT",
+            "cloudflare_status": "TEXT DEFAULT 'Não publicado'",
+            "cloudflare_publicado_em": "TIMESTAMP",
+            "cloudflare_erro": "TEXT"
+        }
+
         with engine.begin() as conn:
             conn.execute(text(sql))
+
+            if dialect_name == "postgresql":
+                for coluna, tipo in colunas_extras.items():
+                    conn.execute(text(f"ALTER TABLE sites_gerados ADD COLUMN IF NOT EXISTS {coluna} {tipo}"))
+            else:
+                existentes = conn.execute(text("PRAGMA table_info(sites_gerados)")).fetchall()
+                colunas_existentes = {linha[1] for linha in existentes}
+
+                for coluna, tipo in colunas_extras.items():
+                    if coluna not in colunas_existentes:
+                        conn.execute(text(f"ALTER TABLE sites_gerados ADD COLUMN {coluna} {tipo}"))
+
     except Exception as erro:
         print("Erro ao criar tabela sites_gerados:", erro)
 
@@ -2365,6 +2391,7 @@ def gerar_html_site_empresa(empresa, meta_tag, modelo_site, observacoes=""):
     cnae = valor_publico(empresa.get("cnae_principal", ""))
     categoria = valor_publico(empresa.get("categoria_cnae", ""))
     telefone = valor_publico(empresa.get("telefone_formatado", ""))
+    whatsapp = valor_publico(empresa.get("whatsapp_site", "") or empresa.get("telefone_formatado", ""))
     email = valor_publico(empresa.get("email", ""))
     endereco = montar_endereco_empresa(empresa)
     data_abertura = valor_publico(empresa.get("data_inicio_formatada", ""))
@@ -2509,6 +2536,7 @@ def gerar_html_site_empresa(empresa, meta_tag, modelo_site, observacoes=""):
                 <div class="info-line"><span>Data de Abertura</span><strong>{escape(data_abertura)}</strong></div>
                 <div class="info-line"><span>Endereço</span><strong>{escape(endereco)}</strong></div>
                 <div class="info-line"><span>Telefone</span><strong>{escape(telefone)}</strong></div>
+                <div class="info-line"><span>WhatsApp</span><strong>{escape(whatsapp)}</strong></div>
                 <div class="info-line"><span>E-mail</span><strong>{escape(email)}</strong></div>
             </div>
         </div>
@@ -2526,6 +2554,7 @@ def gerar_html_site_empresa(empresa, meta_tag, modelo_site, observacoes=""):
                 <article class="card">
                     <h3>Atendimento</h3>
                     <p><strong>Telefone:</strong> {escape(telefone)}</p>
+                    <p><strong>WhatsApp:</strong> {escape(whatsapp)}</p>
                     <p><strong>E-mail:</strong> {escape(email)}</p>
                     <p><strong>Endereço:</strong> {escape(endereco)}</p>
                 </article>
@@ -2585,31 +2614,44 @@ def gerar_html_site_empresa(empresa, meta_tag, modelo_site, observacoes=""):
 
 
 
-def aplicar_personalizacao_site(empresa, nome_site="", telefone_site="", email_site="", endereco_site=""):
+def aplicar_personalizacao_site(empresa, nome_site="", telefone_site="", email_site="", endereco_site="", whatsapp_site=""):
     empresa_site = dict(empresa)
     empresa_site["nome_site"] = valor_texto(nome_site, "") or nome_exibicao_empresa(empresa)
     empresa_site["telefone_formatado"] = valor_texto(telefone_site, "")
+    empresa_site["whatsapp_site"] = valor_texto(whatsapp_site, "") or valor_texto(telefone_site, "")
     empresa_site["email"] = valor_texto(email_site, "")
     empresa_site["endereco_site"] = valor_texto(endereco_site, "")
     return empresa_site
 
 
 def gerar_nome_worker_site(site):
-    base = valor_texto(site.get("nome_fantasia", "")) or valor_texto(site.get("nome_empresarial", "")) or "site"
+    base = (
+        valor_texto(site.get("nome_exibicao", ""))
+        or valor_texto(site.get("nome_fantasia", ""))
+        or valor_texto(site.get("nome_empresarial", ""))
+        or "site"
+    )
     slug = normalizar_slug_site(base).replace("_", "-")
     cnpj = limpar_cnpj(site.get("cnpj", ""))
-    sufixo = cnpj[-4:] if cnpj else datetime.now().strftime("%H%M")
-    nome = f"{slug}-{sufixo}"
+    sufixo_cnpj = cnpj[-4:] if cnpj else datetime.now().strftime("%H%M")
+    sufixo_id = valor_texto(site.get("id", ""))
+
+    partes = [slug, sufixo_cnpj]
+
+    if sufixo_id:
+        partes.append(sufixo_id)
+
+    nome = "-".join(partes)
     nome = re.sub(r"[^a-z0-9-]+", "-", nome.lower()).strip("-")
     nome = re.sub(r"-+", "-", nome)
 
     if not nome:
-        nome = f"site-{sufixo}"
+        nome = f"site-{sufixo_cnpj}"
 
-    if len(nome) > 54:
-        nome = nome[:54].strip("-")
+    if len(nome) > 63:
+        nome = nome[:63].strip("-")
 
-    return nome
+    return nome or f"site-{sufixo_cnpj}"
 
 
 def gerar_worker_js_site(html):
@@ -2619,28 +2661,174 @@ def gerar_worker_js_site(html):
     return f"""const HTML = {html_literal};
 const ROBOTS = {robots_literal};
 
-export default {{
-  async fetch(request) {{
-    const url = new URL(request.url);
+async function handleRequest(request) {{
+  const url = new URL(request.url);
 
-    if (url.pathname === "/robots.txt") {{
-      return new Response(ROBOTS, {{
-        headers: {{
-          "content-type": "text/plain; charset=UTF-8",
-          "cache-control": "public, max-age=3600"
-        }}
-      }});
-    }}
-
-    return new Response(HTML, {{
+  if (url.pathname === "/robots.txt") {{
+    return new Response(ROBOTS, {{
       headers: {{
-        "content-type": "text/html; charset=UTF-8",
-        "cache-control": "public, max-age=300"
+        "content-type": "text/plain; charset=UTF-8",
+        "cache-control": "public, max-age=3600"
       }}
     }});
   }}
-}};
+
+  return new Response(HTML, {{
+    headers: {{
+      "content-type": "text/html; charset=UTF-8",
+      "cache-control": "public, max-age=300"
+    }}
+  }});
+}}
+
+addEventListener("fetch", event => {{
+  event.respondWith(handleRequest(event.request));
+}});
 """
+
+
+def obter_config_cloudflare():
+    account_id = valor_texto(os.environ.get("CLOUDFLARE_ACCOUNT_ID", ""))
+    api_token = valor_texto(os.environ.get("CLOUDFLARE_API_TOKEN", ""))
+    subdomain = valor_texto(os.environ.get("CLOUDFLARE_WORKERS_SUBDOMAIN", ""))
+    subdomain = subdomain.replace("https://", "").replace("http://", "").strip().lower()
+    subdomain = subdomain.replace(".workers.dev", "").strip("/")
+
+    return {
+        "account_id": account_id,
+        "api_token": api_token,
+        "subdomain": subdomain
+    }
+
+
+def validar_config_cloudflare():
+    config = obter_config_cloudflare()
+    faltando = []
+
+    if not config["account_id"]:
+        faltando.append("CLOUDFLARE_ACCOUNT_ID")
+
+    if not config["api_token"]:
+        faltando.append("CLOUDFLARE_API_TOKEN")
+
+    if not config["subdomain"]:
+        faltando.append("CLOUDFLARE_WORKERS_SUBDOMAIN")
+
+    if faltando:
+        raise RuntimeError("Variáveis ausentes na Railway: " + ", ".join(faltando))
+
+    return config
+
+
+def resumir_erros_cloudflare(payload, texto_resposta=""):
+    mensagens = []
+
+    if isinstance(payload, dict):
+        for erro in payload.get("errors", []) or []:
+            if isinstance(erro, dict):
+                mensagens.append(valor_texto(erro.get("message", "")))
+            else:
+                mensagens.append(valor_texto(erro))
+
+        for mensagem in payload.get("messages", []) or []:
+            if isinstance(mensagem, dict):
+                mensagens.append(valor_texto(mensagem.get("message", "")))
+            else:
+                mensagens.append(valor_texto(mensagem))
+
+    if not mensagens and texto_resposta:
+        mensagens.append(texto_resposta[:500])
+
+    return " | ".join([m for m in mensagens if m]) or "Erro desconhecido na Cloudflare"
+
+
+def atualizar_publicacao_cloudflare_site(site_id, status, worker_name="", cloudflare_url="", erro=""):
+    criar_tabela_sites_gerados()
+
+    with engine.begin() as conn:
+        conn.execute(
+            text("""
+                UPDATE sites_gerados
+                SET
+                    cloudflare_worker_name = :worker_name,
+                    cloudflare_url = :cloudflare_url,
+                    cloudflare_status = :status,
+                    cloudflare_erro = :erro,
+                    cloudflare_publicado_em = CASE
+                        WHEN :status = 'Publicado' THEN CURRENT_TIMESTAMP
+                        ELSE cloudflare_publicado_em
+                    END
+                WHERE id = :site_id
+            """),
+            {
+                "worker_name": worker_name,
+                "cloudflare_url": cloudflare_url,
+                "status": status,
+                "erro": erro,
+                "site_id": site_id
+            }
+        )
+
+
+def publicar_site_na_cloudflare(site):
+    config = validar_config_cloudflare()
+    worker_name = gerar_nome_worker_site(site)
+    worker_js = gerar_worker_js_site(site.get("html_gerado", ""))
+
+    headers = {
+        "Authorization": f"Bearer {config['api_token']}",
+        "Content-Type": "application/javascript; charset=UTF-8"
+    }
+
+    upload_url = f"https://api.cloudflare.com/client/v4/accounts/{config['account_id']}/workers/scripts/{worker_name}"
+
+    resposta = requests.put(
+        upload_url,
+        headers=headers,
+        data=worker_js.encode("utf-8"),
+        timeout=45
+    )
+
+    try:
+        payload = resposta.json()
+    except Exception:
+        payload = {}
+
+    if not resposta.ok or payload.get("success") is False:
+        erro = resumir_erros_cloudflare(payload, resposta.text)
+        raise RuntimeError(erro)
+
+    aviso_subdominio = ""
+
+    try:
+        subdomain_url = f"https://api.cloudflare.com/client/v4/accounts/{config['account_id']}/workers/scripts/{worker_name}/subdomain"
+        subdomain_resposta = requests.post(
+            subdomain_url,
+            headers={
+                "Authorization": f"Bearer {config['api_token']}",
+                "Content-Type": "application/json"
+            },
+            json={"enabled": True},
+            timeout=30
+        )
+
+        try:
+            subdomain_payload = subdomain_resposta.json()
+        except Exception:
+            subdomain_payload = {}
+
+        if not subdomain_resposta.ok or subdomain_payload.get("success") is False:
+            aviso_subdominio = resumir_erros_cloudflare(subdomain_payload, subdomain_resposta.text)
+    except Exception as erro_subdominio:
+        aviso_subdominio = str(erro_subdominio)
+
+    cloudflare_url = f"https://{worker_name}.{config['subdomain']}.workers.dev"
+
+    return {
+        "worker_name": worker_name,
+        "cloudflare_url": cloudflare_url,
+        "aviso": aviso_subdominio
+    }
 
 
 def gerar_wrangler_toml_site(nome_worker):
@@ -2712,52 +2900,36 @@ def salvar_site_gerado(dados):
         "nome_arquivo",
         "html_gerado",
         "status",
-        "observacoes"
+        "observacoes",
+        "nome_exibicao",
+        "telefone_exibicao",
+        "whatsapp_exibicao",
+        "email_exibicao",
+        "endereco_exibicao",
+        "cloudflare_worker_name",
+        "cloudflare_url",
+        "cloudflare_status",
+        "cloudflare_erro"
     ]
 
     params = {campo: dados.get(campo, "") for campo in campos}
 
+    if not params.get("cloudflare_status"):
+        params["cloudflare_status"] = "Não publicado"
+
+    colunas_sql = ",\n                        ".join(campos)
+    valores_sql = ",\n                        ".join([f":{campo}" for campo in campos])
     dialect_name = getattr(getattr(engine, "dialect", None), "name", "postgresql")
 
     with engine.begin() as conn:
         if dialect_name == "postgresql":
             resultado = conn.execute(
-                text("""
+                text(f"""
                     INSERT INTO sites_gerados (
-                        usuario,
-                        cnpj,
-                        cnpj_formatado,
-                        nome_empresarial,
-                        nome_fantasia,
-                        cnae_principal,
-                        categoria_cnae,
-                        endereco,
-                        telefone,
-                        email,
-                        meta_tag,
-                        modelo_site,
-                        nome_arquivo,
-                        html_gerado,
-                        status,
-                        observacoes
+                        {colunas_sql}
                     )
                     VALUES (
-                        :usuario,
-                        :cnpj,
-                        :cnpj_formatado,
-                        :nome_empresarial,
-                        :nome_fantasia,
-                        :cnae_principal,
-                        :categoria_cnae,
-                        :endereco,
-                        :telefone,
-                        :email,
-                        :meta_tag,
-                        :modelo_site,
-                        :nome_arquivo,
-                        :html_gerado,
-                        :status,
-                        :observacoes
+                        {valores_sql}
                     )
                     RETURNING id
                 """),
@@ -2767,42 +2939,12 @@ def salvar_site_gerado(dados):
             return int(resultado[0])
 
         conn.execute(
-            text("""
+            text(f"""
                 INSERT INTO sites_gerados (
-                    usuario,
-                    cnpj,
-                    cnpj_formatado,
-                    nome_empresarial,
-                    nome_fantasia,
-                    cnae_principal,
-                    categoria_cnae,
-                    endereco,
-                    telefone,
-                    email,
-                    meta_tag,
-                    modelo_site,
-                    nome_arquivo,
-                    html_gerado,
-                    status,
-                    observacoes
+                    {colunas_sql}
                 )
                 VALUES (
-                    :usuario,
-                    :cnpj,
-                    :cnpj_formatado,
-                    :nome_empresarial,
-                    :nome_fantasia,
-                    :cnae_principal,
-                    :categoria_cnae,
-                    :endereco,
-                    :telefone,
-                    :email,
-                    :meta_tag,
-                    :modelo_site,
-                    :nome_arquivo,
-                    :html_gerado,
-                    :status,
-                    :observacoes
+                    {valores_sql}
                 )
             """),
             params
@@ -2835,6 +2977,7 @@ def listar_sites_gerados(modelo_site="", busca=""):
                 OR LOWER(nome_empresarial) LIKE :busca
                 OR LOWER(nome_fantasia) LIKE :busca
                 OR LOWER(modelo_site) LIKE :busca
+                OR LOWER(COALESCE(cloudflare_url, '')) LIKE :busca
             )
         """)
         params["busca"] = f"%{busca.lower()}%"
@@ -2863,7 +3006,17 @@ def listar_sites_gerados(modelo_site="", busca=""):
                     nome_arquivo,
                     status,
                     observacoes,
-                    criado_em
+                    criado_em,
+                    nome_exibicao,
+                    telefone_exibicao,
+                    whatsapp_exibicao,
+                    email_exibicao,
+                    endereco_exibicao,
+                    cloudflare_worker_name,
+                    cloudflare_url,
+                    cloudflare_status,
+                    cloudflare_publicado_em,
+                    cloudflare_erro
                 FROM sites_gerados
                 {where_sql}
                 ORDER BY id DESC
@@ -3768,11 +3921,13 @@ def gerador_site(cnpj):
     if request.method == "POST":
         nome_site = request.form.get("nome_site", "").strip()
         telefone_site = request.form.get("telefone_site", "").strip()
+        whatsapp_site = request.form.get("whatsapp_site", "").strip()
         email_site = request.form.get("email_site", "").strip()
         endereco_site = request.form.get("endereco_site", "").strip()
     else:
         nome_site = nome_exibicao_empresa(empresa)
         telefone_site = valor_texto(empresa.get("telefone_formatado", ""))
+        whatsapp_site = telefone_site
         email_site = valor_texto(empresa.get("email", ""))
         endereco_site = montar_endereco_empresa(empresa)
 
@@ -3786,7 +3941,7 @@ def gerador_site(cnpj):
             erro = "A meta tag parece inválida. Cole a tag completa começando com <meta."
         else:
             cnpj_limpo = limpar_cnpj(empresa.get("cnpj_limpo", empresa.get("cnpj", cnpj)))
-            empresa_site = aplicar_personalizacao_site(empresa, nome_site, telefone_site, email_site, endereco_site)
+            empresa_site = aplicar_personalizacao_site(empresa, nome_site, telefone_site, email_site, endereco_site, whatsapp_site)
             html_gerado = gerar_html_site_empresa(empresa_site, meta_tag, modelo_site, observacoes)
             nome_arquivo = gerar_nome_arquivo_site(empresa_site)
 
@@ -3801,6 +3956,12 @@ def gerador_site(cnpj):
                 "endereco": valor_texto(endereco_site),
                 "telefone": valor_texto(telefone_site),
                 "email": valor_texto(email_site),
+                "nome_exibicao": valor_texto(nome_site),
+                "telefone_exibicao": valor_texto(telefone_site),
+                "whatsapp_exibicao": valor_texto(whatsapp_site),
+                "email_exibicao": valor_texto(email_site),
+                "endereco_exibicao": valor_texto(endereco_site),
+                "cloudflare_status": "Não publicado",
                 "meta_tag": meta_tag,
                 "modelo_site": modelo_site,
                 "nome_arquivo": nome_arquivo,
@@ -3828,6 +3989,7 @@ def gerador_site(cnpj):
         nome_site=nome_site,
         telefone_site=telefone_site,
         email_site=email_site,
+        whatsapp_site=whatsapp_site,
         endereco_site=endereco_site,
         erro=erro
     )
@@ -3846,8 +4008,56 @@ def site_gerado_preview(site_id):
         usuario_logado=usuario_atual(),
         tipo_usuario=tipo_usuario(),
         site=site,
-        modelo_site_nome=modelo_site_nome
+        modelo_site_nome=modelo_site_nome,
+        cloudflare_msg=request.args.get("cloudflare_msg", ""),
+        cloudflare_erro=request.args.get("cloudflare_erro", "")
     )
+
+
+@app.route("/site-gerado/<int:site_id>/publicar-cloudflare", methods=["POST"])
+@login_obrigatorio
+def site_gerado_publicar_cloudflare(site_id):
+    site = buscar_site_gerado(site_id)
+
+    if not site:
+        abort(404)
+
+    worker_name = site.get("cloudflare_worker_name", "") or gerar_nome_worker_site(site)
+    cloudflare_url = site.get("cloudflare_url", "")
+
+    try:
+        resultado = publicar_site_na_cloudflare(site)
+        worker_name = resultado["worker_name"]
+        cloudflare_url = resultado["cloudflare_url"]
+        aviso = resultado.get("aviso", "")
+
+        atualizar_publicacao_cloudflare_site(
+            site_id,
+            "Publicado",
+            worker_name,
+            cloudflare_url,
+            aviso
+        )
+
+        try:
+            registrar_evento(usuario_atual(), site.get("cnpj_formatado", site.get("cnpj", "")), "Site gerado", f"Publicado na Cloudflare: {cloudflare_url}")
+        except Exception:
+            pass
+
+        return redirect(url_for("site_gerado_preview", site_id=site_id, cloudflare_msg="Site publicado na Cloudflare com sucesso."))
+
+    except Exception as erro:
+        mensagem = str(erro)
+
+        atualizar_publicacao_cloudflare_site(
+            site_id,
+            "Erro",
+            worker_name,
+            cloudflare_url,
+            mensagem
+        )
+
+        return redirect(url_for("site_gerado_preview", site_id=site_id, cloudflare_erro=mensagem))
 
 
 @app.route("/site-gerado/<int:site_id>/download", methods=["GET"])
