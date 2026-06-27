@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Site Gerado - LtdaFinder Pro</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+
+    <style>
+        /* =========================
+           GERADOR DE SITES - VISUAL LTDAFINDER PRO
+           Ajuste para o tema escuro do sistema
+           ========================= */
+
+        :root {
+            --site-bg-soft: rgba(8, 24, 44, .96);
+            --site-bg-card: rgba(10, 31, 55, .98);
+            --site-bg-card-2: rgba(13, 42, 73, .96);
+            --site-border: rgba(73, 154, 255, .18);
+            --site-border-strong: rgba(24, 211, 197, .35);
+            --site-text: #f4f8ff;
+            --site-muted: #9db5d3;
+            --site-muted-2: #6f8cad;
+            --site-cyan: #13d6e3;
+            --site-green: #11c985;
+            --site-blue: #2086f3;
+            --site-red: #ff6b6b;
+            --site-shadow: 0 18px 50px rgba(0, 0, 0, .30);
+        }
+
+        .main {
+            color: var(--site-text);
+        }
+
+        .sites-hero {
+            position: relative;
+            overflow: hidden;
+            background:
+                radial-gradient(circle at top right, rgba(19, 214, 227, .20), transparent 34%),
+                linear-gradient(135deg, #08182c 0%, #0b2440 48%, #093c3f 100%);
+            color: var(--site-text);
+            border: 1px solid var(--site-border);
+            border-radius: 24px;
+            padding: 30px 32px;
+            margin-bottom: 24px;
+            box-shadow: var(--site-shadow);
+        }
+
+        .sites-hero::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(90deg, rgba(255,255,255,.055), transparent 45%);
+            pointer-events: none;
+        }
+
+        .sites-hero h1 {
+            position: relative;
+            margin: 0 0 8px 0;
+            color: #ffffff;
+            font-size: clamp(26px, 2.2vw, 36px);
+            line-height: 1.1;
+            letter-spacing: -.04em;
+            font-weight: 900;
+        }
+
+        .sites-hero p {
+            position: relative;
+            margin: 0;
+            color: #cfe2fb;
+            font-size: 15px;
+            line-height: 1.5;
+        }
+
+        .sites-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 16px;
+            margin-bottom: 22px;
+        }
+
+        .site-kpi,
+        .site-box,
+        .modelo-card,
+        .site-list-card {
+            background: linear-gradient(180deg, var(--site-bg-card) 0%, rgba(7, 23, 42, .98) 100%);
+            border: 1px solid var(--site-border);
+            border-radius: 22px;
+            padding: 22px;
+            box-shadow: var(--site-shadow);
+            color: var(--site-text);
+        }
+
+        .site-kpi {
+            min-height: 100px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .site-kpi span {
+            display: block;
+            color: var(--site-muted);
+            font-weight: 800;
+            font-size: 13px;
+            margin-bottom: 8px;
+        }
+
+        .site-kpi strong {
+            font-size: 32px;
+            line-height: 1;
+            color: #ffffff;
+            font-weight: 900;
+        }
+
+        .site-box {
+            margin-bottom: 22px;
+        }
+
+        .site-box h2 {
+            margin: 0 0 18px 0;
+            color: #ffffff;
+            letter-spacing: -.035em;
+            font-size: 22px;
+            font-weight: 900;
+        }
+
+        .site-form-grid {
+            display: grid;
+            grid-template-columns: minmax(240px, 1fr) minmax(240px, 1fr) auto;
+            gap: 14px;
+            align-items: end;
+        }
+
+        .site-form-grid label,
+        .gerador-form label {
+            display: block;
+            color: #d8e8fb;
+            font-size: 13px;
+            font-weight: 900;
+            margin-bottom: 8px;
+        }
+
+        .site-form-grid input,
+        .site-form-grid select,
+        .gerador-form input,
+        .gerador-form select,
+        .gerador-form textarea {
+            width: 100%;
+            border: 1px solid rgba(112, 175, 255, .24);
+            border-radius: 15px;
+            padding: 13px 14px;
+            outline: none;
+            font: inherit;
+            background: rgba(4, 16, 30, .90);
+            color: #eef7ff;
+            transition: border-color .18s ease, box-shadow .18s ease, background .18s ease;
+        }
+
+        .site-form-grid input::placeholder,
+        .gerador-form input::placeholder,
+        .gerador-form textarea::placeholder {
+            color: #7f98b8;
+        }
+
+        .site-form-grid input:disabled,
+        .site-form-grid select:disabled,
+        .gerador-form input:disabled,
+        .gerador-form textarea:disabled {
+            opacity: 1;
+            color: #88a2c2;
+            background: rgba(4, 16, 30, .55);
+            cursor: not-allowed;
+        }
+
+        .site-form-grid input:focus,
+        .site-form-grid select:focus,
+        .gerador-form input:focus,
+        .gerador-form select:focus,
+        .gerador-form textarea:focus {
+            border-color: var(--site-cyan);
+            box-shadow: 0 0 0 4px rgba(19, 214, 227, .12);
+            background: rgba(5, 19, 35, .98);
+        }
+
+        .site-form-grid textarea,
+        .gerador-form textarea {
+            min-height: 130px;
+            resize: vertical;
+        }
+
+        .btn-site-main,
+        .btn-site-secondary,
+        .btn-site-danger {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            border: 0;
+            min-height: 46px;
+            padding: 0 18px;
+            border-radius: 999px;
+            font-weight: 900;
+            cursor: pointer;
+            text-decoration: none;
+            white-space: nowrap;
+            transition: transform .16s ease, filter .16s ease, background .16s ease, border-color .16s ease;
+        }
+
+        .btn-site-main {
+            background: linear-gradient(135deg, var(--site-cyan), var(--site-green));
+            color: #03101d;
+            box-shadow: 0 12px 26px rgba(19, 214, 227, .16);
+        }
+
+        .btn-site-main:hover,
+        .btn-site-secondary:hover,
+        .btn-site-danger:hover {
+            transform: translateY(-1px);
+            filter: brightness(1.06);
+        }
+
+        .btn-site-secondary {
+            background: rgba(32, 134, 243, .13);
+            color: #dff3ff;
+            border: 1px solid rgba(112, 175, 255, .22);
+        }
+
+        .btn-site-danger {
+            background: rgba(255, 107, 107, .12);
+            color: #ffd5d5;
+            border: 1px solid rgba(255, 107, 107, .24);
+        }
+
+        .modelos-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 16px;
+        }
+
+        .modelo-card {
+            cursor: pointer;
+            position: relative;
+            transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease, background .18s ease;
+            min-height: 154px;
+            background: linear-gradient(180deg, rgba(13, 42, 73, .92), rgba(7, 24, 44, .96));
+        }
+
+        .modelo-card:hover {
+            transform: translateY(-3px);
+            border-color: rgba(19, 214, 227, .28);
+            box-shadow: 0 24px 56px rgba(0, 0, 0, .34);
+        }
+
+        .modelo-card input {
+            position: absolute;
+            top: 18px;
+            right: 18px;
+            width: 18px;
+            height: 18px;
+            accent-color: var(--site-cyan);
+        }
+
+        .modelo-card .modelo-icone {
+            font-size: 28px;
+            margin-bottom: 12px;
+        }
+
+        .modelo-card strong {
+            display: block;
+            color: #ffffff;
+            font-size: 18px;
+            margin-bottom: 8px;
+            padding-right: 28px;
+        }
+
+        .modelo-card p {
+            color: var(--site-muted);
+            font-size: 14px;
+            line-height: 1.45;
+            margin: 0;
+        }
+
+        .modelo-card.selecionado {
+            border-color: var(--site-border-strong);
+            box-shadow: 0 24px 56px rgba(17, 201, 133, .12), inset 0 0 0 1px rgba(19, 214, 227, .12);
+            background: linear-gradient(180deg, rgba(12, 57, 78, .98), rgba(7, 30, 50, .98));
+        }
+
+        .site-list {
+            display: grid;
+            gap: 14px;
+        }
+
+        .site-list-card {
+            display: grid;
+            grid-template-columns: 1.2fr .8fr auto;
+            gap: 18px;
+            align-items: center;
+        }
+
+        .site-list-card h3 {
+            margin: 0 0 6px 0;
+            color: #ffffff;
+            font-size: 18px;
+            font-weight: 900;
+        }
+
+        .site-list-card p {
+            margin: 0;
+            color: var(--site-muted);
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        .site-list-card p[style] {
+            color: var(--site-muted) !important;
+        }
+
+        .site-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 7px 10px;
+            border-radius: 999px;
+            background: rgba(19, 214, 227, .10);
+            color: #a5f7ff;
+            border: 1px solid rgba(19, 214, 227, .18);
+            font-weight: 900;
+            font-size: 12px;
+        }
+
+        .preview-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 18px;
+        }
+
+        .gerador-layout {
+            display: grid;
+            grid-template-columns: .9fr 1.1fr;
+            gap: 22px;
+            align-items: start;
+        }
+
+        .empresa-resumo {
+            display: grid;
+            gap: 12px;
+        }
+
+        .empresa-resumo div {
+            background: rgba(4, 16, 30, .58);
+            border: 1px solid rgba(112, 175, 255, .15);
+            border-radius: 16px;
+            padding: 14px;
+        }
+
+        .empresa-resumo span {
+            display: block;
+            color: var(--site-muted-2);
+            font-size: 12px;
+            font-weight: 900;
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+        }
+
+        .empresa-resumo strong {
+            color: #ffffff;
+            font-size: 14px;
+            line-height: 1.45;
+            word-break: break-word;
+        }
+
+        .erro-site {
+            margin-bottom: 18px;
+            background: rgba(255, 107, 107, .12);
+            border: 1px solid rgba(255, 107, 107, .25);
+            color: #ffd5d5;
+            border-radius: 16px;
+            padding: 14px 16px;
+            font-weight: 800;
+        }
+
+        .html-textarea {
+            width: 100%;
+            min-height: 480px;
+            background: #03101d;
+            color: #dff4ff;
+            border: 1px solid rgba(112, 175, 255, .20);
+            border-radius: 18px;
+            padding: 18px;
+            outline: none;
+            resize: vertical;
+            font-family: Consolas, Monaco, 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.5;
+            box-shadow: inset 0 0 0 1px rgba(255,255,255,.02);
+        }
+
+        .html-textarea:focus {
+            border-color: var(--site-cyan);
+            box-shadow: 0 0 0 4px rgba(19, 214, 227, .10);
+        }
+
+        .preview-frame {
+            width: 100%;
+            min-height: 720px;
+            border: 1px solid rgba(112, 175, 255, .20);
+            border-radius: 18px;
+            background: #ffffff;
+            overflow: hidden;
+        }
+
+        @media (max-width: 1180px) {
+            .sites-grid,
+            .modelos-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .gerador-layout,
+            .site-list-card,
+            .site-form-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 720px) {
+            .sites-hero,
+            .site-kpi,
+            .site-box,
+            .modelo-card,
+            .site-list-card {
+                border-radius: 18px;
+                padding: 18px;
+            }
+
+            .sites-grid,
+            .modelos-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .preview-actions,
+            .preview-actions[style] {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .btn-site-main,
+            .btn-site-secondary,
+            .btn-site-danger {
+                width: 100%;
+            }
+        }
+    </style>
+
+</head>
+<body>
+
+
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+<div class="layout">
+
+    <aside class="sidebar">
+        <div>
+            <div class="sidebar-logo">
+                <img src="{{ url_for('static', filename='logo.png') }}" alt="LtdaFinder Pro">
+            </div>
+
+            <div class="usuario-box">
+                <span>Usuário logado</span>
+                <strong>👤 {{ usuario_logado }}</strong>
+            </div>
+
+            <nav class="menu">
+                <a class="menu-item" href="/">🔎 Minerar CNPJs</a>
+                <a class="menu-item" href="/master">📊 Dashboard Master</a>
+                <a class="menu-item" href="/usados">📌 Meus CNPJs Usados</a>
+                <a class="menu-item" href="/favoritos">⭐ Favoritos</a>
+                <a class="menu-item" href="/perfis-meta">👤 Perfis Meta</a>
+                <a class="menu-item" href="/relatorios-bm">📄 Relatórios BM</a>
+                <a class="menu-item active" href="/sites">🌐 Gerador de Sites</a>
+                <a class="menu-item" href="/historico">📜 Histórico</a>
+                <a class="menu-item" href="/estatisticas">📈 Estatísticas</a>
+                {% if tipo_usuario == "admin" %}
+                <a class="menu-item" href="/admin">👑 Painel Admin</a>
+                {% endif %}
+                <a class="menu-item sair" href="/logout">🚪 Sair</a>
+            </nav>
+        </div>
+
+        <div class="sidebar-footer">
+            <span>Versão Local</span>
+            <strong>V1.0</strong>
+        </div>
+    </aside>
+
+
+    <main class="main">
+        <header class="topbar">
+            <div class="topbar-flex">
+                <div class="topbar-title">
+                    <button type="button" class="menu-toggle" id="menuToggle" title="Abrir menu">
+                        <span></span><span></span><span></span>
+                    </button>
+
+                    <div>
+                        <h1>Site Gerado</h1>
+                        <p>Preview, cópia e download do HTML salvo no PostgreSQL.</p>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <section class="sites-hero">
+            <h1>✅ {{ site.nome_arquivo }}</h1>
+            <p>{{ site.nome_empresarial }} · {{ site.cnpj_formatado }} · {{ modelo_site_nome(site.modelo_site) }}</p>
+        </section>
+
+        <section class="site-box">
+            <div class="preview-actions">
+                <button type="button" class="btn-site-main" id="btnCopiarHtml">📋 Copiar HTML</button>
+                <a class="btn-site-secondary" href="/site-gerado/{{ site.id }}/download">⬇ Baixar index.html</a>
+                <a class="btn-site-secondary" href="/gerador-site/{{ site.cnpj }}">Gerar outro modelo</a>
+                <a class="btn-site-danger" href="/sites">Voltar ao histórico</a>
+            </div>
+
+            <textarea id="htmlGerado" class="html-textarea" spellcheck="false">{{ site.html_gerado }}</textarea>
+        </section>
+
+        <section class="site-box">
+            <h2>Preview visual</h2>
+            <iframe class="preview-frame" srcdoc="{{ site.html_gerado|e }}"></iframe>
+        </section>
+    </main>
+</div>
+
+<script>
+    const menuToggle = document.getElementById("menuToggle");
+    const sidebarOverlay = document.getElementById("sidebarOverlay");
+
+    function fecharMenuMobile() { document.body.classList.remove("sidebar-aberta"); }
+    function alternarMenu() {
+        if (window.innerWidth <= 1000) {
+            document.body.classList.toggle("sidebar-aberta");
+        } else {
+            document.body.classList.toggle("sidebar-fechada");
+        }
+    }
+
+    if (menuToggle) menuToggle.addEventListener("click", alternarMenu);
+    if (sidebarOverlay) sidebarOverlay.addEventListener("click", fecharMenuMobile);
+
+    const btnCopiarHtml = document.getElementById("btnCopiarHtml");
+    const htmlGerado = document.getElementById("htmlGerado");
+
+    if (btnCopiarHtml && htmlGerado) {
+        btnCopiarHtml.addEventListener("click", async () => {
+            htmlGerado.select();
+            htmlGerado.setSelectionRange(0, 999999);
+
+            try {
+                await navigator.clipboard.writeText(htmlGerado.value);
+                btnCopiarHtml.textContent = "✅ HTML copiado";
+            } catch (e) {
+                document.execCommand("copy");
+                btnCopiarHtml.textContent = "✅ HTML copiado";
+            }
+
+            setTimeout(() => {
+                btnCopiarHtml.textContent = "📋 Copiar HTML";
+            }, 1800);
+        });
+    }
+</script>
+
+</body>
+</html>
