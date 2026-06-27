@@ -518,6 +518,16 @@
             <p>{{ site.nome_empresarial }} · {{ site.cnpj_formatado }} · {{ modelo_site_nome(site.modelo_site) }}</p>
         </section>
 
+        {% if verificacao_site %}
+        <section class="site-box" style="border-color:rgba(19,214,227,.32);">
+            <h2>🧭 Verificação BM vinculada</h2>
+            <p style="margin:0 0 14px 0; color:var(--site-muted); line-height:1.6;">
+                Este site já está conectado à Central BM. Qualquer publicação nova na Cloudflare atualiza a URL da verificação automaticamente.
+            </p>
+            <a class="btn-site-main" href="/central-bm/{{ verificacao_site.id }}">Abrir Verificação BM #{{ verificacao_site.id }}</a>
+        </section>
+        {% endif %}
+
 
         {% if cloudflare_msg %}
         <section class="site-box" style="border-color:rgba(17,201,133,.38);">
@@ -566,6 +576,15 @@
                 {% if site.cloudflare_url %}
                 <a class="btn-site-secondary" href="{{ site.cloudflare_url }}" target="_blank" rel="noopener noreferrer">🌍 Abrir site publicado</a>
                 {% endif %}
+
+                {% if verificacao_site %}
+                <a class="btn-site-main" href="/central-bm/{{ verificacao_site.id }}">🧭 Abrir Verificação BM</a>
+                {% else %}
+                <form method="post" action="/site-gerado/{{ site.id }}/criar-verificacao-bm" style="margin:0;">
+                    <button type="submit" class="btn-site-main">🧭 Criar Verificação BM</button>
+                </form>
+                {% endif %}
+
                 <a class="btn-site-secondary" href="/site-gerado/{{ site.id }}/worker-zip">📦 Baixar pacote Worker</a>
                 <a class="btn-site-secondary" href="/site-gerado/{{ site.id }}/worker-download">⚙️ Baixar worker.js</a>
                 <a class="btn-site-secondary" href="/gerador-site/{{ site.cnpj }}">Gerar outro modelo</a>

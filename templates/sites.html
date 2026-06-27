@@ -602,6 +602,13 @@
 
                         <div class="preview-actions" style="margin:0;">
                             <a class="btn-site-main" href="/site-gerado/{{ site.id }}">Visualizar</a>
+                            {% if site.verificacao_bm_id %}
+                            <a class="btn-site-secondary" href="/central-bm/{{ site.verificacao_bm_id }}">🧭 Ver BM</a>
+                            {% else %}
+                            <form method="post" action="/site-gerado/{{ site.id }}/criar-verificacao-bm" style="margin:0;">
+                                <button type="submit" class="btn-site-secondary">🧭 Criar BM</button>
+                            </form>
+                            {% endif %}
                             <a class="btn-site-secondary" href="/site-gerado/{{ site.id }}/download">Baixar</a>
                         </div>
                     </article>

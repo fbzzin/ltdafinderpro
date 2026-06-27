@@ -316,6 +316,7 @@
                             BM: {{ item.nome_bm or 'Não informada' }}<br>
                             Perfil: {{ item.perfil_meta_nome or 'Não vinculado' }}<br>
                             Operador: {{ item.operador or item.usuario }}
+                            {% if item.site_gerado_id %}<br>🌐 Site: {{ item.site_nome_arquivo or ('#' ~ item.site_gerado_id) }}{% endif %}
                         </div>
                     </div>
 
@@ -352,6 +353,9 @@
 
                     <div class="acoes-row">
                         <a href="/central-bm/{{ item.id }}" class="bm-btn bm-btn-blue">Abrir</a>
+                        {% if item.site_gerado_id %}
+                        <a href="/site-gerado/{{ item.site_gerado_id }}" class="bm-btn bm-btn-dark">Site</a>
+                        {% endif %}
                     </div>
                 </article>
                 {% endfor %}

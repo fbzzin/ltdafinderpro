@@ -3238,6 +3238,9 @@ def criar_tabelas_central_bm():
                 cnpj_formatado TEXT,
                 razao_social TEXT,
                 nome_fantasia TEXT,
+                site_gerado_id INTEGER,
+                site_nome_arquivo TEXT,
+                site_modelo TEXT,
                 perfil_meta_id TEXT,
                 perfil_meta_nome TEXT,
                 nome_bm TEXT,
@@ -3289,6 +3292,9 @@ def criar_tabelas_central_bm():
                 cnpj_formatado TEXT,
                 razao_social TEXT,
                 nome_fantasia TEXT,
+                site_gerado_id INTEGER,
+                site_nome_arquivo TEXT,
+                site_modelo TEXT,
                 perfil_meta_id TEXT,
                 perfil_meta_nome TEXT,
                 nome_bm TEXT,
@@ -3338,6 +3344,9 @@ def criar_tabelas_central_bm():
             "cnpj_formatado": "TEXT",
             "razao_social": "TEXT",
             "nome_fantasia": "TEXT",
+            "site_gerado_id": "INTEGER",
+            "site_nome_arquivo": "TEXT",
+            "site_modelo": "TEXT",
             "perfil_meta_id": "TEXT",
             "perfil_meta_nome": "TEXT",
             "nome_bm": "TEXT",
@@ -3464,7 +3473,7 @@ def obter_site_recente_do_cnpj(cnpj):
         with engine.connect() as conn:
             linha = conn.execute(
                 text("""
-                SELECT id, cloudflare_url, meta_tag, nome_exibicao, telefone_exibicao, email_exibicao, endereco_exibicao
+                SELECT id, nome_arquivo, modelo_site, cloudflare_url, cloudflare_status, cloudflare_worker_name, cloudflare_slug_personalizado, meta_tag, nome_exibicao, telefone_exibicao, email_exibicao, endereco_exibicao
                 FROM sites_gerados
                 WHERE cnpj = :cnpj
                 ORDER BY id DESC
@@ -3495,11 +3504,19 @@ def montar_dados_verificacao_form(empresa=None, verificacao=None):
 
         site = obter_site_recente_do_cnpj(cnpj_limpo)
         if site:
+            dados["site_gerado_id"] = site.get("id")
+            dados["site_nome_arquivo"] = valor_texto(site.get("nome_arquivo", ""))
+            dados["site_modelo"] = valor_texto(site.get("modelo_site", ""))
             dados["url_site"] = valor_texto(site.get("cloudflare_url", ""))
             dados["meta_tag"] = valor_texto(site.get("meta_tag", ""))
             dados["checklist_site"] = bool(dados.get("url_site"))
             dados["checklist_meta_tag"] = bool(dados.get("meta_tag"))
             dados["checklist_dominio"] = bool(dados.get("url_site"))
+            if dados.get("url_site"):
+                try:
+                    dados["dominio"] = urlparse(dados.get("url_site")).netloc or dados.get("url_site")
+                except Exception:
+                    dados["dominio"] = dados.get("url_site")
 
             if site.get("telefone_exibicao"):
                 dados["telefone_operacional"] = valor_texto(site.get("telefone_exibicao", ""))
@@ -3518,6 +3535,9 @@ def montar_dados_verificacao_form(empresa=None, verificacao=None):
     dados.setdefault("dominio", "")
     dados.setdefault("url_site", "")
     dados.setdefault("meta_tag", "")
+    dados.setdefault("site_gerado_id", None)
+    dados.setdefault("site_nome_arquivo", "")
+    dados.setdefault("site_modelo", "")
     dados.setdefault("perfil_meta_id", "")
     dados.setdefault("perfil_meta_nome", "")
     dados.setdefault("telefone_operacional", "")
@@ -3551,6 +3571,9 @@ def dados_verificacao_do_form(empresa=None, verificacao_atual=None):
         "cnpj_formatado": formatar_cnpj(cnpj_limpo),
         "razao_social": razao_social,
         "nome_fantasia": nome_fantasia,
+        "site_gerado_id": int(request.form.get("site_gerado_id", "").strip()) if request.form.get("site_gerado_id", "").strip().isdigit() else ((verificacao_atual or {}).get("site_gerado_id") or None),
+        "site_nome_arquivo": request.form.get("site_nome_arquivo", "").strip() or (verificacao_atual or {}).get("site_nome_arquivo", ""),
+        "site_modelo": request.form.get("site_modelo", "").strip() or (verificacao_atual or {}).get("site_modelo", ""),
         "perfil_meta_id": perfil_id,
         "perfil_meta_nome": perfil_nome,
         "nome_bm": request.form.get("nome_bm", "").strip(),
@@ -3634,6 +3657,7 @@ def criar_verificacao_bm(dados):
 
     campos = [
         "usuario", "cnpj", "cnpj_formatado", "razao_social", "nome_fantasia",
+        "site_gerado_id", "site_nome_arquivo", "site_modelo",
         "perfil_meta_id", "perfil_meta_nome", "nome_bm", "dominio", "url_site", "meta_tag",
         "status", "operador", "telefone_operacional", "email_operacional", "numero_sms",
         "checklist_cnpj", "checklist_site", "checklist_meta_tag", "checklist_dominio",
@@ -3711,6 +3735,7 @@ def atualizar_verificacao_bm(verificacao_id, dados):
 
     campos = [
         "cnpj", "cnpj_formatado", "razao_social", "nome_fantasia",
+        "site_gerado_id", "site_nome_arquivo", "site_modelo",
         "perfil_meta_id", "perfil_meta_nome", "nome_bm", "dominio", "url_site", "meta_tag",
         "status", "operador", "telefone_operacional", "email_operacional", "numero_sms",
         "checklist_cnpj", "checklist_site", "checklist_meta_tag", "checklist_dominio",
@@ -3997,6 +4022,189 @@ def testar_dominio_verificacao(verificacao):
             "detalhes": "\n".join(detalhes)
         }
 
+
+
+
+def dominio_de_url_site(url):
+    url = normalizar_url_teste(url)
+    if not url:
+        return ""
+    try:
+        return urlparse(url).netloc or url
+    except Exception:
+        return url
+
+
+def buscar_verificacao_por_site(site_id):
+    criar_tabelas_central_bm()
+
+    params = {"site_id": site_id}
+    filtros = ["site_gerado_id = :site_id"]
+
+    if tipo_usuario() != "admin":
+        filtros.append("usuario = :usuario")
+        params["usuario"] = usuario_atual()
+
+    try:
+        with engine.connect() as conn:
+            linha = conn.execute(
+                text(f"""
+                SELECT *
+                FROM bm_verificacoes
+                WHERE {" AND ".join(filtros)}
+                ORDER BY id DESC
+                LIMIT 1
+                """),
+                params
+            ).fetchone()
+        return linha_para_dict(linha)
+    except Exception:
+        return None
+
+
+def ids_verificacao_por_sites(site_ids):
+    criar_tabelas_central_bm()
+    ids_limpos = []
+
+    for site_id in site_ids:
+        try:
+            ids_limpos.append(int(site_id))
+        except Exception:
+            pass
+
+    if not ids_limpos:
+        return {}
+
+    placeholders = ", ".join([f":id_{idx}" for idx, _ in enumerate(ids_limpos)])
+    params = {f"id_{idx}": site_id for idx, site_id in enumerate(ids_limpos)}
+    where_usuario = ""
+
+    if tipo_usuario() != "admin":
+        where_usuario = "AND usuario = :usuario"
+        params["usuario"] = usuario_atual()
+
+    try:
+        with engine.connect() as conn:
+            linhas = conn.execute(
+                text(f"""
+                SELECT site_gerado_id, MAX(id) AS verificacao_id
+                FROM bm_verificacoes
+                WHERE site_gerado_id IN ({placeholders})
+                {where_usuario}
+                GROUP BY site_gerado_id
+                """),
+                params
+            ).mappings().fetchall()
+
+        return {str(linha["site_gerado_id"]): linha["verificacao_id"] for linha in linhas if linha.get("site_gerado_id")}
+    except Exception:
+        return {}
+
+
+def enriquecer_sites_com_verificacao_bm(sites):
+    mapa = ids_verificacao_por_sites([site.get("id") for site in sites])
+
+    for site in sites:
+        site["verificacao_bm_id"] = mapa.get(str(site.get("id")), "")
+
+    return sites
+
+
+def montar_dados_verificacao_por_site(site):
+    empresa = buscar_empresa_por_cnpj(site.get("cnpj", ""))
+    dados = montar_dados_verificacao_form(empresa)
+    url_site = valor_texto(site.get("cloudflare_url", ""))
+    meta_tag = valor_texto(site.get("meta_tag", ""))
+    cnpj_limpo = limpar_cnpj(site.get("cnpj", "") or (empresa or {}).get("cnpj_limpo", ""))
+
+    dados.update({
+        "usuario": usuario_atual(),
+        "cnpj": cnpj_limpo,
+        "cnpj_formatado": formatar_cnpj(cnpj_limpo),
+        "razao_social": valor_texto(site.get("nome_empresarial", "")) or valor_texto((empresa or {}).get("razao_social", "")),
+        "nome_fantasia": valor_texto(site.get("nome_fantasia", "")) or valor_texto(site.get("nome_exibicao", "")) or valor_texto((empresa or {}).get("nome_fantasia", "")),
+        "site_gerado_id": site.get("id"),
+        "site_nome_arquivo": valor_texto(site.get("nome_arquivo", "")),
+        "site_modelo": valor_texto(site.get("modelo_site", "")),
+        "dominio": dominio_de_url_site(url_site),
+        "url_site": url_site,
+        "meta_tag": meta_tag,
+        "status": "Pronto para verificar domínio" if url_site and meta_tag else "Preparando",
+        "operador": usuario_atual(),
+        "telefone_operacional": valor_texto(site.get("telefone_exibicao", "")) or valor_texto(site.get("telefone", "")),
+        "email_operacional": valor_texto(site.get("email_exibicao", "")) or valor_texto(site.get("email", "")),
+        "checklist_cnpj": True,
+        "checklist_site": bool(url_site),
+        "checklist_meta_tag": bool(meta_tag),
+        "checklist_dominio": bool(url_site),
+    })
+
+    dados["score_prontidao"], dados["risco"] = calcular_score_prontidao_bm(dados)
+    return dados
+
+
+def atualizar_verificacoes_do_site_publicado(site_id, cloudflare_url, slug_personalizado=""):
+    criar_tabelas_central_bm()
+    dominio = dominio_de_url_site(cloudflare_url)
+
+    try:
+        with engine.connect() as conn:
+            linhas = conn.execute(
+                text("""
+                SELECT *
+                FROM bm_verificacoes
+                WHERE site_gerado_id = :site_id
+                """),
+                {"site_id": site_id}
+            ).mappings().fetchall()
+
+        for linha in linhas:
+            dados = dict(linha)
+            dados["url_site"] = cloudflare_url
+            dados["dominio"] = dominio
+            dados["checklist_site"] = True
+            dados["checklist_dominio"] = True
+            if dados.get("meta_tag"):
+                dados["checklist_meta_tag"] = True
+            dados["score_prontidao"], dados["risco"] = calcular_score_prontidao_bm(dados)
+
+            with engine.begin() as conn:
+                conn.execute(
+                    text("""
+                    UPDATE bm_verificacoes
+                    SET url_site = :url_site,
+                        dominio = :dominio,
+                        checklist_site = :checklist_site,
+                        checklist_dominio = :checklist_dominio,
+                        checklist_meta_tag = :checklist_meta_tag,
+                        score_prontidao = :score_prontidao,
+                        risco = :risco,
+                        atualizado_em = CURRENT_TIMESTAMP
+                    WHERE id = :id
+                    """),
+                    {
+                        "id": dados.get("id"),
+                        "url_site": cloudflare_url,
+                        "dominio": dominio,
+                        "checklist_site": dados.get("checklist_site"),
+                        "checklist_dominio": dados.get("checklist_dominio"),
+                        "checklist_meta_tag": dados.get("checklist_meta_tag"),
+                        "score_prontidao": dados.get("score_prontidao"),
+                        "risco": dados.get("risco")
+                    }
+                )
+
+            registrar_historico_verificacao(
+                dados.get("id"),
+                "Site atualizado",
+                dados.get("status", ""),
+                dados.get("status", ""),
+                f"URL publicada na Cloudflare vinculada: {cloudflare_url}",
+                usuario_atual(),
+                dados.get("cnpj", "")
+            )
+    except Exception as erro:
+        print("Erro ao sincronizar site publicado com Central BM:", erro)
 
 @app.route("/central-bm", methods=["GET"])
 @login_obrigatorio
@@ -4958,7 +5166,7 @@ def sites_gerados():
     if modelo_site and modelo_site not in MODELOS_SITE_DICT:
         modelo_site = ""
 
-    sites = listar_sites_gerados(modelo_site, busca)
+    sites = enriquecer_sites_com_verificacao_bm(listar_sites_gerados(modelo_site, busca))
     estatisticas_sites = estatisticas_sites_gerados()
 
     return render_template(
@@ -5093,11 +5301,14 @@ def site_gerado_preview(site_id):
     if not site:
         abort(404)
 
+    verificacao_site = buscar_verificacao_por_site(site_id)
+
     return render_template(
         "site_preview.html",
         usuario_logado=usuario_atual(),
         tipo_usuario=tipo_usuario(),
         site=site,
+        verificacao_site=verificacao_site,
         modelo_site_nome=modelo_site_nome,
         sugestao_worker=sugerir_nome_worker_site(site),
         cloudflare_subdomain=obter_config_cloudflare().get("subdomain") or "portalempresarial",
@@ -5105,6 +5316,40 @@ def site_gerado_preview(site_id):
         cloudflare_erro=request.args.get("cloudflare_erro", "")
     )
 
+
+
+
+@app.route("/site-gerado/<int:site_id>/criar-verificacao-bm", methods=["POST"])
+@login_obrigatorio
+def site_gerado_criar_verificacao_bm(site_id):
+    site = buscar_site_gerado(site_id)
+
+    if not site:
+        abort(404)
+
+    existente = buscar_verificacao_por_site(site_id)
+    if existente:
+        return redirect(url_for("detalhe_verificacao_bm", verificacao_id=existente["id"], sucesso="Este site já estava vinculado a esta verificação BM."))
+
+    dados = montar_dados_verificacao_por_site(site)
+    verificacao_id = criar_verificacao_bm(dados)
+
+    registrar_historico_verificacao(
+        verificacao_id,
+        "Site vinculado",
+        "",
+        dados.get("status", "Preparando"),
+        f"Verificação criada a partir do site gerado #{site_id}: {site.get('nome_arquivo', '')}",
+        usuario_atual(),
+        dados.get("cnpj", "")
+    )
+
+    try:
+        registrar_evento(usuario_atual(), site.get("cnpj_formatado", site.get("cnpj", "")), "Site gerado", f"Verificação BM criada a partir do site #{site_id}")
+    except Exception:
+        pass
+
+    return redirect(url_for("detalhe_verificacao_bm", verificacao_id=verificacao_id, sucesso="Verificação BM criada com os dados do site gerado."))
 
 @app.route("/site-gerado/<int:site_id>/publicar-cloudflare", methods=["POST"])
 @login_obrigatorio
@@ -5136,6 +5381,8 @@ def site_gerado_publicar_cloudflare(site_id):
             aviso,
             slug_personalizado
         )
+
+        atualizar_verificacoes_do_site_publicado(site_id, cloudflare_url, slug_personalizado)
 
         try:
             registrar_evento(usuario_atual(), site.get("cnpj_formatado", site.get("cnpj", "")), "Site gerado", f"Publicado na Cloudflare: {cloudflare_url}")

@@ -252,6 +252,9 @@
                     <div>
                         <label>CNPJ</label>
                         <input type="text" name="cnpj" value="{{ dados.cnpj or '' }}" placeholder="Digite ou cole o CNPJ" required>
+                        <input type="hidden" name="site_gerado_id" value="{{ dados.site_gerado_id or '' }}">
+                        <input type="hidden" name="site_nome_arquivo" value="{{ dados.site_nome_arquivo or '' }}">
+                        <input type="hidden" name="site_modelo" value="{{ dados.site_modelo or '' }}">
                     </div>
                     <div>
                         <label>Status inicial</label>
@@ -288,6 +291,15 @@
                     </div>
                 </div>
             </section>
+
+            {% if dados.site_gerado_id %}
+            <section class="bm-form-card" style="border-color:rgba(19,214,227,.30);">
+                <h2>🌐 Site gerado vinculado</h2>
+                <p style="margin:0; color:#9db5d3; line-height:1.6;">
+                    {{ dados.site_nome_arquivo or ('Site #' ~ dados.site_gerado_id) }} · {{ dados.site_modelo or 'modelo não informado' }}
+                </p>
+            </section>
+            {% endif %}
 
             <section class="bm-form-card">
                 <h2>🌐 Domínio e contato operacional</h2>
