@@ -460,7 +460,9 @@ def enriquecer_perfis_meta(perfis):
             item["razao_social"] = empresa.get("razao_social", item.get("razao_social", ""))
             item["uf"] = empresa.get("uf", "")
             item["municipio_nome"] = empresa.get("municipio_nome", "")
-            item["status_bm"] = empresa.get("status_bm", item.get("status_bm", STATUS_PADRAO))
+            status_empresa = empresa.get("status_bm", STATUS_PADRAO)
+            status_salvo = status_perfil_salvo(item)
+            item["status_bm"] = status_empresa if status_empresa != STATUS_PADRAO else status_salvo
             item["capital_formatado"] = empresa.get("capital_formatado", "")
             item["data_uso_bm"] = empresa.get("data_uso_bm", "")
             item["data_uso_bm_iso"] = empresa.get("data_uso_bm_iso", "")
@@ -476,6 +478,44 @@ def enriquecer_perfis_meta(perfis):
         perfis_enriquecidos.append(item)
 
     return perfis_enriquecidos
+
+
+
+
+# ============================================================
+# PERSISTÊNCIA DE STATUS DOS PERFIS META
+# O perfil guarda um snapshot do status para não voltar a Disponível
+# quando a tabela de status for recarregada ou quando houver deploy.
+# ============================================================
+
+def status_perfil_salvo(perfil):
+    status = str(perfil.get("status_bm", "") or "").strip()
+    return status if status in STATUS_OPCOES else STATUS_PADRAO
+
+
+def sincronizar_status_perfis_meta(cnpj, novo_status, usuario=""):
+    cnpj_limpo = limpar_cnpj(cnpj)
+    novo_status = novo_status if novo_status in STATUS_OPCOES else STATUS_PADRAO
+
+    if not cnpj_limpo:
+        return
+
+    perfis = carregar_perfis_meta()
+    alterou = False
+    agora = datetime.now().strftime("%d/%m/%Y %H:%M")
+
+    for perfil in perfis:
+        perfil_cnpj = limpar_cnpj(perfil.get("cnpj_limpo", "")) if perfil.get("cnpj_limpo") else ""
+
+        if perfil_cnpj == cnpj_limpo:
+            perfil["status_bm"] = novo_status
+            perfil["status_bm_usuario"] = usuario or perfil.get("status_bm_usuario", "")
+            perfil["status_bm_atualizado_em"] = agora
+            perfil["atualizado_em"] = agora
+            alterou = True
+
+    if alterou:
+        salvar_perfis_meta(perfis)
 
 
 def resumo_perfis_meta(perfis):
@@ -1682,6 +1722,12 @@ MODELOS_SITE = [
         "nome": "Tech Dark",
         "descricao": "Visual escuro, moderno e tecnológico. Bom para tecnologia, marketing, web, dados e inovação.",
         "icone": "🛰️"
+    },
+    {
+        "slug": "meta_waba_clean",
+        "nome": "Meta/WABA Clean",
+        "descricao": "Modelo limpo para verificação Meta/WhatsApp: CNPJ, atividade, contato, privacidade e termos sem excesso visual.",
+        "icone": "🧼"
     }
 ]
 
@@ -2563,8 +2609,306 @@ def montar_cards_diferenciais(diferenciais):
     return "\n".join(cards)
 
 
+
+
+# ============================================================
+# MODELO META/WABA CLEAN
+# Site enxuto para reduzir ruído em análise de verificação.
+# ============================================================
+
+def gerar_html_site_meta_waba_clean(empresa, meta_tag, observacoes=""):
+    nome_site = valor_texto(empresa.get("nome_site", "")) or nome_exibicao_empresa(empresa)
+    razao_social = valor_publico(empresa.get("razao_social", ""))
+    nome_fantasia = valor_publico(empresa.get("nome_fantasia", ""))
+    cnpj_formatado = formatar_cnpj(limpar_cnpj(empresa.get("cnpj_limpo", empresa.get("cnpj", ""))))
+    cnae = valor_publico(empresa.get("cnae_principal", ""))
+    categoria = valor_publico(empresa.get("categoria_cnae", ""))
+    telefone = valor_publico(empresa.get("telefone_formatado", ""))
+    whatsapp = valor_publico(empresa.get("whatsapp_site", "") or empresa.get("telefone_formatado", ""))
+    email = valor_publico(empresa.get("email", ""))
+    endereco = montar_endereco_empresa(empresa)
+    data_abertura = valor_publico(empresa.get("data_inicio_formatada", ""))
+
+    titulo_atividade = cnae or categoria or "Atividade empresarial cadastrada"
+    nome_publico = nome_site or nome_fantasia or razao_social
+
+    telefone_html = f'<a href="tel:{escape(telefone)}">{escape(telefone)}</a>' if telefone else '<span>Não informado</span>'
+    whatsapp_numero = re.sub(r"\D", "", whatsapp or telefone or "")
+    whatsapp_html = f'<a href="https://wa.me/55{escape(whatsapp_numero)}" target="_blank" rel="noopener">{escape(whatsapp or telefone)}</a>' if whatsapp_numero else '<span>Não informado</span>'
+    email_html = f'<a href="mailto:{escape(email)}">{escape(email)}</a>' if email else '<span>Não informado</span>'
+
+    html = f'''<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    {meta_tag.strip()}
+    <title>{escape(nome_publico)} | Informações Empresariais</title>
+    <meta name="description" content="Informações institucionais e canais oficiais de atendimento de {escape(razao_social)}.">
+    <style>
+        :root {{
+            --bg: #f6f8fb;
+            --card: #ffffff;
+            --text: #172033;
+            --muted: #5f6f86;
+            --line: #dce4ef;
+            --accent: #1c5d99;
+            --soft: #eef5fb;
+            --ok: #0f766e;
+        }}
+
+        * {{ box-sizing: border-box; }}
+
+        body {{
+            margin: 0;
+            font-family: Arial, Helvetica, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+        }}
+
+        a {{ color: var(--accent); text-decoration: none; }}
+        a:hover {{ text-decoration: underline; }}
+
+        .topbar {{
+            background: #ffffff;
+            border-bottom: 1px solid var(--line);
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }}
+
+        .container {{ width: min(1080px, calc(100% - 32px)); margin: 0 auto; }}
+
+        .topbar-inner {{
+            min-height: 72px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 20px;
+        }}
+
+        .brand strong {{ display: block; color: var(--text); font-size: 18px; }}
+        .brand span {{ display: block; color: var(--muted); font-size: 13px; margin-top: 2px; }}
+
+        .nav {{ display: flex; gap: 16px; flex-wrap: wrap; font-size: 14px; }}
+        .nav a {{ color: var(--muted); font-weight: 700; }}
+
+        .hero {{ padding: 58px 0 34px; }}
+
+        .hero-card {{
+            background: var(--card);
+            border: 1px solid var(--line);
+            border-radius: 18px;
+            padding: clamp(24px, 4vw, 42px);
+            box-shadow: 0 12px 32px rgba(23, 32, 51, .08);
+        }}
+
+        .tag {{
+            display: inline-flex;
+            align-items: center;
+            padding: 7px 11px;
+            border-radius: 999px;
+            background: var(--soft);
+            color: var(--accent);
+            font-weight: 800;
+            font-size: 13px;
+            margin-bottom: 14px;
+        }}
+
+        h1 {{
+            margin: 0 0 12px;
+            font-size: clamp(30px, 4.6vw, 52px);
+            line-height: 1.05;
+            letter-spacing: -.04em;
+        }}
+
+        .hero p {{ max-width: 760px; margin: 0; color: var(--muted); font-size: 17px; }}
+
+        section {{ padding: 22px 0; }}
+
+        .grid {{
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 18px;
+        }}
+
+        .card {{
+            background: var(--card);
+            border: 1px solid var(--line);
+            border-radius: 16px;
+            padding: 22px;
+        }}
+
+        .card h2 {{ margin: 0 0 14px; font-size: 22px; }}
+        .card p {{ margin: 0 0 12px; color: var(--muted); }}
+
+        .info {{ display: grid; gap: 10px; }}
+        .info div {{
+            display: grid;
+            grid-template-columns: 180px 1fr;
+            gap: 12px;
+            padding: 10px 0;
+            border-bottom: 1px solid var(--line);
+        }}
+        .info div:last-child {{ border-bottom: 0; }}
+        .info span {{ color: var(--muted); font-weight: 700; }}
+        .info strong {{ color: var(--text); word-break: break-word; }}
+
+        .notice {{
+            border-left: 4px solid var(--ok);
+            background: #f0fdfa;
+            padding: 16px;
+            border-radius: 12px;
+            color: #134e4a;
+            font-weight: 700;
+        }}
+
+        .footer {{
+            margin-top: 28px;
+            padding: 26px 0;
+            border-top: 1px solid var(--line);
+            color: var(--muted);
+            font-size: 14px;
+        }}
+
+        @media (max-width: 760px) {{
+            .topbar-inner {{ align-items: flex-start; flex-direction: column; padding: 16px 0; }}
+            .grid {{ grid-template-columns: 1fr; }}
+            .info div {{ grid-template-columns: 1fr; gap: 2px; }}
+        }}
+    </style>
+</head>
+<body>
+    <header class="topbar">
+        <div class="container topbar-inner">
+            <a class="brand" href="#inicio" aria-label="{escape(nome_publico)}">
+                <strong>{escape(nome_publico)}</strong>
+                <span>{escape(razao_social)} · {escape(cnpj_formatado)}</span>
+            </a>
+            <nav class="nav" aria-label="Menu principal">
+                <a href="#empresa">Empresa</a>
+                <a href="#atendimento">Atendimento</a>
+                <a href="#privacidade">Privacidade</a>
+                <a href="#termos">Termos</a>
+            </nav>
+        </div>
+    </header>
+
+    <main id="inicio">
+        <section class="hero">
+            <div class="container hero-card">
+                <div class="tag">Informações empresariais oficiais</div>
+                <h1>{escape(nome_publico)}</h1>
+                <p>
+                    Este site apresenta informações institucionais, cadastrais e canais de atendimento de
+                    {escape(razao_social)}, com atuação vinculada à atividade cadastrada da empresa.
+                </p>
+            </div>
+        </section>
+
+        <section id="empresa">
+            <div class="container grid">
+                <article class="card">
+                    <h2>Dados cadastrais</h2>
+                    <div class="info">
+                        <div><span>Razão social</span><strong>{escape(razao_social)}</strong></div>
+                        <div><span>Nome fantasia</span><strong>{escape(nome_fantasia or nome_publico)}</strong></div>
+                        <div><span>CNPJ</span><strong>{escape(cnpj_formatado)}</strong></div>
+                        <div><span>Data de abertura</span><strong>{escape(data_abertura or 'Não informada')}</strong></div>
+                        <div><span>Atividade principal</span><strong>{escape(titulo_atividade)}</strong></div>
+                        <div><span>Categoria</span><strong>{escape(categoria or 'Não informada')}</strong></div>
+                    </div>
+                </article>
+
+                <article class="card">
+                    <h2>Sobre a atividade</h2>
+                    <p>
+                        A empresa mantém este canal para apresentação institucional e atendimento a clientes,
+                        fornecedores e interessados em seus serviços ou informações comerciais.
+                    </p>
+                    <p>
+                        As informações exibidas neste site devem manter coerência com a razão social, CNPJ,
+                        atividade econômica e canais de contato utilizados pela empresa.
+                    </p>
+                    <div class="notice">Canal informativo, sem venda de produtos restritos ou divulgação de serviços fora da atividade empresarial cadastrada.</div>
+                </article>
+            </div>
+        </section>
+
+        <section id="atendimento">
+            <div class="container grid">
+                <article class="card">
+                    <h2>Atendimento</h2>
+                    <div class="info">
+                        <div><span>Telefone</span><strong>{telefone_html}</strong></div>
+                        <div><span>WhatsApp</span><strong>{whatsapp_html}</strong></div>
+                        <div><span>E-mail</span><strong>{email_html}</strong></div>
+                        <div><span>Endereço</span><strong>{escape(endereco or 'Não informado')}</strong></div>
+                    </div>
+                </article>
+
+                <article class="card">
+                    <h2>Atendimento via WhatsApp</h2>
+                    <p>
+                        O atendimento por WhatsApp pode ser utilizado para informações sobre a empresa,
+                        dúvidas comerciais, suporte inicial e retorno de contato solicitado pelo usuário.
+                    </p>
+                    <p>
+                        A empresa não solicita senhas, códigos de segurança ou dados sensíveis por mensagem.
+                    </p>
+                </article>
+            </div>
+        </section>
+
+        <section id="privacidade">
+            <div class="container card">
+                <h2>Política de privacidade</h2>
+                <p>
+                    Os dados enviados por formulários, telefone, WhatsApp ou e-mail são utilizados somente para
+                    atendimento, retorno de contato, suporte e relacionamento comercial solicitado pelo próprio usuário.
+                </p>
+                <p>
+                    A empresa não comercializa dados pessoais e mantém as informações recebidas apenas pelo tempo
+                    necessário para cumprir a finalidade do atendimento ou obrigações legais aplicáveis.
+                </p>
+            </div>
+        </section>
+
+        <section id="termos">
+            <div class="container card">
+                <h2>Termos de uso</h2>
+                <p>
+                    Este site possui finalidade institucional e informativa. As informações cadastrais, contatos e
+                    descrições de atividade são apresentadas para facilitar a identificação da empresa e seus canais oficiais.
+                </p>
+                <p>
+                    O uso indevido das informações, cópia não autorizada de conteúdo ou tentativa de contato fraudulento
+                    não é permitido.
+                </p>
+            </div>
+        </section>
+    </main>
+
+    <footer class="footer">
+        <div class="container">
+            <strong>{escape(razao_social)}</strong><br>
+            CNPJ: {escape(cnpj_formatado)}<br>
+            {escape(endereco or '')}
+        </div>
+    </footer>
+</body>
+</html>'''
+
+    return html
+
+
 def gerar_html_site_empresa(empresa, meta_tag, modelo_site, observacoes=""):
     modelo_site = modelo_site if modelo_site in MODELOS_SITE_DICT else "institucional"
+
+    if modelo_site == "meta_waba_clean":
+        return gerar_html_site_meta_waba_clean(empresa, meta_tag, observacoes)
+
     segmento = identificar_segmento_site(empresa)
     conteudo = obter_conteudo_segmento(segmento)
     imagens = IMAGENS_SEGMENTO.get(segmento, IMAGENS_SEGMENTO["servicos"])
@@ -5837,6 +6181,8 @@ def atualizar_status_bm(cnpj):
         salvar_status(usuario, cnpj_limpo, novo_status)
         registrar_data_uso_cnpj(usuario, cnpj_limpo, novo_status)
 
+    sincronizar_status_perfis_meta(cnpj_limpo, novo_status, usuario)
+
     registrar_historico_producao(usuario, status_antigo, novo_status)
 
     try:
@@ -5941,6 +6287,9 @@ def perfis_meta():
                         "nome": nome,
                         "cnpj_limpo": cnpj if empresa else "",
                         "razao_social": empresa.get("razao_social", "") if empresa else "",
+                        "status_bm": empresa.get("status_bm", STATUS_PADRAO) if empresa else STATUS_PADRAO,
+                        "status_bm_usuario": usuario_atual(),
+                        "status_bm_atualizado_em": agora.strftime("%d/%m/%Y %H:%M"),
                         "proxy": proxy,
                         "navegador": navegador,
                         "conta_facebook": conta_facebook,
@@ -6025,6 +6374,9 @@ def perfis_meta():
                     if perfil.get("id") == perfil_id:
                         perfil["cnpj_limpo"] = cnpj
                         perfil["razao_social"] = empresa.get("razao_social", "")
+                        perfil["status_bm"] = empresa.get("status_bm", STATUS_PADRAO)
+                        perfil["status_bm_usuario"] = usuario_atual()
+                        perfil["status_bm_atualizado_em"] = datetime.now().strftime("%d/%m/%Y %H:%M")
                         perfil["atualizado_em"] = datetime.now().strftime("%d/%m/%Y %H:%M")
                         nome_perfil = perfil.get("nome", "")
                         atualizado = True
@@ -6126,8 +6478,11 @@ def perfis_meta_status(perfil_id):
         salvar_status(usuario, cnpj, novo_status)
         registrar_data_uso_cnpj(usuario, cnpj, novo_status)
 
+    agora_status_perfil = datetime.now().strftime("%d/%m/%Y %H:%M")
     perfil_encontrado["status_bm"] = novo_status
-    perfil_encontrado["atualizado_em"] = datetime.now().strftime("%d/%m/%Y %H:%M")
+    perfil_encontrado["status_bm_usuario"] = usuario
+    perfil_encontrado["status_bm_atualizado_em"] = agora_status_perfil
+    perfil_encontrado["atualizado_em"] = agora_status_perfil
     salvar_perfis_meta(perfis)
 
     registrar_historico_producao(usuario, status_antigo, novo_status)
@@ -6352,6 +6707,8 @@ def admin_atualizar_status(usuario, cnpj):
     else:
         salvar_status(usuario, cnpj_limpo, novo_status)
         registrar_data_uso_cnpj(usuario, cnpj_limpo, novo_status)
+
+    sincronizar_status_perfis_meta(cnpj_limpo, novo_status, usuario)
 
     registrar_historico_producao(usuario, status_antigo, novo_status)
 

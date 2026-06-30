@@ -596,7 +596,25 @@
                 <a class="btn-site-danger" href="/sites">Voltar ao histórico</a>
             </div>
 
-            <textarea id="htmlGerado" class="html-textarea" spellcheck="false">{{ site.html_gerado }}</textarea>
+            <textarea id="htmlGerado" class="html-textarea" spellcheck="false">
+        {% if site.modelo_site == "meta_waba_clean" %}
+        <section class="site-box" style="border-color: rgba(17, 201, 133, .45);">
+            <h2>🧼 Checklist Meta/WABA Clean</h2>
+            <p style="color:var(--site-muted); line-height:1.55;">
+                Modelo gerado com estrutura enxuta para análise: CNPJ, razão social, atividade principal, atendimento, privacidade e termos.
+            </p>
+            <div style="display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; color:#dff3ff; font-size:13px; font-weight:800; margin-top:12px;">
+                <span>✅ Meta tag incluída</span>
+                <span>✅ CNPJ no site</span>
+                <span>✅ Razão social no site</span>
+                <span>✅ Atividade principal clara</span>
+                <span>✅ Sem galeria/depoimento fake</span>
+                <span>✅ Política e termos presentes</span>
+            </div>
+        </section>
+        {% endif %}
+
+{{ site.html_gerado }}</textarea>
         </section>
 
         <section class="site-box">

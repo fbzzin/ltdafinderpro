@@ -621,6 +621,22 @@
                     </div>
                 </div>
 
+
+                <div class="site-box" id="metaCleanNotice" style="display:none; border-color: rgba(17, 201, 133, .45); background: linear-gradient(180deg, rgba(5, 35, 35, .98), rgba(7, 23, 42, .98));">
+                    <h2>🧼 Meta/WABA Clean ativo</h2>
+                    <p style="color:var(--site-muted); margin-top:-8px; line-height:1.55;">
+                        Este modelo gera um site mais limpo para análise: razão social, CNPJ, atividade principal, contato, atendimento via WhatsApp, política de privacidade e termos. Sem galeria fake, sem promessas fortes e sem excesso visual.
+                    </p>
+                    <div style="display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin-top:14px; color:#dff3ff; font-size:13px; font-weight:800;">
+                        <span>✅ CNPJ visível</span>
+                        <span>✅ Razão social visível</span>
+                        <span>✅ CNAE/atividade em destaque</span>
+                        <span>✅ Política e termos simples</span>
+                        <span>✅ WhatsApp como canal de atendimento</span>
+                        <span>✅ Baixo ruído visual</span>
+                    </div>
+                </div>
+
                 <div style="height:18px;"></div>
 
                 <label>Meta tag da Meta <strong style="color:#ffb4b4;">obrigatória</strong></label>
@@ -656,12 +672,22 @@
     if (menuToggle) menuToggle.addEventListener("click", alternarMenu);
     if (sidebarOverlay) sidebarOverlay.addEventListener("click", fecharMenuMobile);
 
+    function atualizarAvisoMetaClean() {
+        const aviso = document.getElementById("metaCleanNotice");
+        const selecionado = document.querySelector('.modelo-card input[value="meta_waba_clean"]');
+        if (!aviso || !selecionado) return;
+        aviso.style.display = selecionado.checked ? "block" : "none";
+    }
+
     document.querySelectorAll(".modelo-card input").forEach((input) => {
         input.addEventListener("change", () => {
             document.querySelectorAll(".modelo-card").forEach((card) => card.classList.remove("selecionado"));
             input.closest(".modelo-card").classList.add("selecionado");
+            atualizarAvisoMetaClean();
         });
     });
+
+    atualizarAvisoMetaClean();
 
     const cloudflareSlugInput = document.getElementById("cloudflareSlugInput");
     const cloudflareSlugPreview = document.getElementById("cloudflareSlugPreview");
