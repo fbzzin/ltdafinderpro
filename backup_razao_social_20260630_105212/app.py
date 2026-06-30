@@ -930,154 +930,6 @@ def avaliar_ia_empresa(empresa):
     }
 
 
-
-TERMOS_EMPRESA_RAZAO = {
-    "COMERCIO", "COMERCIAL", "SERVICO", "SERVICOS", "SOLUCOES", "TECNOLOGIA",
-    "DIGITAL", "MARKETING", "CONSULTORIA", "ASSESSORIA", "TRANSPORTES",
-    "TRANSPORTE", "LOGISTICA", "CONSTRUCAO", "CONSTRUCOES", "ENGENHARIA",
-    "INDUSTRIA", "INDUSTRIAL", "DISTRIBUIDORA", "DISTRIBUICAO", "IMPORTACAO",
-    "EXPORTACAO", "MERCADO", "MINIMERCADO", "MERCEARIA", "ARMAZEM", "LOJA",
-    "RESTAURANTE", "LANCHONETE", "PIZZARIA", "PADARIA", "DOCERIA", "DOCES",
-    "HAMBURGUERIA", "BAR", "LOUNGE", "CLINICA", "LABORATORIO", "HOSPITAL",
-    "ESCOLA", "COLEGIO", "CURSO", "CURSOS", "ACADEMIA", "AUTO", "PECAS",
-    "AUTOPECAS", "OFICINA", "MECANICA", "ESTETICA", "BELEZA", "COSMETICOS",
-    "FARMACIA", "DROGARIA", "IMOBILIARIA", "IMOVEIS", "PARTICIPACOES",
-    "HOLDING", "INVESTIMENTOS", "ADMINISTRADORA", "EMPREENDIMENTOS",
-    "INCORPORADORA", "AGRO", "AGROPECUARIA", "FAZENDA", "SITIO", "POSTO",
-    "HOTEL", "POUSADA", "TURISMO", "VIAGENS", "EVENTOS", "PRODUCOES",
-    "COMUNICACAO", "PUBLICIDADE", "PROPAGANDA", "ALIMENTOS", "BEBIDAS",
-    "VAREJISTA", "ATACADISTA", "MATERIAIS", "ELETRICA", "ELETRICO",
-    "INFORMATICA", "TELECOM", "GAMING", "BET", "BRASIL", "NACIONAL",
-    "CENTER", "CENTRO", "SHOP", "STORE", "GROUP", "GRUPO", "MASTER",
-    "PRIME", "ALPHA", "OMEGA", "NOVA", "NOVO", "IDEAL", "REAL", "TOP",
-    "PLUS", "MAX", "VIP", "EXPRESS", "DELIVERY", "COMPANY", "EMPRESA",
-    "CASA", "CASAS", "ATELIE", "ATELIER", "MODAS", "CONFECCOES", "MOVEIS",
-    "MOVEIS", "EQUIPAMENTOS", "SUPRIMENTOS", "REPRESENTACOES", "REPRESENTACAO"
-}
-
-CONECTORES_NOME_RAZAO = {"DA", "DE", "DO", "DAS", "DOS", "E"}
-
-NOMES_MASCULINOS_RAZAO = {
-    "JOAO", "JOSE", "ANTONIO", "FRANCISCO", "CARLOS", "PAULO", "PEDRO",
-    "LUCAS", "LUIZ", "LUIS", "MARCOS", "MARCO", "MATEUS", "MATHEUS",
-    "GABRIEL", "RAFAEL", "DANIEL", "BRUNO", "FELIPE", "ANDRE", "RODRIGO",
-    "RICARDO", "MARCELO", "ALEXANDRE", "GUSTAVO", "LEANDRO", "EDUARDO",
-    "FERNANDO", "ROBERTO", "ROGERIO", "CLAUDIO", "FABIO", "FABIANO",
-    "DIEGO", "THIAGO", "TIAGO", "VINICIUS", "VITOR", "VICTOR", "HUGO",
-    "MIGUEL", "ARTHUR", "DAVI", "BERNARDO", "HEITOR", "ENZO", "NICOLAS",
-    "NICOLAU", "SAMUEL", "BENJAMIN", "LORENZO", "MURILO", "CAIO",
-    "ARMANDO", "ALBERTO", "ALFREDO", "ALCIR", "ALCIDES", "ALAN", "ALEX",
-    "ADRIANO", "ADILSON", "ANDERSON", "WAGNER", "WELLINGTON", "WASHINGTON",
-    "WILLIAM", "ROBSON", "RONALDO", "RENATO", "MAURICIO", "NELSON",
-    "OSVALDO", "SEBASTIAO", "GERALDO", "MANOEL", "MANUEL", "EDSON",
-    "ELIAS", "EVANDRO", "IVAN", "JULIO", "JULIANO", "LEONARDO", "ALESSANDRO",
-    "AUGUSTO", "ADALBERTO", "ADEMIR", "AMILTON", "HAMILTON", "SIDNEY", "SIDNEI"
-}
-
-NOMES_FEMININOS_RAZAO = {
-    "MARIA", "ANA", "ANTONIA", "FRANCISCA", "ADRIANA", "JULIANA",
-    "MARCIA", "FERNANDA", "PATRICIA", "ALINE", "SANDRA", "CAMILA",
-    "AMANDA", "BRUNA", "JESSICA", "LETICIA", "JULIA", "LUCIA", "LUCIANA",
-    "VANESSA", "CRISTIANE", "CRISTINA", "CLAUDIA", "ANDREA", "RAQUEL",
-    "CARLA", "CAROLINA", "DANIELA", "PRISCILA", "ROBERTA", "RENATA",
-    "SIMONE", "TALITA", "TATIANE", "TATIANA", "ELIANE", "ELAINE",
-    "ELISANGELA", "FABIANA", "GABRIELA", "ISABELA", "ISABELLA",
-    "LARISSA", "MARIANA", "NATALIA", "PAULA", "VITORIA", "VANUSA",
-    "ALICE", "HELENA", "LAURA", "VALENTINA", "HELOISA", "LORENA",
-    "MANUELA", "LUIZA", "MELISSA", "LIVIA", "CECILIA", "BEATRIZ",
-    "CLARA", "SOPHIA", "SOFIA", "YASMIN", "EMANUELA", "MIRELLA",
-    "ALESSANDRA", "ALEXANDRA", "APARECIDA", "ROSA", "TEREZINHA",
-    "TERESA", "VERA", "MARTA", "SUELI", "REGINA", "DENISE", "MONICA",
-    "ANGELA", "ANGELICA", "SILVIA", "SILVANA", "SOLANGE", "VALERIA", "VIVIANE"
-}
-
-
-def normalizar_texto_razao(texto):
-    texto = str(texto or "").strip()
-    texto = unicodedata.normalize("NFKD", texto)
-    texto = texto.encode("ASCII", "ignore").decode("ASCII")
-    texto = texto.upper()
-    texto = re.sub(r"[^A-Z0-9\s]", " ", texto)
-    texto = re.sub(r"\s+", " ", texto).strip()
-    return texto
-
-
-def limpar_razao_social_para_nome(razao_social):
-    texto = normalizar_texto_razao(razao_social)
-
-    termos_juridicos = [
-        "SOCIEDADE EMPRESARIA LIMITADA",
-        "SOCIEDADE LIMITADA UNIPESSOAL",
-        "SOCIEDADE UNIPESSOAL",
-        "EMPRESA INDIVIDUAL DE RESPONSABILIDADE LIMITADA",
-        "EMPRESARIO INDIVIDUAL",
-        "MICROEMPREENDEDOR INDIVIDUAL",
-        "LIMITADA",
-        "LTDA",
-        "EIRELI",
-        "SLU",
-        "MEI",
-        "ME",
-        "EPP"
-    ]
-
-    for termo in termos_juridicos:
-        texto = re.sub(rf"\b{re.escape(termo)}\b", " ", texto)
-
-    texto = re.sub(r"\s+", " ", texto).strip()
-    return texto
-
-
-def classificar_razao_social_nome_pessoa(razao_social):
-    razao_limpa = limpar_razao_social_para_nome(razao_social)
-
-    if not razao_limpa:
-        return {"razao_limpa": "", "eh_nome_pessoa": False, "sexo": "Indefinido"}
-
-    partes_brutas = razao_limpa.split()
-    partes_validas = [parte for parte in partes_brutas if parte not in CONECTORES_NOME_RAZAO]
-
-    if len(partes_validas) < 2:
-        return {"razao_limpa": razao_limpa, "eh_nome_pessoa": False, "sexo": "Indefinido"}
-
-    if len(partes_validas) > 7:
-        return {"razao_limpa": razao_limpa, "eh_nome_pessoa": False, "sexo": "Indefinido"}
-
-    if any(parte in TERMOS_EMPRESA_RAZAO for parte in partes_validas):
-        return {"razao_limpa": razao_limpa, "eh_nome_pessoa": False, "sexo": "Indefinido"}
-
-    primeiro = partes_validas[0]
-
-    if primeiro.isdigit():
-        return {"razao_limpa": razao_limpa, "eh_nome_pessoa": False, "sexo": "Indefinido"}
-
-    if primeiro in NOMES_MASCULINOS_RAZAO:
-        return {"razao_limpa": razao_limpa, "eh_nome_pessoa": True, "sexo": "Masculino"}
-
-    if primeiro in NOMES_FEMININOS_RAZAO:
-        return {"razao_limpa": razao_limpa, "eh_nome_pessoa": True, "sexo": "Feminino"}
-
-    # Aceita razões sociais com iniciais, exemplo:
-    # A ALBUQUERQUE MARTINS CORREA LTDA
-    # A K DA SILVA VIEIRA LTDA
-    if len(primeiro) == 1 and primeiro.isalpha() and len(partes_validas) >= 3:
-        segundo_nome_real = ""
-        for parte in partes_validas[1:]:
-            if len(parte) > 1:
-                segundo_nome_real = parte
-                break
-
-        sexo = "Indefinido"
-
-        if segundo_nome_real in NOMES_MASCULINOS_RAZAO:
-            sexo = "Masculino"
-        elif segundo_nome_real in NOMES_FEMININOS_RAZAO:
-            sexo = "Feminino"
-
-        return {"razao_limpa": razao_limpa, "eh_nome_pessoa": True, "sexo": sexo}
-
-    return {"razao_limpa": razao_limpa, "eh_nome_pessoa": False, "sexo": "Indefinido"}
-
 def carregar_base():
     usuario = usuario_atual()
     df = pd.read_csv(BASE_FINAL, dtype=str)
@@ -1149,25 +1001,7 @@ def carregar_base():
         axis=1
     )
 
-    if "razao_social" not in df.columns:
-        df["razao_social"] = ""
-
-    if "sexo_provavel" in df.columns:
-        df["sexo_socio"] = df["sexo_provavel"].replace("", "Indefinido")
-    else:
-        df["sexo_socio"] = "Indefinido"
-
-    classificacao_razao = df["razao_social"].apply(classificar_razao_social_nome_pessoa)
-
-    df["razao_limpa_nome"] = classificacao_razao.apply(lambda item: item["razao_limpa"])
-    df["razao_nome_pessoa"] = classificacao_razao.apply(lambda item: item["eh_nome_pessoa"])
-    df["sexo_razao"] = classificacao_razao.apply(lambda item: item["sexo"])
-    df["sexo_provavel"] = df["sexo_razao"].replace("", "Indefinido")
-
-    # Regra nova do minerador:
-    # nome de pessoa agora é definido pela razão social, não pelo nome do sócio.
-    df = df[df["razao_nome_pessoa"] == True].copy()
-
+    df["sexo_provavel"] = df["sexo_provavel"].replace("", "Indefinido")
     df["categoria_cnae"] = df["categoria_cnae"].replace("", "Outros")
     df["idade_empresa"] = df["data_inicio"].apply(calcular_idade_empresa)
     df["data_inicio_formatada"] = df["data_inicio"].apply(formatar_data_brasil)
@@ -1265,6 +1099,7 @@ def aplicar_filtros(df, form):
             df["cnpj_limpo"].astype(str).str.upper()
             + " " + df["cnpj_formatado"].astype(str).str.upper()
             + " " + df["razao_social"].astype(str).str.upper()
+            + " " + df["nome_socio"].astype(str).str.upper()
             + " " + df["email"].astype(str).str.upper()
             + " " + df["telefone_formatado"].astype(str).str.upper()
             + " " + df["municipio_nome"].astype(str).str.upper()
@@ -6779,7 +6614,7 @@ def exportar():
         "telefone_formatado": "Telefone",
         "email": "Email",
         "nome_socio": "Sócio",
-        "sexo_provavel": "Sexo pela Razão Social",
+        "sexo_provavel": "Sexo Provável",
         "categoria_cnae": "Categoria CNAE",
         "status_bm": "Meu Status BM",
         "score_ia": "Score IA",
