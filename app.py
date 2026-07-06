@@ -2623,285 +2623,558 @@ def gerar_html_site_meta_waba_clean(empresa, meta_tag, observacoes=""):
     cnpj_formatado = formatar_cnpj(limpar_cnpj(empresa.get("cnpj_limpo", empresa.get("cnpj", ""))))
     cnae = valor_publico(empresa.get("cnae_principal", ""))
     categoria = valor_publico(empresa.get("categoria_cnae", ""))
-    telefone = valor_publico(empresa.get("telefone_formatado", ""))
-    whatsapp = valor_publico(empresa.get("whatsapp_site", "") or empresa.get("telefone_formatado", ""))
-    email = valor_publico(empresa.get("email", ""))
+    telefone = valor_texto(empresa.get("telefone_formatado", ""))
+    whatsapp = valor_texto(empresa.get("whatsapp_site", "") or empresa.get("telefone_formatado", ""))
     endereco = montar_endereco_empresa(empresa)
     data_abertura = valor_publico(empresa.get("data_inicio_formatada", ""))
+    municipio = valor_texto(empresa.get("municipio_nome", "")) or valor_texto(empresa.get("municipio", ""))
+    uf = valor_texto(empresa.get("uf", ""))
 
     titulo_atividade = cnae or categoria or "Atividade empresarial cadastrada"
     nome_publico = nome_site or nome_fantasia or razao_social
+    localidade = " - ".join([item for item in [municipio, uf] if item]) or "Brasil"
 
-    telefone_html = f'<a href="tel:{escape(telefone)}">{escape(telefone)}</a>' if telefone else '<span>Não informado</span>'
-    whatsapp_numero = re.sub(r"\D", "", whatsapp or telefone or "")
-    whatsapp_html = f'<a href="https://wa.me/55{escape(whatsapp_numero)}" target="_blank" rel="noopener">{escape(whatsapp or telefone)}</a>' if whatsapp_numero else '<span>Não informado</span>'
-    email_html = f'<a href="mailto:{escape(email)}">{escape(email)}</a>' if email else '<span>Não informado</span>'
+    telefone_base = whatsapp or telefone
+    telefone_digits = re.sub(r"\D", "", telefone_base or "")
 
-    html = f'''<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    {meta_tag.strip()}
-    <title>{escape(nome_publico)} | Informações Empresariais</title>
-    <meta name="description" content="Informações institucionais e canais oficiais de atendimento de {escape(razao_social)}.">
-    <style>
-        :root {{
-            --bg: #f6f8fb;
-            --card: #ffffff;
-            --text: #172033;
-            --muted: #5f6f86;
-            --line: #dce4ef;
-            --accent: #1c5d99;
-            --soft: #eef5fb;
-            --ok: #0f766e;
-        }}
+    if telefone_digits and not telefone_digits.startswith("55"):
+        whatsapp_numero = f"55{telefone_digits}"
+    else:
+        whatsapp_numero = telefone_digits
 
-        * {{ box-sizing: border-box; }}
+    if whatsapp_numero:
+        telefone_display = f"+{whatsapp_numero[:2]} {whatsapp_numero[2:]}" if whatsapp_numero.startswith("55") else whatsapp_numero
+        telefone_href = f"+{whatsapp_numero}"
+        whatsapp_href = f"https://wa.me/{whatsapp_numero}"
+    else:
+        telefone_display = "Não informado"
+        telefone_href = "#"
+        whatsapp_href = "#"
 
-        body {{
-            margin: 0;
-            font-family: Arial, Helvetica, sans-serif;
-            background: var(--bg);
-            color: var(--text);
-            line-height: 1.6;
-        }}
+    logo_letra = "E"
+    for caractere in normalizar_texto_razao(nome_publico):
+        if caractere.isalnum():
+            logo_letra = caractere[0]
+            break
 
-        a {{ color: var(--accent); text-decoration: none; }}
-        a:hover {{ text-decoration: underline; }}
+    valores = {
+        "__META_TAG__": meta_tag.strip(),
+        "__NOME_PUBLICO__": escape(nome_publico),
+        "__LOGO_LETRA__": escape(logo_letra),
+        "__RAZAO_SOCIAL__": escape(razao_social),
+        "__CNPJ__": escape(cnpj_formatado),
+        "__DATA_ABERTURA__": escape(data_abertura),
+        "__ATIVIDADE__": escape(titulo_atividade),
+        "__LOCALIDADE__": escape(localidade),
+        "__TELEFONE_DISPLAY__": escape(telefone_display),
+        "__TELEFONE_HREF__": escape(telefone_href),
+        "__WHATSAPP_HREF__": escape(whatsapp_href),
+        "__ANO__": escape(str(datetime.now().year)),
+    }
 
-        .topbar {{
-            background: #ffffff;
-            border-bottom: 1px solid var(--line);
-            position: sticky;
-            top: 0;
-            z-index: 10;
-        }}
+    template = """<!doctype html>
+<html lang="pt-BR"><head>
+__META_TAG__
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
 
-        .container {{ width: min(1080px, calc(100% - 32px)); margin: 0 auto; }}
+  <title>__NOME_PUBLICO__ | __ATIVIDADE__</title>
+  <meta name="description" content="__ATIVIDADE__ em __LOCALIDADE__. Qualidade e confiança. Contato via WhatsApp.">
+  <meta property="og:title" content="__NOME_PUBLICO__">
+  <meta property="og:description" content="__ATIVIDADE__ em __LOCALIDADE__.">
+  <meta property="og:type" content="website">
 
-        .topbar-inner {{
-            min-height: 72px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 20px;
-        }}
+  <style>
+:root{
+  --primary: #5b2aa7;
+  --primary-2: #4b61d3;
+  --primary-3: #5ea0ff;
 
-        .brand strong {{ display: block; color: var(--text); font-size: 18px; }}
-        .brand span {{ display: block; color: var(--muted); font-size: 13px; margin-top: 2px; }}
+  --text: #0f172a;
+  --muted: #64748b;
 
-        .nav {{ display: flex; gap: 16px; flex-wrap: wrap; font-size: 14px; }}
-        .nav a {{ color: var(--muted); font-weight: 700; }}
+  --bg: #ffffff;
+  --soft: #f1f6fb;
 
-        .hero {{ padding: 58px 0 34px; }}
+  --card: #ffffff;
+  --border: rgba(15, 23, 42, .08);
 
-        .hero-card {{
-            background: var(--card);
-            border: 1px solid var(--line);
-            border-radius: 18px;
-            padding: clamp(24px, 4vw, 42px);
-            box-shadow: 0 12px 32px rgba(23, 32, 51, .08);
-        }}
+  --radius: 14px;
+  --shadow: 0 10px 25px rgba(15, 23, 42, .08);
+  --max: 1100px;
+}
 
-        .tag {{
-            display: inline-flex;
-            align-items: center;
-            padding: 7px 11px;
-            border-radius: 999px;
-            background: var(--soft);
-            color: var(--accent);
-            font-weight: 800;
-            font-size: 13px;
-            margin-bottom: 14px;
-        }}
+/* Reset leve */
+*{ box-sizing: border-box; }
+html,body{ margin:0; padding:0; }
+body{
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  color: var(--text);
+  background: var(--bg);
+}
 
-        h1 {{
-            margin: 0 0 12px;
-            font-size: clamp(30px, 4.6vw, 52px);
-            line-height: 1.05;
-            letter-spacing: -.04em;
-        }}
+/* Layout */
+.gdl-container{ width: 100%; max-width: var(--max); margin: 0 auto; padding: 0 18px; }
 
-        .hero p {{ max-width: 760px; margin: 0; color: var(--muted); font-size: 17px; }}
+/* Topbar */
+.gdl-topbar{
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: rgba(255,255,255,.92);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--border);
+}
+.gdl-topbar-inner{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 74px;
+  gap: 16px;
+}
 
-        section {{ padding: 22px 0; }}
+.gdl-brand{
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-decoration: none;
+  color: inherit;
+  min-width: 230px;
+}
+.gdl-logo{
+  width: 44px; height: 44px;
+  border-radius: 12px;
+  display: grid; place-items: center;
+  color: #fff;
+  font-weight: 800;
+  background: linear-gradient(135deg, var(--primary), var(--primary-2));
+  box-shadow: 0 10px 20px rgba(91, 42, 167, .25);
+  flex: 0 0 auto;
+}
+.gdl-brand-text{ line-height: 1.1; }
+.gdl-brand-text strong{ display: block; font-size: 14px; letter-spacing: .3px; }
+.gdl-brand-text span{ display: block; font-size: 12px; color: var(--muted); margin-top: 3px; }
 
-        .grid {{
-            display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 18px;
-        }}
+.gdl-nav{
+  display: flex;
+  gap: 18px;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+.gdl-nav a{
+  text-decoration: none;
+  color: #1f2937;
+  font-size: 14px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  transition: .2s ease;
+}
+.gdl-nav a:hover{ background: rgba(2, 6, 23, .04); }
 
-        .card {{
-            background: var(--card);
-            border: 1px solid var(--line);
-            border-radius: 16px;
-            padding: 22px;
-        }}
+.gdl-btn{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border-radius: 12px;
+  padding: 11px 16px;
+  font-weight: 700;
+  font-size: 14px;
+  border: 1px solid transparent;
+  text-decoration: none;
+  cursor: pointer;
+  transition: .2s ease;
+  white-space: nowrap;
+}
+.gdl-btn-primary{
+  color: #fff;
+  background: linear-gradient(135deg, var(--primary), var(--primary-2));
+  box-shadow: 0 12px 25px rgba(75, 97, 211, .25);
+}
+.gdl-btn-primary:hover{ transform: translateY(-1px); filter: brightness(1.02); }
+.gdl-btn-outline{
+  color: #fff;
+  border-color: rgba(255,255,255,.35);
+  background: rgba(255,255,255,.10);
+}
+.gdl-btn-outline:hover{ background: rgba(255,255,255,.16); transform: translateY(-1px); }
 
-        .card h2 {{ margin: 0 0 14px; font-size: 22px; }}
-        .card p {{ margin: 0 0 12px; color: var(--muted); }}
+/* Hero */
+.gdl-hero{
+  background: linear-gradient(90deg, var(--primary) 0%, var(--primary-2) 55%, var(--primary-3) 100%);
+  color: #fff;
+  padding: 58px 0 62px;
+}
+.gdl-hero h1{
+  margin: 0;
+  font-size: clamp(28px, 4vw, 44px);
+  letter-spacing: -0.02em;
+  line-height: 1.12;
+  text-align: center;
+}
+.gdl-hero p{
+  margin: 14px auto 0;
+  max-width: 780px;
+  font-size: 16px;
+  opacity: .92;
+  text-align: center;
+}
+.gdl-hero-cta{
+  display: flex;
+  gap: 14px;
+  justify-content: center;
+  margin-top: 26px;
+  flex-wrap: wrap;
+}
+.gdl-btn-light{
+  background: #fff;
+  color: var(--primary);
+  border: 1px solid rgba(255,255,255,.6);
+}
+.gdl-btn-light:hover{ transform: translateY(-1px); }
 
-        .info {{ display: grid; gap: 10px; }}
-        .info div {{
-            display: grid;
-            grid-template-columns: 180px 1fr;
-            gap: 12px;
-            padding: 10px 0;
-            border-bottom: 1px solid var(--line);
-        }}
-        .info div:last-child {{ border-bottom: 0; }}
-        .info span {{ color: var(--muted); font-weight: 700; }}
-        .info strong {{ color: var(--text); word-break: break-word; }}
+/* Cards */
+.gdl-section{ padding: 34px 0; }
+.gdl-grid-3{
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 18px;
+  margin-top: 18px;
+}
+.gdl-card{
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 20px;
+  min-height: 140px;
+}
+.gdl-card h3{ margin: 0 0 10px; font-size: 16px; }
+.gdl-card p{
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+.gdl-list{
+  margin: 0;
+  padding-left: 16px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.8;
+}
+.gdl-contact{
+  display: grid;
+  gap: 10px;
+  margin-top: 6px;
+}
+.gdl-contact a{
+  text-decoration: none;
+  color: #111827;
+  font-weight: 600;
+  font-size: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.gdl-ic{
+  width: 30px; height: 30px;
+  border-radius: 10px;
+  background: rgba(2, 6, 23, .04);
+  display: grid;
+  place-items: center;
+  font-size: 14px;
+}
 
-        .notice {{
-            border-left: 4px solid var(--ok);
-            background: #f0fdfa;
-            padding: 16px;
-            border-radius: 12px;
-            color: #134e4a;
-            font-weight: 700;
-        }}
+/* Dados Oficiais */
+.gdl-soft{
+  background: var(--soft);
+  padding: 34px 0 40px;
+}
+.gdl-soft h2{
+  margin: 0 0 14px;
+  font-size: 22px;
+  letter-spacing: -0.01em;
+}
+.gdl-info-box{
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, .06);
+}
+.gdl-info-grid{
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+.gdl-info-item small{
+  display: block;
+  color: var(--muted);
+  font-weight: 700;
+  font-size: 12px;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+.gdl-info-item div{
+  font-weight: 700;
+  color: #111827;
+  font-size: 14px;
+  line-height: 1.35;
+}
 
-        .footer {{
-            margin-top: 28px;
-            padding: 26px 0;
-            border-top: 1px solid var(--line);
-            color: var(--muted);
-            font-size: 14px;
-        }}
+/* Footer */
+.gdl-footer{
+  background: #0b1220;
+  color: rgba(255,255,255,.82);
+  padding: 26px 0;
+}
+.gdl-footer-inner{
+  display: grid;
+  grid-template-columns: 1.5fr .8fr;
+  gap: 18px;
+  align-items: start;
+}
+.gdl-footer a{ color: rgba(255,255,255,.86); text-decoration: none; }
+.gdl-footer a:hover{ text-decoration: underline; }
+.gdl-foot-title{ font-weight: 800; color: #fff; margin-bottom: 8px; }
+.gdl-foot-muted{ color: rgba(255,255,255,.70); font-size: 14px; line-height: 1.6; }
+.gdl-foot-links{
+  display: grid;
+  gap: 10px;
+  justify-content: end;
+}
 
-        @media (max-width: 760px) {{
-            .topbar-inner {{ align-items: flex-start; flex-direction: column; padding: 16px 0; }}
-            .grid {{ grid-template-columns: 1fr; }}
-            .info div {{ grid-template-columns: 1fr; gap: 2px; }}
-        }}
-    </style>
+/* Modal */
+.gdl-modal-overlay{
+  position: fixed;
+  inset: 0;
+  background: rgba(2,6,23,.65);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  padding: 20px;
+}
+.gdl-modal-overlay.active{ display: flex; }
+
+.gdl-modal-box{
+  background: #fff;
+  width: 100%;
+  max-width: 720px;
+  max-height: 80vh;
+  border-radius: 14px;
+  padding: 26px;
+  position: relative;
+  overflow-y: auto;
+  box-shadow: 0 30px 60px rgba(0,0,0,.25);
+}
+.gdl-modal-box h2{
+  margin: 0 0 10px;
+  font-size: 22px;
+}
+.gdl-modal-box p{
+  font-size: 14px;
+  line-height: 1.7;
+  color: #334155;
+}
+.gdl-modal-close{
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  border: none;
+  background: transparent;
+  font-size: 22px;
+  cursor: pointer;
+}
+.gdl-modal-content{ display: none; }
+.gdl-modal-content.active{ display: block; }
+
+/* Responsivo */
+@media (max-width: 980px){
+  .gdl-grid-3{ grid-template-columns: 1fr; margin-top: 18px; }
+  .gdl-info-grid{ grid-template-columns: 1fr 1fr; }
+  .gdl-topbar-inner{ height: auto; padding: 14px 0; align-items: flex-start; }
+  .gdl-brand{ min-width: unset; }
+}
+@media (max-width: 520px){
+  .gdl-info-grid{ grid-template-columns: 1fr; }
+  .gdl-nav{ gap: 8px; }
+}
+/* Painel simples de automação CNPJ */
+.gdl-editor{
+  background:#07111f;
+  color:#fff;
+  padding:14px 0;
+  border-bottom:1px solid rgba(255,255,255,.12);
+}
+.gdl-editor strong{display:block;margin-bottom:10px;font-size:16px;}
+.gdl-editor-grid{display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center;}
+.gdl-editor input,.gdl-editor textarea{
+  width:100%;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.08);color:#fff;border-radius:10px;padding:11px 12px;outline:none;
+}
+.gdl-editor input::placeholder,.gdl-editor textarea::placeholder{color:rgba(255,255,255,.65);}
+.gdl-editor button{
+  border:0;border-radius:10px;padding:11px 14px;font-weight:800;cursor:pointer;background:#fff;color:#111827;
+}
+.gdl-editor button:last-child{background:#22c55e;color:#06120b;}
+.gdl-editor details{margin-top:10px;}
+.gdl-editor summary{cursor:pointer;color:rgba(255,255,255,.86);font-weight:700;}
+.gdl-editor-fields{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:10px;}
+.gdl-editor-fields textarea{grid-column:1/-1;min-height:72px;resize:vertical;}
+.gdl-editor small{display:block;color:rgba(255,255,255,.65);margin-top:8px;}
+@media(max-width:760px){.gdl-editor-grid,.gdl-editor-fields{grid-template-columns:1fr}.gdl-editor button{width:100%;}}
+
+  </style>
 </head>
 <body>
-    <header class="topbar">
-        <div class="container topbar-inner">
-            <a class="brand" href="#inicio" aria-label="{escape(nome_publico)}">
-                <strong>{escape(nome_publico)}</strong>
-                <span>{escape(razao_social)} · {escape(cnpj_formatado)}</span>
-            </a>
-            <nav class="nav" aria-label="Menu principal">
-                <a href="#empresa">Empresa</a>
-                <a href="#atendimento">Atendimento</a>
-                <a href="#privacidade">Privacidade</a>
-                <a href="#termos">Termos</a>
-            </nav>
+
+  
+
+  <div class="gdl-topbar">
+    <div class="gdl-container">
+      <div class="gdl-topbar-inner">
+        <a class="gdl-brand" href="#home" aria-label="Ir para o início">
+          <div class="gdl-logo">__LOGO_LETRA__</div>
+          <div class="gdl-brand-text">
+            <strong>__NOME_PUBLICO__</strong>
+            <span>Atendimento profissional</span>
+          </div>
+        </a>
+        <nav class="gdl-nav" aria-label="Menu principal">
+          <a href="#home">Home</a>
+          <a href="#sobre">Sobre</a>
+          <a href="#servicos">Serviços</a>
+          <a class="gdl-btn gdl-btn-primary" href="#contato">Contato</a>
+        </nav>
+      </div>
+    </div>
+  </div>
+
+  <section id="home" class="gdl-hero">
+    <div class="gdl-container">
+      <h1>__ATIVIDADE__</h1>
+      <p>Atendimento profissional em <strong>__LOCALIDADE__</strong>. Qualidade e confiança.</p>
+      <div class="gdl-hero-cta">
+        <a class="gdl-btn gdl-btn-light" href="#servicos">Ver Serviços</a>
+        <a class="gdl-btn gdl-btn-outline" href="__WHATSAPP_HREF__" target="_blank" rel="noopener">Chamar no WhatsApp</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="gdl-section">
+    <div class="gdl-container">
+      <div class="gdl-grid-3">
+        <div id="sobre" class="gdl-card">
+          <h3>Quem somos</h3>
+          <p>A empresa <strong>__RAZAO_SOCIAL__</strong> atua com <strong>__ATIVIDADE__</strong>.</p>
         </div>
-    </header>
-
-    <main id="inicio">
-        <section class="hero">
-            <div class="container hero-card">
-                <div class="tag">Informações empresariais oficiais</div>
-                <h1>{escape(nome_publico)}</h1>
-                <p>
-                    Este site apresenta informações institucionais, cadastrais e canais de atendimento de
-                    {escape(razao_social)}, com atuação vinculada à atividade cadastrada da empresa.
-                </p>
-            </div>
-        </section>
-
-        <section id="empresa">
-            <div class="container grid">
-                <article class="card">
-                    <h2>Dados cadastrais</h2>
-                    <div class="info">
-                        <div><span>Razão social</span><strong>{escape(razao_social)}</strong></div>
-                        <div><span>Nome fantasia</span><strong>{escape(nome_fantasia or nome_publico)}</strong></div>
-                        <div><span>CNPJ</span><strong>{escape(cnpj_formatado)}</strong></div>
-                        <div><span>Data de abertura</span><strong>{escape(data_abertura or 'Não informada')}</strong></div>
-                        <div><span>Atividade principal</span><strong>{escape(titulo_atividade)}</strong></div>
-                        <div><span>Categoria</span><strong>{escape(categoria or 'Não informada')}</strong></div>
-                    </div>
-                </article>
-
-                <article class="card">
-                    <h2>Sobre a atividade</h2>
-                    <p>
-                        A empresa mantém este canal para apresentação institucional e atendimento a clientes,
-                        fornecedores e interessados em seus serviços ou informações comerciais.
-                    </p>
-                    <p>
-                        As informações exibidas neste site devem manter coerência com a razão social, CNPJ,
-                        atividade econômica e canais de contato utilizados pela empresa.
-                    </p>
-                    <div class="notice">Canal informativo, sem venda de produtos restritos ou divulgação de serviços fora da atividade empresarial cadastrada.</div>
-                </article>
-            </div>
-        </section>
-
-        <section id="atendimento">
-            <div class="container grid">
-                <article class="card">
-                    <h2>Atendimento</h2>
-                    <div class="info">
-                        <div><span>Telefone</span><strong>{telefone_html}</strong></div>
-                        <div><span>WhatsApp</span><strong>{whatsapp_html}</strong></div>
-                        <div><span>E-mail</span><strong>{email_html}</strong></div>
-                        <div><span>Endereço</span><strong>{escape(endereco or 'Não informado')}</strong></div>
-                    </div>
-                </article>
-
-                <article class="card">
-                    <h2>Atendimento via WhatsApp</h2>
-                    <p>
-                        O atendimento por WhatsApp pode ser utilizado para informações sobre a empresa,
-                        dúvidas comerciais, suporte inicial e retorno de contato solicitado pelo usuário.
-                    </p>
-                    <p>
-                        A empresa não solicita senhas, códigos de segurança ou dados sensíveis por mensagem.
-                    </p>
-                </article>
-            </div>
-        </section>
-
-        <section id="privacidade">
-            <div class="container card">
-                <h2>Política de privacidade</h2>
-                <p>
-                    Os dados enviados por formulários, telefone, WhatsApp ou e-mail são utilizados somente para
-                    atendimento, retorno de contato, suporte e relacionamento comercial solicitado pelo próprio usuário.
-                </p>
-                <p>
-                    A empresa não comercializa dados pessoais e mantém as informações recebidas apenas pelo tempo
-                    necessário para cumprir a finalidade do atendimento ou obrigações legais aplicáveis.
-                </p>
-            </div>
-        </section>
-
-        <section id="termos">
-            <div class="container card">
-                <h2>Termos de uso</h2>
-                <p>
-                    Este site possui finalidade institucional e informativa. As informações cadastrais, contatos e
-                    descrições de atividade são apresentadas para facilitar a identificação da empresa e seus canais oficiais.
-                </p>
-                <p>
-                    O uso indevido das informações, cópia não autorizada de conteúdo ou tentativa de contato fraudulento
-                    não é permitido.
-                </p>
-            </div>
-        </section>
-    </main>
-
-    <footer class="footer">
-        <div class="container">
-            <strong>{escape(razao_social)}</strong><br>
-            CNPJ: {escape(cnpj_formatado)}<br>
-            {escape(endereco or '')}
+        <div id="servicos" class="gdl-card">
+          <h3>O que fazemos</h3>
+          <ul class="gdl-list">
+            <li>__NOME_PUBLICO__</li>
+            <li>Atendimento profissional</li>
+            <li>Qualidade e confiança</li>
+            <li>Suporte e agilidade</li>
+          </ul>
         </div>
-    </footer>
-</body>
-</html>'''
+        <div id="contato" class="gdl-card">
+          <h3>Contato</h3>
+          <div class="gdl-contact">
+            <a href="tel:__TELEFONE_HREF__"><span class="gdl-ic">📞</span><span>__TELEFONE_DISPLAY__</span></a>
+            <a href="__WHATSAPP_HREF__" target="_blank" rel="noopener"><span class="gdl-ic">💬</span>Chamar no WhatsApp</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
 
-    return html
+  <section class="gdl-soft">
+    <div class="gdl-container">
+      <h2>Dados Oficiais</h2>
+      <div class="gdl-info-box">
+        <div class="gdl-info-grid">
+          <div class="gdl-info-item"><small>Razão Social</small><div>__RAZAO_SOCIAL__</div></div>
+          <div class="gdl-info-item"><small>CNPJ</small><div>__CNPJ__</div></div>
+          <div class="gdl-info-item"><small>Data de Abertura</small><div>__DATA_ABERTURA__</div></div>
+          <div class="gdl-info-item"><small>Atividade Principal</small><div>__ATIVIDADE__</div></div>
+        </div>
+      </div>
+    </div>
+  </section>
 
+  <footer class="gdl-footer">
+    <div class="gdl-container">
+      <div class="gdl-footer-inner">
+        <div>
+          <div class="gdl-foot-title">__NOME_PUBLICO__</div>
+          <div class="gdl-foot-muted">CNPJ: <span>__CNPJ__</span><br>© <span>__ANO__</span> Todos os direitos reservados.</div>
+        </div>
+        <div class="gdl-foot-links">
+          <a href="javascript:void(0)" onclick="openModal('privacidade')">Política de Privacidade</a>
+          <a href="javascript:void(0)" onclick="openModal('termos')">Termos de Uso</a>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <div id="modalOverlay" class="gdl-modal-overlay" onclick="closeModal(event)">
+    <div class="gdl-modal-box" role="dialog" aria-modal="true" aria-label="Conteúdo legal">
+      <button class="gdl-modal-close" onclick="closeModal()" aria-label="Fechar">✕</button>
+      <div id="modal-privacidade" class="gdl-modal-content">
+        <h2>Política de Privacidade</h2>
+        <p>A <strong>__NOME_PUBLICO__</strong>, inscrita no CNPJ <strong>__CNPJ__</strong>, respeita a sua privacidade e está comprometida com a proteção dos dados pessoais dos usuários.</p>
+        <p>As informações coletadas neste site são utilizadas exclusivamente para fins de atendimento, comunicação e melhoria dos serviços prestados, em conformidade com a Lei Geral de Proteção de Dados.</p>
+      </div>
+      <div id="modal-termos" class="gdl-modal-content">
+        <h2>Termos de Uso</h2>
+        <p>O acesso a este site implica na aceitação dos presentes Termos de Uso. A <strong>__NOME_PUBLICO__</strong> atua no segmento de <strong>__ATIVIDADE__</strong>.</p>
+        <p>Todo o conteúdo deste site é protegido por direitos autorais, sendo proibida a reprodução sem autorização prévia.</p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+(function(){
+  const overlay = document.getElementById('modalOverlay');
+  const priv = document.getElementById('modal-privacidade');
+  const termos = document.getElementById('modal-termos');
+
+  function setActive(type){
+    priv.classList.remove('active');
+    termos.classList.remove('active');
+    if(type === 'privacidade') priv.classList.add('active');
+    if(type === 'termos') termos.classList.add('active');
+  }
+
+  window.openModal = function(type){
+    overlay.classList.add('active');
+    setActive(type);
+  }
+
+  window.closeModal = function(e){
+    if(!e || e.target === overlay){
+      overlay.classList.remove('active');
+    }
+  }
+
+  document.addEventListener('keydown', function(e){
+    if(e.key === 'Escape'){
+      overlay.classList.remove('active');
+    }
+  });
+})();
+  </script>
+  
+
+</body></html>"""
+
+    for chave, valor in valores.items():
+        template = template.replace(chave, valor)
+
+    return template
 
 def gerar_html_site_empresa(empresa, meta_tag, modelo_site, observacoes=""):
     modelo_site = modelo_site if modelo_site in MODELOS_SITE_DICT else "institucional"
