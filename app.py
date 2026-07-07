@@ -1463,6 +1463,226 @@ def estatisticas_gerais():
     }
 
 
+# ============================================================
+# ESTATÍSTICAS DA DASHBOARD MASTER BASEADAS NOS PERFIS META
+# A Dashboard Master usa os Perfis Meta como fonte operacional
+# e deixa o status do CNPJ apenas como apoio de base/disponibilidade.
+# ============================================================
+
+def usuario_perfil_meta(perfil):
+    usuario = str(
+        perfil.get("status_bm_usuario")
+        or perfil.get("usuario")
+        or perfil.get("operador")
+        or "Sem usuário"
+    ).strip()
+
+    return usuario if usuario else "Sem usuário"
+
+
+def status_operacional_perfil_meta(perfil):
+    status = str(perfil.get("status_bm", "") or "").strip()
+    return status if status in STATUS_OPCOES else STATUS_PADRAO
+
+
+def data_texto_para_iso(data_texto):
+    data_texto = str(data_texto or "").strip()
+
+    if not data_texto:
+        return ""
+
+    if re.match(r"^\d{4}-\d{2}-\d{2}$", data_texto):
+        return data_texto
+
+    for formato in ["%d/%m/%Y %H:%M", "%d/%m/%Y"]:
+        try:
+            return datetime.strptime(data_texto, formato).strftime("%Y-%m-%d")
+        except:
+            pass
+
+    return ""
+
+
+def data_operacional_perfil_meta(perfil):
+    for campo in ["status_bm_atualizado_em", "atualizado_em", "criado_em", "criado_em_iso"]:
+        data_iso = data_texto_para_iso(perfil.get(campo, ""))
+
+        if data_iso:
+            return data_iso
+
+    return ""
+
+
+def perfis_meta_operacionais(perfis=None):
+    if perfis is None:
+        perfis = carregar_perfis_meta()
+
+    operacionais = []
+
+    for perfil in perfis:
+        status = status_operacional_perfil_meta(perfil)
+
+        if status == STATUS_PADRAO:
+            continue
+
+        item = dict(perfil)
+        item["status_bm"] = status
+        item["usuario_operacional"] = usuario_perfil_meta(item)
+        item["data_operacional_iso"] = data_operacional_perfil_meta(item)
+        operacionais.append(item)
+
+    return operacionais
+
+
+def estatisticas_gerais_perfis_meta(perfis=None):
+    perfis = perfis_meta_operacionais(perfis)
+    usuarios_cadastrados = carregar_usuarios()
+
+    total_geral = {status: 0 for status in STATUS_OPCOES if status != STATUS_PADRAO}
+    por_usuario = {}
+
+    for usuario in usuarios_cadastrados.keys():
+        por_usuario[usuario] = {status: 0 for status in STATUS_OPCOES if status != STATUS_PADRAO}
+
+    for perfil in perfis:
+        status = perfil.get("status_bm", STATUS_PADRAO)
+        usuario = perfil.get("usuario_operacional") or usuario_perfil_meta(perfil)
+
+        if status not in total_geral:
+            continue
+
+        total_geral[status] += 1
+
+        if usuario not in por_usuario:
+            por_usuario[usuario] = {status_item: 0 for status_item in STATUS_OPCOES if status_item != STATUS_PADRAO}
+
+        por_usuario[usuario][status] += 1
+
+    dados_usuarios = []
+
+    for usuario, contagem in por_usuario.items():
+        total_usuario = sum(contagem.values())
+        sucesso_usuario = sum(contagem.get(status, 0) for status in STATUS_SUCESSO)
+        taxa_usuario = (sucesso_usuario / total_usuario * 100) if total_usuario else 0
+
+        dados_usuarios.append({
+            "usuario": usuario,
+            "contagem": contagem,
+            "total": total_usuario,
+            "sucesso": sucesso_usuario,
+            "taxa_sucesso": taxa_usuario
+        })
+
+    total = sum(total_geral.values())
+    sucesso = sum(total_geral.get(status, 0) for status in STATUS_SUCESSO)
+    taxa_sucesso = (sucesso / total * 100) if total else 0
+
+    dados_usuarios = sorted(dados_usuarios, key=lambda item: (item["sucesso"], item["total"]), reverse=True)
+
+    return {
+        "usuarios": dados_usuarios,
+        "contagem": total_geral,
+        "total": total,
+        "sucesso": sucesso,
+        "taxa_sucesso": taxa_sucesso
+    }
+
+
+def resumo_perfis_meta_do_dia(data=None, perfis=None):
+    if data is None:
+        data = data_hoje()
+
+    perfis = perfis_meta_operacionais(perfis)
+    total_geral = {status: 0 for status in STATUS_OPCOES if status != STATUS_PADRAO}
+    por_usuario = {}
+
+    for perfil in perfis:
+        if perfil.get("data_operacional_iso", "") != data:
+            continue
+
+        status = perfil.get("status_bm", STATUS_PADRAO)
+        usuario = perfil.get("usuario_operacional") or usuario_perfil_meta(perfil)
+
+        if status not in total_geral:
+            continue
+
+        total_geral[status] += 1
+
+        if usuario not in por_usuario:
+            por_usuario[usuario] = {status_item: 0 for status_item in STATUS_OPCOES if status_item != STATUS_PADRAO}
+
+        por_usuario[usuario][status] += 1
+
+    usuarios = []
+
+    for usuario, contagem in por_usuario.items():
+        total_usuario = sum(contagem.values())
+        sucesso_usuario = sum(contagem.get(status, 0) for status in STATUS_SUCESSO)
+        taxa_usuario = (sucesso_usuario / total_usuario * 100) if total_usuario else 0
+
+        usuarios.append({
+            "usuario": usuario,
+            "contagem": contagem,
+            "total": total_usuario,
+            "sucesso": sucesso_usuario,
+            "taxa_sucesso": taxa_usuario
+        })
+
+    total = sum(total_geral.values())
+    sucesso = sum(total_geral.get(status, 0) for status in STATUS_SUCESSO)
+    taxa_sucesso = (sucesso / total * 100) if total else 0
+
+    usuarios = sorted(usuarios, key=lambda item: item["total"], reverse=True)
+
+    return {
+        "data": data,
+        "usuarios": usuarios,
+        "contagem": total_geral,
+        "total": total,
+        "sucesso": sucesso,
+        "taxa_sucesso": taxa_sucesso
+    }
+
+
+def resumo_evolucao_diaria_perfis_meta(dias=15, perfis=None):
+    labels = []
+    valores = []
+    sucessos = []
+
+    hoje = datetime.now()
+
+    for indice in range(dias - 1, -1, -1):
+        data_obj = hoje - timedelta(days=indice)
+        data_chave = data_obj.strftime("%Y-%m-%d")
+        data_label = data_obj.strftime("%d/%m")
+        resumo = resumo_perfis_meta_do_dia(data_chave, perfis)
+
+        labels.append(data_label)
+        valores.append(resumo["total"])
+        sucessos.append(resumo["sucesso"])
+
+    return {
+        "labels": labels,
+        "valores": valores,
+        "sucessos": sucessos
+    }
+
+
+def cnpjs_usados_por_perfis_meta(perfis=None):
+    if perfis is None:
+        perfis = carregar_perfis_meta()
+
+    usados = set()
+
+    for perfil in perfis:
+        cnpj = limpar_cnpj(perfil.get("cnpj_limpo", "")) if perfil.get("cnpj_limpo") else ""
+
+        if cnpj and cnpj != "00000000000000":
+            usados.add(cnpj)
+
+    return usados
+
+
 def calcular_top_ufs(df, limite=10):
     if "uf" not in df.columns or len(df) == 0:
         return {"labels": [], "valores": []}
@@ -1481,14 +1701,32 @@ def calcular_top_ufs(df, limite=10):
     }
 
 
-def calcular_dashboard_master(df):
+def calcular_dashboard_master(df, estatisticas=None, perfis_meta=None):
     total_base = len(df)
     total_favoritos = int(df["favorito"].sum()) if "favorito" in df.columns else 0
-    total_usados = len(df[df["bm_utilizada"] == True]) if "bm_utilizada" in df.columns else 0
-    total_disponiveis = len(df[df["bm_utilizada"] == False]) if "bm_utilizada" in df.columns else 0
     capital_medio = df["capital_social_num"].mean() if len(df) else 0
 
-    estatisticas = estatisticas_gerais()
+    cnpjs_usados = set()
+
+    if "cnpj_limpo" in df.columns and "bm_utilizada" in df.columns:
+        cnpjs_usados.update(
+            str(cnpj)
+            for cnpj in df[df["bm_utilizada"] == True]["cnpj_limpo"].dropna().astype(str).tolist()
+            if str(cnpj).strip()
+        )
+
+    cnpjs_usados.update(cnpjs_usados_por_perfis_meta(perfis_meta))
+
+    if "cnpj_limpo" in df.columns:
+        cnpjs_base = set(df["cnpj_limpo"].dropna().astype(str).tolist())
+        total_usados = len(cnpjs_usados.intersection(cnpjs_base))
+    else:
+        total_usados = len(cnpjs_usados)
+
+    total_disponiveis = max(0, total_base - total_usados)
+
+    if estatisticas is None:
+        estatisticas = estatisticas_gerais_perfis_meta(perfis_meta)
 
     total_250 = estatisticas["contagem"].get("Verificou 250", 0)
     total_2k = estatisticas["contagem"].get("Verificou 2k", 0)
@@ -6350,11 +6588,14 @@ def master():
     df = carregar_base()
     df = df.sort_values(by="capital_social_num", ascending=False)
 
+    perfis_meta = carregar_perfis_meta()
+    estatisticas_meta = estatisticas_gerais_perfis_meta(perfis_meta)
+
     contexto = montar_contexto(df, df)
-    contexto["estatisticas_gerais"] = estatisticas_gerais()
-    contexto["historico_hoje"] = resumo_historico_do_dia()
-    contexto["dashboard_master"] = calcular_dashboard_master(df)
-    contexto["evolucao_diaria"] = resumo_evolucao_diaria(15)
+    contexto["estatisticas_gerais"] = estatisticas_meta
+    contexto["historico_hoje"] = resumo_perfis_meta_do_dia(perfis=perfis_meta)
+    contexto["dashboard_master"] = calcular_dashboard_master(df, estatisticas_meta, perfis_meta)
+    contexto["evolucao_diaria"] = resumo_evolucao_diaria_perfis_meta(15, perfis_meta)
     contexto["top_ufs"] = calcular_top_ufs(df, 10)
 
     return render_template("master.html", **contexto)
