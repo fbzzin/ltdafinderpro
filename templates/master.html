@@ -2,7 +2,11 @@
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Dashboard Master - LTDAFinder Pro</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
@@ -46,6 +50,22 @@
     </aside>
 
     <main class="main">
+
+        {% set status_classes = {
+            "Disponível": "st-disponivel",
+            "BM em Análise": "st-bm-analise",
+            "Usado em BM": "st-usado-bm",
+            "Verificou 250": "st-v-250",
+            "Verificou 2k": "st-v-2k",
+            "Verificou 100k": "st-v-100k",
+            "Precisa de mais informações": "st-mais-info",
+            "Análise permanente": "st-analise-perm",
+            "Restrito": "st-restrito",
+            "WABA restrita": "st-waba-restrita",
+            "Conta desabilitada": "st-desabilitada",
+            "Checkpoint": "st-checkpoint",
+            "Descartado": "st-descartado"
+        } %}
 
         <header class="topbar">
             <div class="topbar-flex">
@@ -223,7 +243,7 @@
                 <tbody>
                     {% for item in dashboard_master.ranking_status %}
                     <tr>
-                        <td>{{ item.status }}</td>
+                        <td><span class="badge {{ status_classes.get(item.status, 'badge-neutral') }}">{{ item.status }}</span></td>
                         <td>{{ item.quantidade }}</td>
                         <td>{{ "%.1f"|format(item.percentual) }}%</td>
                     </tr>
