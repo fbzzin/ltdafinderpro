@@ -603,19 +603,19 @@
                     </div>
 
                     <div>
-                        <label>Nome do domínio Cloudflare</label>
+                        <label>Subdomínio no domínio próprio</label>
                         <input
                             type="text"
                             name="cloudflare_slug"
                             id="cloudflareSlugInput"
                             value="{{ cloudflare_slug }}"
-                            placeholder="Ex: perolla"
+                            placeholder="Ex: denisesantoslopes"
                             pattern="[a-zA-Z0-9-]{3,63}"
                             title="Use apenas letras, números e hífens. Mínimo 3 e máximo 63 caracteres."
-                            data-subdomain="{{ cloudflare_subdomain }}"
+                            data-public-domain="{{ cloudflare_public_domain }}"
                         >
                         <small style="display:block; margin-top:7px; color:var(--site-muted); line-height:1.45;">
-                            O link ficará assim: <strong id="cloudflareSlugPreview" style="color:#fff;">{{ cloudflare_slug or 'nome-escolhido' }}.{{ cloudflare_subdomain }}.workers.dev</strong>.
+                            O link ficará assim: <strong id="cloudflareSlugPreview" style="color:#fff;">{{ cloudflare_slug or 'nome-escolhido' }}.{{ cloudflare_public_domain }}</strong>.
                         </small>
                     </div>
 
@@ -710,10 +710,10 @@
     function atualizarPreviewCloudflare() {
         if (!cloudflareSlugInput || !cloudflareSlugPreview) return;
 
-        const subdomain = cloudflareSlugInput.dataset.subdomain || "portalempresarial";
+        const publicDomain = cloudflareSlugInput.dataset.publicDomain || "espacoempresarial.com";
         const slugLimpo = limparSlugCloudflare(cloudflareSlugInput.value) || "nome-escolhido";
 
-        cloudflareSlugPreview.textContent = `${slugLimpo}.${subdomain}.workers.dev`;
+        cloudflareSlugPreview.textContent = `${slugLimpo}.${publicDomain}`;
     }
 
     if (cloudflareSlugInput) {

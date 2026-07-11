@@ -2033,6 +2033,8 @@ def criar_tabela_sites_gerados():
             "cloudflare_slug_personalizado": "TEXT",
             "cloudflare_worker_name": "TEXT",
             "cloudflare_url": "TEXT",
+            "cloudflare_dominio_base": "TEXT",
+            "cloudflare_hostname": "TEXT",
             "cloudflare_status": "TEXT DEFAULT 'Não publicado'",
             "cloudflare_publicado_em": "TIMESTAMP",
             "cloudflare_erro": "TEXT"
@@ -3770,18 +3772,49 @@ addEventListener("fetch", event => {{
 """
 
 
+def normalizar_dominio_cloudflare(dominio):
+    dominio = valor_texto(dominio, "").lower()
+    dominio = dominio.replace("https://", "").replace("http://", "")
+    dominio = dominio.split("/")[0].strip().strip(".")
+    dominio = re.sub(r"[^a-z0-9.-]+", "", dominio)
+    dominio = re.sub(r"\.{2,}", ".", dominio).strip(".")
+    return dominio
+
+
 def obter_config_cloudflare():
     account_id = valor_texto(os.environ.get("CLOUDFLARE_ACCOUNT_ID", ""))
     api_token = valor_texto(os.environ.get("CLOUDFLARE_API_TOKEN", ""))
+
     subdomain = valor_texto(os.environ.get("CLOUDFLARE_WORKERS_SUBDOMAIN", ""))
     subdomain = subdomain.replace("https://", "").replace("http://", "").strip().lower()
     subdomain = subdomain.replace(".workers.dev", "").strip("/")
 
+    custom_domain = normalizar_dominio_cloudflare(
+        os.environ.get("CLOUDFLARE_CUSTOM_DOMAIN", "espacoempresarial.com")
+    )
+    zone_id = valor_texto(os.environ.get("CLOUDFLARE_ZONE_ID", ""))
+    zone_name = normalizar_dominio_cloudflare(
+        os.environ.get("CLOUDFLARE_ZONE_NAME", custom_domain)
+    )
+
     return {
         "account_id": account_id,
         "api_token": api_token,
-        "subdomain": subdomain
+        "subdomain": subdomain,
+        "custom_domain": custom_domain,
+        "zone_id": zone_id,
+        "zone_name": zone_name or custom_domain
     }
+
+
+def dominio_publicacao_cloudflare(config=None):
+    config = config or obter_config_cloudflare()
+
+    if config.get("custom_domain"):
+        return config.get("custom_domain")
+
+    subdomain = config.get("subdomain") or "portalempresarial"
+    return f"{subdomain}.workers.dev"
 
 
 def validar_config_cloudflare():
@@ -3794,7 +3827,10 @@ def validar_config_cloudflare():
     if not config["api_token"]:
         faltando.append("CLOUDFLARE_API_TOKEN")
 
-    if not config["subdomain"]:
+    if config.get("custom_domain"):
+        if not config.get("zone_id"):
+            faltando.append("CLOUDFLARE_ZONE_ID")
+    elif not config["subdomain"]:
         faltando.append("CLOUDFLARE_WORKERS_SUBDOMAIN")
 
     if faltando:
@@ -3839,6 +3875,14 @@ def atualizar_publicacao_cloudflare_site(site_id, status, worker_name="", cloudf
                     END,
                     cloudflare_worker_name = :worker_name,
                     cloudflare_url = :cloudflare_url,
+                    cloudflare_dominio_base = CASE
+                        WHEN :dominio_base != '' THEN :dominio_base
+                        ELSE cloudflare_dominio_base
+                    END,
+                    cloudflare_hostname = CASE
+                        WHEN :hostname != '' THEN :hostname
+                        ELSE cloudflare_hostname
+                    END,
                     cloudflare_status = :status,
                     cloudflare_erro = :erro,
                     cloudflare_publicado_em = CASE
@@ -3851,11 +3895,42 @@ def atualizar_publicacao_cloudflare_site(site_id, status, worker_name="", cloudf
                 "slug_personalizado": slug_personalizado,
                 "worker_name": worker_name,
                 "cloudflare_url": cloudflare_url,
+                "dominio_base": normalizar_dominio_cloudflare(os.environ.get("CLOUDFLARE_CUSTOM_DOMAIN", "espacoempresarial.com")),
+                "hostname": cloudflare_url.replace("https://", "").replace("http://", "").strip("/"),
                 "status": status,
                 "erro": erro,
                 "site_id": site_id
             }
         )
+
+
+def anexar_dominio_customizado_cloudflare(config, worker_name, hostname):
+    url = f"https://api.cloudflare.com/client/v4/accounts/{config['account_id']}/workers/domains"
+    resposta = requests.put(
+        url,
+        headers={
+            "Authorization": f"Bearer {config['api_token']}",
+            "Content-Type": "application/json"
+        },
+        json={
+            "hostname": hostname,
+            "service": worker_name,
+            "zone_id": config.get("zone_id", ""),
+            "zone_name": config.get("zone_name", "") or config.get("custom_domain", "")
+        },
+        timeout=45
+    )
+
+    try:
+        payload = resposta.json()
+    except Exception:
+        payload = {}
+
+    if not resposta.ok or payload.get("success") is False:
+        erro = resumir_erros_cloudflare(payload, resposta.text)
+        raise RuntimeError(f"Worker enviado, mas falhou ao vincular o domínio {hostname}: {erro}")
+
+    return payload
 
 
 def publicar_site_na_cloudflare(site, nome_personalizado=""):
@@ -3886,6 +3961,18 @@ def publicar_site_na_cloudflare(site, nome_personalizado=""):
         erro = resumir_erros_cloudflare(payload, resposta.text)
         raise RuntimeError(erro)
 
+    if config.get("custom_domain"):
+        hostname = f"{worker_name}.{config['custom_domain']}"
+        anexar_dominio_customizado_cloudflare(config, worker_name, hostname)
+
+        return {
+            "worker_name": worker_name,
+            "cloudflare_url": f"https://{hostname}",
+            "aviso": "",
+            "hostname": hostname,
+            "dominio_base": config["custom_domain"]
+        }
+
     aviso_subdominio = ""
 
     try:
@@ -3915,7 +4002,9 @@ def publicar_site_na_cloudflare(site, nome_personalizado=""):
     return {
         "worker_name": worker_name,
         "cloudflare_url": cloudflare_url,
-        "aviso": aviso_subdominio
+        "aviso": aviso_subdominio,
+        "hostname": cloudflare_url.replace("https://", ""),
+        "dominio_base": dominio_publicacao_cloudflare(config)
     }
 
 
@@ -3997,6 +4086,8 @@ def salvar_site_gerado(dados):
         "cloudflare_slug_personalizado",
         "cloudflare_worker_name",
         "cloudflare_url",
+        "cloudflare_dominio_base",
+        "cloudflare_hostname",
         "cloudflare_status",
         "cloudflare_erro"
     ]
@@ -7434,6 +7525,7 @@ def gerador_site(cnpj):
         endereco_site=endereco_site,
         cloudflare_slug=cloudflare_slug,
         cloudflare_subdomain=obter_config_cloudflare().get("subdomain") or "portalempresarial",
+        cloudflare_public_domain=dominio_publicacao_cloudflare(),
         erro=erro
     )
 
@@ -7457,6 +7549,7 @@ def site_gerado_preview(site_id):
         modelo_site_nome=modelo_site_nome,
         sugestao_worker=sugerir_nome_worker_site(site),
         cloudflare_subdomain=obter_config_cloudflare().get("subdomain") or "portalempresarial",
+        cloudflare_public_domain=dominio_publicacao_cloudflare(),
         cloudflare_msg=request.args.get("cloudflare_msg", ""),
         cloudflare_erro=request.args.get("cloudflare_erro", "")
     )

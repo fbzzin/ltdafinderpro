@@ -511,7 +511,7 @@
 
                     <div>
                         <h1>Site Gerado</h1>
-                        <p>Preview, download do HTML e publicação automática no Cloudflare Workers.</p>
+                        <p>Preview, download do HTML e publicação automática no Cloudflare Workers + domínio próprio.</p>
                     </div>
                 </div>
             </div>
@@ -554,14 +554,14 @@
                             name="cloudflare_slug"
                             id="cloudflareSlugInput"
                             value="{{ site.cloudflare_slug_personalizado or site.cloudflare_worker_name or sugestao_worker }}"
-                            placeholder="nome-do-dominio"
+                            placeholder="denisesantoslopes"
                             pattern="[a-zA-Z0-9-]{3,63}"
                             title="Use apenas letras, números e hífens. Mínimo 3 e máximo 63 caracteres."
-                            data-subdomain="{{ cloudflare_subdomain }}"
+                            data-public-domain="{{ cloudflare_public_domain }}"
                             style="width:100%; border:1px solid rgba(112,175,255,.24); border-radius:15px; padding:13px 14px; background:rgba(4,16,30,.90); color:#eef7ff;"
                         >
                         <small style="color:var(--site-muted); line-height:1.45;">
-                            O link ficará assim: <strong id="cloudflareSlugPreview" style="color:#fff;">{{ (site.cloudflare_slug_personalizado or site.cloudflare_worker_name or sugestao_worker) }}.{{ cloudflare_subdomain }}.workers.dev</strong>
+                            O link ficará assim: <strong id="cloudflareSlugPreview" style="color:#fff;">{{ (site.cloudflare_slug_personalizado or site.cloudflare_worker_name or sugestao_worker) }}.{{ cloudflare_public_domain }}</strong>
                         </small>
                     </div>
                     <button type="submit" class="btn-site-main">☁️ Publicar na Cloudflare</button>
@@ -597,12 +597,12 @@
         </section>
 
         <section class="site-box">
-            <h2>Cloudflare Workers</h2>
+            <h2>Cloudflare Workers + domínio próprio</h2>
 
             <div class="site-list-card" style="margin-bottom:14px; border-color:rgba(70,229,193,.22);">
                 <div>
                     <h3>Nome escolhido para o domínio</h3>
-                    <p>Antes de publicar, você pode escolher o nome que vem antes de <strong style="color:#fff;">.{{ cloudflare_subdomain }}.workers.dev</strong>.</p>
+                    <p>Antes de publicar, você escolhe o subdomínio que vem antes de <strong style="color:#fff;">.{{ cloudflare_public_domain }}</strong>.</p>
                 </div>
             </div>
 
@@ -632,8 +632,8 @@
             </div>
 
             <p style="margin:0; color:var(--site-muted); line-height:1.6;">
-                O botão <strong style="color:#fff;">Publicar na Cloudflare</strong> envia o site direto pela API e retorna o link
-                <strong style="color:#fff;">workers.dev</strong>. O ZIP continua disponível como backup manual.
+                O botão <strong style="color:#fff;">Publicar na Cloudflare</strong> envia o site pela API e vincula o Worker ao domínio próprio
+                <strong style="color:#fff;">{{ cloudflare_public_domain }}</strong>. O ZIP continua disponível como backup manual.
             </p>
         </section>
 
@@ -719,10 +719,10 @@
     function atualizarPreviewCloudflare() {
         if (!cloudflareSlugInput || !cloudflareSlugPreview) return;
 
-        const subdomain = cloudflareSlugInput.dataset.subdomain || "portalempresarial";
+        const publicDomain = cloudflareSlugInput.dataset.publicDomain || "espacoempresarial.com";
         const slugLimpo = limparSlugCloudflare(cloudflareSlugInput.value) || "nome-do-dominio";
 
-        cloudflareSlugPreview.textContent = `${slugLimpo}.${subdomain}.workers.dev`;
+        cloudflareSlugPreview.textContent = `${slugLimpo}.${publicDomain}`;
     }
 
     if (cloudflareSlugInput) {
