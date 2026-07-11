@@ -3933,6 +3933,126 @@ def anexar_dominio_customizado_cloudflare(config, worker_name, hostname):
     return payload
 
 
+
+
+def cloudflare_headers_json(config):
+    return {
+        "Authorization": f"Bearer {config['api_token']}",
+        "Content-Type": "application/json"
+    }
+
+
+def dns_record_ja_existe_cloudflare(mensagem):
+    mensagem = valor_texto(mensagem, "").lower()
+    termos = [
+        "record already exists",
+        "already exists",
+        "an identical record already exists",
+        "dns record already exists",
+        "existing dns record"
+    ]
+    return any(termo in mensagem for termo in termos)
+
+
+def criar_dns_proxied_para_worker_route(config, hostname):
+    """
+    Worker Routes precisam que exista um DNS record para o hostname.
+    Criamos um A record proxied apontando para 192.0.2.1, IP reservado
+    usado apenas como alvo neutro, porque o Worker Route intercepta a requisição.
+    """
+    url = f"https://api.cloudflare.com/client/v4/zones/{config['zone_id']}/dns_records"
+    resposta = requests.post(
+        url,
+        headers=cloudflare_headers_json(config),
+        json={
+            "type": "A",
+            "name": hostname,
+            "content": "192.0.2.1",
+            "ttl": 1,
+            "proxied": True,
+            "comment": "LTDAFinder Pro - DNS automático para Worker Route"
+        },
+        timeout=30
+    )
+
+    try:
+        payload = resposta.json()
+    except Exception:
+        payload = {}
+
+    if resposta.ok and payload.get("success") is not False:
+        return payload
+
+    erro = resumir_erros_cloudflare(payload, resposta.text)
+
+    if dns_record_ja_existe_cloudflare(erro):
+        return payload
+
+    raise RuntimeError(f"Falhou ao criar DNS proxied para {hostname}: {erro}")
+
+
+def buscar_rota_worker_cloudflare(config, pattern):
+    url = f"https://api.cloudflare.com/client/v4/zones/{config['zone_id']}/workers/routes"
+    resposta = requests.get(
+        url,
+        headers=cloudflare_headers_json(config),
+        params={"per_page": 100},
+        timeout=30
+    )
+
+    try:
+        payload = resposta.json()
+    except Exception:
+        payload = {}
+
+    if not resposta.ok or payload.get("success") is False:
+        return None
+
+    for rota in payload.get("result", []) or []:
+        if rota.get("pattern") == pattern:
+            return rota
+
+    return None
+
+
+def anexar_rota_worker_cloudflare(config, worker_name, hostname):
+    """
+    Fallback mais estável para muitos subdomínios:
+    cria/atualiza uma Worker Route: subdominio.dominio.com/* -> worker_name.
+    """
+    criar_dns_proxied_para_worker_route(config, hostname)
+
+    pattern = f"{hostname}/*"
+    rota_existente = buscar_rota_worker_cloudflare(config, pattern)
+
+    if rota_existente and rota_existente.get("id"):
+        url = f"https://api.cloudflare.com/client/v4/zones/{config['zone_id']}/workers/routes/{rota_existente['id']}"
+        metodo = requests.put
+    else:
+        url = f"https://api.cloudflare.com/client/v4/zones/{config['zone_id']}/workers/routes"
+        metodo = requests.post
+
+    resposta = metodo(
+        url,
+        headers=cloudflare_headers_json(config),
+        json={
+            "pattern": pattern,
+            "script": worker_name
+        },
+        timeout=30
+    )
+
+    try:
+        payload = resposta.json()
+    except Exception:
+        payload = {}
+
+    if not resposta.ok or payload.get("success") is False:
+        erro = resumir_erros_cloudflare(payload, resposta.text)
+        raise RuntimeError(f"Worker enviado, mas falhou ao criar rota {pattern}: {erro}")
+
+    return payload
+
 def publicar_site_na_cloudflare(site, nome_personalizado=""):
     config = validar_config_cloudflare()
     worker_name = gerar_nome_worker_site(site, nome_personalizado)
@@ -3963,12 +4083,25 @@ def publicar_site_na_cloudflare(site, nome_personalizado=""):
 
     if config.get("custom_domain"):
         hostname = f"{worker_name}.{config['custom_domain']}"
-        anexar_dominio_customizado_cloudflare(config, worker_name, hostname)
+        modo_publicacao = valor_texto(os.environ.get("CLOUDFLARE_PUBLISH_MODE", "route")).lower()
+        aviso_publicacao = ""
+
+        if modo_publicacao in ["custom", "custom_domain", "domain"]:
+            try:
+                anexar_dominio_customizado_cloudflare(config, worker_name, hostname)
+                modo_usado = "Custom Domain"
+            except Exception as erro_custom_domain:
+                anexar_rota_worker_cloudflare(config, worker_name, hostname)
+                modo_usado = "Worker Route"
+                aviso_publicacao = f"Custom Domain falhou, então publiquei via Worker Route: {erro_custom_domain}"
+        else:
+            anexar_rota_worker_cloudflare(config, worker_name, hostname)
+            modo_usado = "Worker Route"
 
         return {
             "worker_name": worker_name,
             "cloudflare_url": f"https://{hostname}",
-            "aviso": "",
+            "aviso": aviso_publicacao or f"Publicado via {modo_usado}",
             "hostname": hostname,
             "dominio_base": config["custom_domain"]
         }
