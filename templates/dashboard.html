@@ -31,6 +31,7 @@
                 <a class="menu-item" href="/usados">📌 Meus CNPJs Usados</a>
                 <a class="menu-item" href="/favoritos">⭐ Favoritos</a>
                 <a class="menu-item" href="/perfis-meta">👤 Perfis Meta</a>
+                <a class="menu-item" href="/ia-operacional">🧠 IA Operacional</a>
                 <a class="menu-item" href="/relatorios-bm">📄 Relatórios BM</a>
                 <a class="menu-item" href="/sites">🌐 Gerador de Sites</a>
                 <a class="menu-item" href="/historico">📜 Histórico</a>
@@ -257,9 +258,10 @@
 
                     <div class="empresa-col empresa-ia-col">
                         <span class="label-mini">IA Operacional</span>
-                        <span class="ia-badge ia-{{ empresa.ia_classe }}">
+                        <span class="ia-badge ia-{{ empresa.ia_classe }}" title="Regras: {{ empresa.score_ia_regras }}/100 · Histórico: {{ empresa.score_ia_historico }}/100 · Confiança: {{ empresa.ia_confianca_historica }}%">
                             <strong>{{ empresa.score_ia }}/100</strong>
                             <small>{{ empresa.ia_recomendacao }}</small>
+                            <small style="margin-top:4px; opacity:.78;">R {{ empresa.score_ia_regras }} · H {{ empresa.score_ia_historico }}</small>
                         </span>
                     </div>
 
@@ -315,7 +317,7 @@
                             <button
                                 class="btn-acao btn-copiar"
                                 title="Copiar dados"
-                                data-texto="Empresa: {{ empresa.razao_social }} | CNPJ: {{ empresa.cnpj_formatado }} | Score IA: {{ empresa.score_ia }}/100 | Recomendação IA: {{ empresa.ia_recomendacao }} | Meu Status BM: {{ empresa.status_bm }} | Histórico global: {{ empresa.usado_por }} | Sócio: {{ empresa.nome_socio }} | Telefone: {{ empresa.telefone_formatado }} | Email: {{ empresa.email }} | Endereço: {{ empresa.endereco_completo }} | Capital: {{ empresa.capital_formatado }}"
+                                data-texto="Empresa: {{ empresa.razao_social }} | CNPJ: {{ empresa.cnpj_formatado }} | Score IA final: {{ empresa.score_ia }}/100 | Score regras: {{ empresa.score_ia_regras }}/100 | Score histórico: {{ empresa.score_ia_historico }}/100 | Confiança histórica: {{ empresa.ia_confianca_historica }}% | Recomendação IA: {{ empresa.ia_recomendacao }} | Meu Status BM: {{ empresa.status_bm }} | Histórico global: {{ empresa.usado_por }} | Sócio: {{ empresa.nome_socio }} | Telefone: {{ empresa.telefone_formatado }} | Email: {{ empresa.email }} | Endereço: {{ empresa.endereco_completo }} | Capital: {{ empresa.capital_formatado }}"
                             >
                                 📋
                             </button>

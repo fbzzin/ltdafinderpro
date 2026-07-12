@@ -25,6 +25,7 @@ from database_utils import (
     salvar_status,
     remover_status
 )
+from ia_operacional import construir_modelo_ia, avaliar_historico_empresa
 
 app = Flask(__name__)
 app.secret_key = "ltdafinder-pro-chave-local"
@@ -421,6 +422,52 @@ def salvar_perfis_meta(perfis):
             perfil["fuso_horario"] = NOME_FUSO_BRASILIA
 
     salvar_dados_postgres("perfis_meta", perfis)
+
+
+_CACHE_MODELO_IA = {
+    "assinatura": None,
+    "modelo": None,
+}
+
+
+def assinatura_modelo_ia(perfis):
+    itens = []
+
+    for perfil in perfis if isinstance(perfis, list) else []:
+        itens.append((
+            str(perfil.get("id", "")),
+            str(perfil.get("cnpj_limpo", "")),
+            str(perfil.get("status_bm", "")),
+            str(perfil.get("status_bm_atualizado_em", "")),
+            str(perfil.get("atualizado_em", "")),
+        ))
+
+    return hash(tuple(sorted(itens)))
+
+
+def obter_modelo_ia_operacional(forcar=False):
+    perfis = carregar_perfis_meta()
+
+    try:
+        versao_base = BASE_FINAL.stat().st_mtime_ns
+    except Exception:
+        versao_base = 0
+
+    assinatura = (assinatura_modelo_ia(perfis), versao_base)
+
+    if (
+        not forcar
+        and _CACHE_MODELO_IA.get("modelo") is not None
+        and _CACHE_MODELO_IA.get("assinatura") == assinatura
+    ):
+        return _CACHE_MODELO_IA["modelo"]
+
+    modelo = construir_modelo_ia(perfis, BASE_FINAL)
+    modelo["gerado_em"] = texto_data_hora_brasilia()
+
+    _CACHE_MODELO_IA["assinatura"] = assinatura
+    _CACHE_MODELO_IA["modelo"] = modelo
+    return modelo
 
 
 def gerar_id_perfil():
@@ -1015,10 +1062,10 @@ def usuarios_que_usaram(status_geral, cnpj):
     return usados
 
 
-def avaliar_ia_empresa(empresa):
-    score = 40
-    motivos = []
-    pontos_atencao = []
+def avaliar_ia_empresa(empresa, modelo_ia=None, detalhado=False):
+    score_regras = 40
+    motivos_regras = []
+    pontos_regras = []
 
     capital = float(empresa.get("capital_social_num", 0) or 0)
     idade = int(empresa.get("idade_empresa", 0) or 0)
@@ -1029,94 +1076,89 @@ def avaliar_ia_empresa(empresa):
     usado_global = bool(empresa.get("usado_global", False))
 
     if capital >= 1000000:
-        score += 25
-        motivos.append("Capital social acima de R$ 1 milhão")
+        score_regras += 25
+        motivos_regras.append("Capital social acima de R$ 1 milhão")
     elif capital >= 500000:
-        score += 20
-        motivos.append("Capital social acima de R$ 500 mil")
+        score_regras += 20
+        motivos_regras.append("Capital social acima de R$ 500 mil")
     elif capital >= 100000:
-        score += 10
-        motivos.append("Capital social acima de R$ 100 mil")
+        score_regras += 10
+        motivos_regras.append("Capital social acima de R$ 100 mil")
     else:
-        pontos_atencao.append("Capital social baixo")
+        pontos_regras.append("Capital social baixo")
 
     if telefone:
-        score += 10
-        motivos.append("Possui telefone cadastrado")
+        score_regras += 10
+        motivos_regras.append("Possui telefone cadastrado")
     else:
-        pontos_atencao.append("Telefone não encontrado")
+        pontos_regras.append("Telefone não encontrado")
 
     if email:
-        score += 10
-        motivos.append("Possui e-mail cadastrado")
+        score_regras += 10
+        motivos_regras.append("Possui e-mail cadastrado")
     else:
-        pontos_atencao.append("E-mail não encontrado")
+        pontos_regras.append("E-mail não encontrado")
 
     if idade >= 5:
-        score += 15
-        motivos.append("Empresa consolidada com mais de 5 anos")
+        score_regras += 15
+        motivos_regras.append("Empresa consolidada com mais de 5 anos")
     elif idade >= 2:
-        score += 10
-        motivos.append("Empresa com mais de 2 anos")
+        score_regras += 10
+        motivos_regras.append("Empresa com mais de 2 anos")
     elif idade >= 1:
-        score += 5
-        motivos.append("Empresa com mais de 1 ano")
+        score_regras += 5
+        motivos_regras.append("Empresa com mais de 1 ano")
     else:
-        pontos_atencao.append("Empresa muito recente")
+        pontos_regras.append("Empresa muito recente")
 
     if categoria and categoria.lower() not in ["outros", "indefinido", ""]:
-        score += 5
-        motivos.append("Categoria CNAE identificada")
+        score_regras += 5
+        motivos_regras.append("Categoria CNAE identificada")
     else:
-        pontos_atencao.append("Categoria pouco específica")
+        pontos_regras.append("Categoria pouco específica")
 
     if usado_global:
-        score -= 20
-        pontos_atencao.append("Este CNPJ já possui histórico global de uso")
+        score_regras -= 20
+        pontos_regras.append("Este CNPJ já possui histórico global de uso")
 
-    if status_bm == "BM em Análise":
-        score -= 15
-        pontos_atencao.append("Este CNPJ já está em BM em Análise")
-    elif status_bm == "Usado em BM":
-        score -= 20
-        pontos_atencao.append("Este CNPJ já foi usado em BM")
-    elif status_bm == "Verificou 250":
-        score -= 10
-        pontos_atencao.append("Este CNPJ já verificou 250")
-    elif status_bm == "Verificou 2k":
-        score -= 10
-        pontos_atencao.append("Este CNPJ já verificou 2k")
-    elif status_bm == "Verificou 100k":
-        score -= 10
-        pontos_atencao.append("Este CNPJ já verificou 100k")
-    elif status_bm == "Restrito":
-        score -= 55
-        pontos_atencao.append("Histórico de restrição")
-    elif status_bm == "Checkpoint":
-        score -= 45
-        pontos_atencao.append("Histórico de checkpoint")
-    elif status_bm == "Descartado":
-        score -= 60
-        pontos_atencao.append("Marcado como descartado")
-    elif status_bm == "Precisa de mais informações":
-        score -= 40
-        pontos_atencao.append("Histórico de precisa de mais informações")
-    elif status_bm == "Análise permanente":
-        score -= 45
-        pontos_atencao.append("Histórico de análise permanente")
-    elif status_bm == "WABA restrita":
-        score -= 50
-        pontos_atencao.append("Histórico de WABA restrita")
-    elif status_bm == "Conta desabilitada":
-        score -= 55
-        pontos_atencao.append("Histórico de conta desabilitada")
+    penalidades_status = {
+        "BM em Análise": (-15, "Este CNPJ já está em BM em Análise"),
+        "Usado em BM": (-20, "Este CNPJ já foi usado em BM"),
+        "Verificou 250": (-10, "Este CNPJ já verificou 250"),
+        "Verificou 2k": (-10, "Este CNPJ já verificou 2k"),
+        "Verificou 100k": (-10, "Este CNPJ já verificou 100k"),
+        "Restrito": (-55, "Histórico de restrição"),
+        "Checkpoint": (-45, "Histórico de checkpoint"),
+        "Descartado": (-60, "Marcado como descartado"),
+        "Precisa de mais informações": (-40, "Histórico de precisa de mais informações"),
+        "Análise permanente": (-45, "Histórico de análise permanente"),
+        "WABA restrita": (-50, "Histórico de WABA restrita"),
+        "Conta desabilitada": (-55, "Histórico de conta desabilitada"),
+    }
 
+    if status_bm in penalidades_status:
+        pontos, descricao = penalidades_status[status_bm]
+        score_regras += pontos
+        pontos_regras.append(descricao)
+
+    score_regras = max(0, min(100, int(score_regras)))
+    modelo_ia = modelo_ia or obter_modelo_ia_operacional()
+    historico = avaliar_historico_empresa(empresa, modelo_ia, detalhado=detalhado)
+
+    fase = modelo_ia.get("fase", {}) if modelo_ia else {}
+    peso_historico = float(fase.get("peso_historico", 0) or 0)
+    peso_regras = float(fase.get("peso_regras", 1) or 1)
+
+    score_historico = int(historico.get("score_historico", 50) or 50)
+    score = round((score_regras * peso_regras) + (score_historico * peso_historico))
     score = max(0, min(100, int(score)))
 
-    if status_bm in ["Restrito", "WABA restrita", "Conta desabilitada", "Checkpoint", "Descartado", "Precisa de mais informações", "Análise permanente"]:
+    if status_bm in STATUS_NEGATIVOS:
+        score = min(score, 25)
         recomendacao = "🔴 Evitar"
         classe = "evitar"
     elif status_bm != STATUS_PADRAO or usado_global:
+        score = min(score, 59)
         recomendacao = "🟡 Atenção"
         classe = "atencao"
     elif score >= 80:
@@ -1129,16 +1171,40 @@ def avaliar_ia_empresa(empresa):
         recomendacao = "🔴 Evitar"
         classe = "evitar"
 
-    if not motivos:
-        motivos.append("Dados insuficientes para recomendação forte")
+    if not motivos_regras:
+        motivos_regras.append("Dados insuficientes para recomendação forte")
 
-    return {
+    motivos_historicos = list(historico.get("motivos", []))
+    pontos_historicos = list(historico.get("pontos_atencao", []))
+
+    resultado = {
         "score_ia": score,
+        "score_ia_regras": score_regras,
+        "score_ia_historico": score_historico,
+        "ia_peso_regras": round(peso_regras * 100),
+        "ia_peso_historico": round(peso_historico * 100),
         "ia_recomendacao": recomendacao,
         "ia_classe": classe,
-        "ia_motivos": motivos,
-        "ia_pontos_atencao": pontos_atencao
+        "ia_confianca_historica": historico.get("confianca", 0),
+        "ia_amostras_semelhantes": historico.get("amostras_semelhantes", 0),
+        "ia_taxa_estimada": historico.get("taxa_estimada", 50.0),
+        "ia_resultado_mais_comum": historico.get("resultado_mais_comum", "Sem dados"),
+        "ia_fase": fase.get("nome", "Fase 1 · Regras fixas"),
+        "ia_total_amostras": modelo_ia.get("total_concluidas", 0) if modelo_ia else 0,
     }
+
+    if detalhado:
+        resultado.update({
+            "ia_motivos": motivos_regras + [f"Histórico: {item}" for item in motivos_historicos],
+            "ia_pontos_atencao": pontos_regras + [f"Histórico: {item}" for item in pontos_historicos],
+            "ia_motivos_regras": motivos_regras,
+            "ia_pontos_regras": pontos_regras,
+            "ia_motivos_historicos": motivos_historicos,
+            "ia_pontos_historicos": pontos_historicos,
+            "ia_fatores_historicos": historico.get("fatores", []),
+        })
+
+    return resultado
 
 
 
@@ -1404,13 +1470,27 @@ def carregar_base():
     df["idade_empresa"] = df["data_inicio"].apply(calcular_idade_empresa)
     df["data_inicio_formatada"] = df["data_inicio"].apply(formatar_data_brasil)
 
-    avaliacoes = df.apply(lambda linha: avaliar_ia_empresa(linha.to_dict()), axis=1)
+    modelo_ia = obter_modelo_ia_operacional()
+    avaliacoes = df.apply(lambda linha: avaliar_ia_empresa(linha.to_dict(), modelo_ia), axis=1)
 
-    df["score_ia"] = avaliacoes.apply(lambda item: item["score_ia"])
-    df["ia_recomendacao"] = avaliacoes.apply(lambda item: item["ia_recomendacao"])
-    df["ia_classe"] = avaliacoes.apply(lambda item: item["ia_classe"])
-    df["ia_motivos"] = avaliacoes.apply(lambda item: item["ia_motivos"])
-    df["ia_pontos_atencao"] = avaliacoes.apply(lambda item: item["ia_pontos_atencao"])
+    campos_ia = [
+        "score_ia",
+        "score_ia_regras",
+        "score_ia_historico",
+        "ia_peso_regras",
+        "ia_peso_historico",
+        "ia_recomendacao",
+        "ia_classe",
+        "ia_confianca_historica",
+        "ia_amostras_semelhantes",
+        "ia_taxa_estimada",
+        "ia_resultado_mais_comum",
+        "ia_fase",
+        "ia_total_amostras",
+    ]
+
+    for campo in campos_ia:
+        df[campo] = avaliacoes.apply(lambda item, nome=campo: item.get(nome))
 
     return df
 
@@ -7097,6 +7177,22 @@ def master():
     return render_template("master.html", **contexto)
 
 
+@app.route("/ia-operacional")
+@login_obrigatorio
+def painel_ia_operacional():
+    forcar = request.args.get("recalcular", "").strip() == "1"
+    modelo = obter_modelo_ia_operacional(forcar=forcar)
+
+    return render_template(
+        "ia_operacional.html",
+        usuario_logado=usuario_atual(),
+        tipo_usuario=tipo_usuario(),
+        modelo=modelo,
+        status_sucesso=STATUS_SUCESSO,
+        status_negativos=STATUS_NEGATIVOS,
+    )
+
+
 @app.route("/historico")
 @login_obrigatorio
 def historico():
@@ -7126,9 +7222,18 @@ def empresa(cnpj):
     if encontrado.empty:
         abort(404)
 
+    empresa_dados = encontrado.iloc[0].to_dict()
+    empresa_dados.update(
+        avaliar_ia_empresa(
+            empresa_dados,
+            obter_modelo_ia_operacional(),
+            detalhado=True,
+        )
+    )
+
     return render_template(
         "empresa.html",
-        empresa=encontrado.iloc[0].to_dict(),
+        empresa=empresa_dados,
         status_opcoes=STATUS_OPCOES,
         usuario_logado=usuario_atual(),
         tipo_usuario=tipo_usuario()
@@ -8136,7 +8241,10 @@ def exportar():
         "cnpj_formatado", "razao_social", "endereco_completo", "capital_formatado", "uf",
         "municipio_nome", "telefone_formatado", "email", "nome_socio",
         "sexo_provavel", "categoria_cnae", "status_bm", "score_ia",
-        "ia_recomendacao", "usado_por", "data_uso_bm", "data_inicio_formatada", "cnae_principal"
+        "score_ia_regras", "score_ia_historico", "ia_peso_regras",
+        "ia_peso_historico", "ia_confianca_historica", "ia_taxa_estimada",
+        "ia_amostras_semelhantes", "ia_resultado_mais_comum", "ia_recomendacao",
+        "usado_por", "data_uso_bm", "data_inicio_formatada", "cnae_principal"
     ]
 
     df = df[[col for col in colunas if col in df.columns]].copy()
@@ -8154,7 +8262,15 @@ def exportar():
         "sexo_provavel": "Sexo pela Razão Social",
         "categoria_cnae": "Categoria CNAE",
         "status_bm": "Meu Status BM",
-        "score_ia": "Score IA",
+        "score_ia": "Score IA Final",
+        "score_ia_regras": "Score IA Regras",
+        "score_ia_historico": "Score IA Histórico",
+        "ia_peso_regras": "Peso Regras (%)",
+        "ia_peso_historico": "Peso Histórico (%)",
+        "ia_confianca_historica": "Confiança Histórica (%)",
+        "ia_taxa_estimada": "Taxa Histórica Estimada (%)",
+        "ia_amostras_semelhantes": "Amostras Semelhantes",
+        "ia_resultado_mais_comum": "Resultado Histórico Mais Comum",
         "ia_recomendacao": "Recomendação IA",
         "usado_por": "Usado Por",
         "data_uso_bm": "Data de Uso",

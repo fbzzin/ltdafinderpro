@@ -30,6 +30,7 @@
                 <a class="menu-item" href="/usados">📌 Meus CNPJs Usados</a>
                 <a class="menu-item" href="/favoritos">⭐ Favoritos</a>
                 <a class="menu-item" href="/perfis-meta">👤 Perfis Meta</a>
+                <a class="menu-item" href="/ia-operacional">🧠 IA Operacional</a>
                 <a class="menu-item" href="/relatorios-bm">📄 Relatórios BM</a>
                 <a class="menu-item" href="/sites">🌐 Gerador de Sites</a>
                 <a class="menu-item" href="/historico">📜 Histórico</a>
@@ -165,43 +166,68 @@
                         <div class="ia-classificacao ia-texto-{{ empresa.ia_classe }}">
                             {{ empresa.ia_recomendacao }}
                         </div>
+
+                        <div style="margin-top:10px; color:#9fb4ce; font-size:12px; text-align:center;">
+                            {{ empresa.ia_fase }} · {{ empresa.ia_total_amostras }} resultado(s) concluído(s)
+                        </div>
+                    </div>
+
+                    <div style="display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin-bottom:16px;">
+                        <div style="background:#071321; border:1px solid rgba(148,163,184,.16); border-radius:14px; padding:14px; text-align:center;">
+                            <span style="display:block; color:#8da4bf; font-size:11px; text-transform:uppercase; font-weight:900;">Regras · {{ empresa.ia_peso_regras }}%</span>
+                            <strong style="display:block; color:#fff; font-size:24px; margin-top:5px;">{{ empresa.score_ia_regras }}</strong>
+                        </div>
+                        <div style="background:#071321; border:1px solid rgba(148,163,184,.16); border-radius:14px; padding:14px; text-align:center;">
+                            <span style="display:block; color:#8da4bf; font-size:11px; text-transform:uppercase; font-weight:900;">Histórico · {{ empresa.ia_peso_historico }}%</span>
+                            <strong style="display:block; color:#fff; font-size:24px; margin-top:5px;">{{ empresa.score_ia_historico }}</strong>
+                        </div>
+                    </div>
+
+                    <div style="background:#071321; border:1px solid rgba(148,163,184,.16); border-radius:14px; padding:14px; margin-bottom:16px; color:#cbd9e9; font-size:13px; line-height:1.55;">
+                        <strong style="color:#fff;">Leitura histórica</strong><br>
+                        Chance estimada: <strong>{{ "%.1f"|format(empresa.ia_taxa_estimada) }}%</strong> ·
+                        confiança: <strong>{{ empresa.ia_confianca_historica }}%</strong> ·
+                        amostras semelhantes: <strong>{{ empresa.ia_amostras_semelhantes }}</strong><br>
+                        Resultado mais frequente: <strong>{{ empresa.ia_resultado_mais_comum }}</strong>
                     </div>
 
                     <div class="ia-motivos ia-motivos-grid">
-
                         <div class="ia-grupo ia-grupo-positivo">
-                            <div class="ia-subtitulo">Pontos positivos</div>
+                            <div class="ia-subtitulo">Pontos positivos das regras</div>
+                            {% if empresa.ia_motivos_regras %}
+                                {% for motivo in empresa.ia_motivos_regras %}<div class="ia-motivo positivo">✓ {{ motivo }}</div>{% endfor %}
+                            {% else %}<div class="ia-motivo atencao">⚠ Nenhum ponto positivo forte encontrado</div>{% endif %}
 
-                            {% if empresa.ia_motivos %}
-                                {% for motivo in empresa.ia_motivos %}
-                                <div class="ia-motivo positivo">
-                                    ✓ {{ motivo }}
-                                </div>
-                                {% endfor %}
-                            {% else %}
-                                <div class="ia-motivo atencao">
-                                    ⚠ Nenhum ponto positivo forte encontrado
-                                </div>
-                            {% endif %}
+                            <div class="ia-subtitulo" style="margin-top:14px;">Padrões positivos do histórico</div>
+                            {% if empresa.ia_motivos_historicos %}
+                                {% for motivo in empresa.ia_motivos_historicos %}<div class="ia-motivo positivo">✓ {{ motivo }}</div>{% endfor %}
+                            {% else %}<div class="ia-motivo atencao">Ainda sem padrão positivo forte para este perfil.</div>{% endif %}
                         </div>
 
                         <div class="ia-grupo ia-grupo-atencao">
-                            <div class="ia-subtitulo ia-subtitulo-atencao">Pontos de atenção</div>
+                            <div class="ia-subtitulo ia-subtitulo-atencao">Pontos de atenção das regras</div>
+                            {% if empresa.ia_pontos_regras %}
+                                {% for ponto in empresa.ia_pontos_regras %}<div class="ia-motivo atencao">⚠ {{ ponto }}</div>{% endfor %}
+                            {% else %}<div class="ia-motivo positivo">✓ Nenhum ponto crítico encontrado</div>{% endif %}
 
-                            {% if empresa.ia_pontos_atencao %}
-                                {% for ponto in empresa.ia_pontos_atencao %}
-                                <div class="ia-motivo atencao">
-                                    ⚠ {{ ponto }}
-                                </div>
-                                {% endfor %}
-                            {% else %}
-                                <div class="ia-motivo positivo">
-                                    ✓ Nenhum ponto crítico encontrado
-                                </div>
-                            {% endif %}
+                            <div class="ia-subtitulo ia-subtitulo-atencao" style="margin-top:14px;">Alertas do histórico</div>
+                            {% if empresa.ia_pontos_historicos %}
+                                {% for ponto in empresa.ia_pontos_historicos %}<div class="ia-motivo atencao">⚠ {{ ponto }}</div>{% endfor %}
+                            {% else %}<div class="ia-motivo positivo">✓ Nenhum padrão histórico negativo forte.</div>{% endif %}
                         </div>
-
                     </div>
+
+                    {% if empresa.ia_fatores_historicos %}
+                    <div style="margin-top:16px;">
+                        <div class="ia-subtitulo">Detalhes dos fatores históricos</div>
+                        {% for fator in empresa.ia_fatores_historicos %}
+                        <div style="display:flex; justify-content:space-between; gap:12px; padding:9px 0; border-bottom:1px solid rgba(148,163,184,.10); color:#b9cbe0; font-size:12px;">
+                            <span>{{ fator.nome }} · {{ fator.valor }} ({{ fator.total }} casos)</span>
+                            <strong style="color:#fff;">{{ "%.1f"|format(fator.taxa) }}%</strong>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
                 </div>
 
             </div>
