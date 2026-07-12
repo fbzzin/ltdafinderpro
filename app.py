@@ -454,6 +454,7 @@ def carregar_base_leve_para_perfis(cnpjs_interesse=None, usuario=None):
         "bairro_distrito",
         "uf",
         "municipio",
+        "municipio_nome",
         "capital_social"
     ]
 
@@ -508,7 +509,15 @@ def carregar_base_leve_para_perfis(cnpjs_interesse=None, usuario=None):
         if coluna_endereco not in df.columns:
             df[coluna_endereco] = ""
 
-    df["municipio_nome"] = df["municipio"].map(municipios).fillna(df["municipio"])
+    municipio_mapeado = df["municipio"].map(municipios)
+
+    if "municipio_nome" in df.columns:
+        municipio_salvo = df["municipio_nome"].fillna("").astype(str).str.strip()
+        df["municipio_nome"] = municipio_salvo.where(municipio_salvo.ne(""), municipio_mapeado)
+    else:
+        df["municipio_nome"] = municipio_mapeado
+
+    df["municipio_nome"] = df["municipio_nome"].fillna("")
     df["endereco_completo"] = df.apply(lambda linha: montar_endereco_empresa(linha), axis=1)
 
     for coluna in [
@@ -1314,7 +1323,16 @@ def carregar_base():
 
     df["cnpj_formatado"] = df["cnpj_limpo"].apply(formatar_cnpj)
     df["capital_formatado"] = df["capital_social_num"].apply(formatar_capital)
-    df["municipio_nome"] = df["municipio"].map(municipios).fillna(df["municipio"])
+
+    municipio_mapeado = df["municipio"].map(municipios)
+
+    if "municipio_nome" in df.columns:
+        municipio_salvo = df["municipio_nome"].fillna("").astype(str).str.strip()
+        df["municipio_nome"] = municipio_salvo.where(municipio_salvo.ne(""), municipio_mapeado)
+    else:
+        df["municipio_nome"] = municipio_mapeado
+
+    df["municipio_nome"] = df["municipio_nome"].fillna("")
     df["endereco_completo"] = df.apply(lambda linha: montar_endereco_empresa(linha), axis=1)
     df["favorito"] = df["cnpj_limpo"].isin(favoritos)
 
@@ -2305,6 +2323,40 @@ def formatar_cep_endereco(cep):
     return cep_texto
 
 
+def numero_ja_esta_no_logradouro(logradouro, numero):
+    """Evita endereços como 'AVENIDA X 1946, 1946'.
+
+    Alguns registros da Receita trazem o número anexado ao final do campo
+    de logradouro e, ao mesmo tempo, repetido na coluna própria de número.
+    A base continua preservando os dados brutos; esta proteção atua apenas
+    na apresentação do endereço.
+    """
+    logradouro_texto = valor_texto(logradouro, "")
+    numero_texto = valor_texto(numero, "")
+
+    if not logradouro_texto or not numero_texto:
+        return False
+
+    def normalizar_parte(valor):
+        valor = unicodedata.normalize("NFKD", valor)
+        valor = valor.encode("ascii", "ignore").decode("ascii").upper()
+        valor = re.sub(r"[^A-Z0-9]+", " ", valor)
+        return re.sub(r"\s+", " ", valor).strip()
+
+    logradouro_normalizado = normalizar_parte(logradouro_texto)
+    numero_normalizado = normalizar_parte(numero_texto)
+
+    if not logradouro_normalizado or not numero_normalizado:
+        return False
+
+    # Exige algum contexto de rua antes do número para reduzir falsos
+    # positivos em nomes curtos como "RUA 25".
+    if len(logradouro_normalizado.split()) < 3:
+        return False
+
+    return logradouro_normalizado.endswith(f" {numero_normalizado}")
+
+
 def montar_endereco_empresa(empresa):
     endereco_personalizado = valor_texto(empresa.get("endereco_site", ""))
 
@@ -2316,14 +2368,27 @@ def montar_endereco_empresa(empresa):
     complemento = obter_campo_endereco(empresa, "complemento")
     cep = formatar_cep_endereco(obter_campo_endereco(empresa, "cep"))
     bairro = obter_campo_endereco(empresa, "bairro", "bairro_distrito", "distrito")
-    municipio = obter_campo_endereco(empresa, "municipio_nome", "municipio", "nome_municipio")
+    municipio = obter_campo_endereco(empresa, "municipio_nome", "nome_municipio")
+
+    # O campo `municipio` da Receita é um código numérico. Só o utiliza
+    # diretamente quando já vier com um nome legível, nunca como "7107".
+    if not municipio:
+        municipio_bruto = obter_campo_endereco(empresa, "municipio")
+        if municipio_bruto and not municipio_bruto.isdigit():
+            municipio = municipio_bruto
+
     uf = obter_campo_endereco(empresa, "uf")
 
     partes = []
 
-    for valor in [logradouro, numero, complemento]:
-        if valor:
-            partes.append(valor)
+    if logradouro:
+        partes.append(logradouro)
+
+    if numero and not numero_ja_esta_no_logradouro(logradouro, numero):
+        partes.append(numero)
+
+    if complemento:
+        partes.append(complemento)
 
     if cep:
         partes.append(f"CEP {cep}")
