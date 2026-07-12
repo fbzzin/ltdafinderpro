@@ -230,8 +230,8 @@
                             <span>🧾 {{ perfil.cnpj_formatado }}</span>
                             {% endif %}
 
-                            {% if perfil.uf %}
-                            <span>📍 {{ perfil.municipio_nome }} - {{ perfil.uf }}</span>
+                            {% if perfil.cnpj_limpo %}
+                            <span>📍 {{ perfil.endereco_completo }}</span>
                             {% endif %}
 
                             <span>📅 {{ perfil.criado_em }}</span>

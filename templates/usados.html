@@ -35,7 +35,6 @@
                 <a class="menu-item" href="/favoritos">⭐ Favoritos</a>
                 <a class="menu-item" href="/perfis-meta">👤 Perfis Meta</a>
                 <a class="menu-item" href="/relatorios-bm">📄 Relatórios BM</a>
-                <a class="menu-item" href="/estatisticas">📈 Estatísticas</a>
                 {% if tipo_usuario == "admin" %}
                 <a class="menu-item" href="/admin">👑 Painel Admin</a>
                 {% endif %}
@@ -200,8 +199,7 @@
                         <th>Status BM</th>
                         <th>Data de Uso</th>
                         <th>Capital</th>
-                        <th>UF</th>
-                        <th>Município</th>
+                        <th>Endereço</th>
                         <th>Telefone</th>
                         <th>Email</th>
                         <th>Sócio</th>
@@ -247,8 +245,7 @@
                         <td>{{ empresa.data_uso_bm }}</td>
 
                         <td>{{ empresa.capital_formatado }}</td>
-                        <td>{{ empresa.uf }}</td>
-                        <td>{{ empresa.municipio_nome }}</td>
+                        <td>{{ empresa.endereco_completo }}</td>
                         <td>{{ empresa.telefone_formatado }}</td>
                         <td>{{ empresa.email }}</td>
                         <td>{{ empresa.nome_socio }}</td>
@@ -265,7 +262,7 @@
                             <button
                                 class="btn-acao btn-copiar"
                                 title="Copiar dados"
-                                data-texto="Empresa: {{ empresa.razao_social }} | CNPJ: {{ empresa.cnpj_formatado }} | Meu Status BM: {{ empresa.status_bm }} | Data de Uso: {{ empresa.data_uso_bm }} | Histórico global: {{ empresa.usado_por }} | Sócio: {{ empresa.nome_socio }} | Telefone: {{ empresa.telefone_formatado }} | Email: {{ empresa.email }} | Cidade: {{ empresa.municipio_nome }} - {{ empresa.uf }} | Capital: {{ empresa.capital_formatado }}"
+                                data-texto="Empresa: {{ empresa.razao_social }} | CNPJ: {{ empresa.cnpj_formatado }} | Meu Status BM: {{ empresa.status_bm }} | Data de Uso: {{ empresa.data_uso_bm }} | Histórico global: {{ empresa.usado_por }} | Sócio: {{ empresa.nome_socio }} | Telefone: {{ empresa.telefone_formatado }} | Email: {{ empresa.email }} | Endereço: {{ empresa.endereco_completo }} | Capital: {{ empresa.capital_formatado }}"
                             >
                                 📋
                             </button>

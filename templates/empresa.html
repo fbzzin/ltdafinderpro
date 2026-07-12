@@ -30,15 +30,9 @@
                 <a class="menu-item" href="/usados">📌 Meus CNPJs Usados</a>
                 <a class="menu-item" href="/favoritos">⭐ Favoritos</a>
                 <a class="menu-item" href="/perfis-meta">👤 Perfis Meta</a>
-                <a class="menu-item" href="/central-bm">🧭 Central BM</a>
-                <a class="menu-item" href="/fila-bm">🧭 Fila BM</a>
-                <a class="menu-item" href="/radar-bm">📡 Radar BM</a>
-                <a class="menu-item" href="/fila-bm">🧭 Fila BM</a>
                 <a class="menu-item" href="/relatorios-bm">📄 Relatórios BM</a>
-                <a class="menu-item" href="/relatorio-diario-bm">🗓️ Relatório Diário</a>
                 <a class="menu-item" href="/sites">🌐 Gerador de Sites</a>
                 <a class="menu-item" href="/historico">📜 Histórico</a>
-                <a class="menu-item" href="/estatisticas">📈 Estatísticas</a>
                 {% if tipo_usuario == "admin" %}
                 <a class="menu-item" href="/admin">👑 Painel Admin</a>
                 {% endif %}
@@ -101,6 +95,11 @@
                     <div class="info-linha">
                         <span>Email</span>
                         <strong>{{ empresa.email }}</strong>
+                    </div>
+
+                    <div class="info-linha">
+                        <span>Endereço completo</span>
+                        <strong>{{ empresa.endereco_completo }}</strong>
                     </div>
 
                     <div class="info-linha">
@@ -209,7 +208,6 @@
 
             <div class="empresa-acoes">
                 <a href="/gerador-site/{{ empresa.cnpj_limpo }}" class="btn-voltar-empresa btn-gerar-site">🌐 Gerar Site Institucional</a>
-                <a href="/central-bm/nova?cnpj={{ empresa.cnpj_limpo }}" class="btn-voltar-empresa btn-gerar-site">🧭 Iniciar Verificação BM</a>
                 <a href="/" class="btn-voltar-empresa">← Voltar para Minerador</a>
             </div>
 

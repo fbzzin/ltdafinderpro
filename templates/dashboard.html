@@ -243,7 +243,7 @@
 
                     <div class="empresa-col empresa-info-bloco">
                         <span class="label-mini">Localização</span>
-                        <strong>{{ empresa.municipio_nome }} - {{ empresa.uf }}</strong>
+                        <strong>{{ empresa.endereco_completo }}</strong>
 
                         <span class="label-mini espaco-mini">Capital</span>
                         <strong>{{ empresa.capital_formatado }}</strong>
@@ -315,7 +315,7 @@
                             <button
                                 class="btn-acao btn-copiar"
                                 title="Copiar dados"
-                                data-texto="Empresa: {{ empresa.razao_social }} | CNPJ: {{ empresa.cnpj_formatado }} | Score IA: {{ empresa.score_ia }}/100 | Recomendação IA: {{ empresa.ia_recomendacao }} | Meu Status BM: {{ empresa.status_bm }} | Histórico global: {{ empresa.usado_por }} | Sócio: {{ empresa.nome_socio }} | Telefone: {{ empresa.telefone_formatado }} | Email: {{ empresa.email }} | Cidade: {{ empresa.municipio_nome }} - {{ empresa.uf }} | Capital: {{ empresa.capital_formatado }}"
+                                data-texto="Empresa: {{ empresa.razao_social }} | CNPJ: {{ empresa.cnpj_formatado }} | Score IA: {{ empresa.score_ia }}/100 | Recomendação IA: {{ empresa.ia_recomendacao }} | Meu Status BM: {{ empresa.status_bm }} | Histórico global: {{ empresa.usado_por }} | Sócio: {{ empresa.nome_socio }} | Telefone: {{ empresa.telefone_formatado }} | Email: {{ empresa.email }} | Endereço: {{ empresa.endereco_completo }} | Capital: {{ empresa.capital_formatado }}"
                             >
                                 📋
                             </button>

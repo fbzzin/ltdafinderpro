@@ -3,7 +3,8 @@ import pandas as pd
 from pathlib import Path
 import zipfile, io, math, json, re, unicodedata, os
 from functools import wraps
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 from html import escape
 import requests
 from urllib.parse import urlparse
@@ -61,6 +62,85 @@ STATUS_OPCOES = [
 
 STATUS_SUCESSO = ["Verificou 250", "Verificou 2k", "Verificou 100k"]
 STATUS_NEGATIVOS = ["Restrito", "WABA restrita", "Conta desabilitada", "Checkpoint", "Descartado", "Precisa de mais informações", "Análise permanente"]
+
+try:
+    FUSO_BRASILIA = ZoneInfo("America/Sao_Paulo")
+except Exception:
+    # Fallback para ambientes Windows sem o pacote tzdata instalado.
+    FUSO_BRASILIA = timezone(timedelta(hours=-3), name="America/Sao_Paulo")
+
+FUSO_UTC = timezone.utc
+NOME_FUSO_BRASILIA = "America/Sao_Paulo"
+
+
+def agora_brasilia():
+    """Retorna a data/hora atual de Brasília, sem depender do fuso do servidor."""
+    return datetime.now(FUSO_BRASILIA)
+
+
+def texto_data_hora_brasilia(valor=None):
+    data = valor or agora_brasilia()
+
+    if data.tzinfo is None:
+        data = data.replace(tzinfo=FUSO_BRASILIA)
+    else:
+        data = data.astimezone(FUSO_BRASILIA)
+
+    return data.strftime("%d/%m/%Y %H:%M")
+
+
+def converter_data_hora_sql_para_brasilia(valor):
+    """Converte timestamps UTC vindos do PostgreSQL/SQLite para exibição em Brasília."""
+    if valor is None or str(valor).strip() == "":
+        return ""
+
+    if isinstance(valor, datetime):
+        data = valor
+    else:
+        texto_data = str(valor).strip()
+        data = None
+
+        try:
+            data = datetime.fromisoformat(texto_data.replace("Z", "+00:00"))
+        except Exception:
+            for formato in [
+                "%Y-%m-%d %H:%M:%S.%f",
+                "%Y-%m-%d %H:%M:%S",
+                "%Y-%m-%dT%H:%M:%S.%f",
+                "%Y-%m-%dT%H:%M:%S",
+            ]:
+                try:
+                    data = datetime.strptime(texto_data, formato)
+                    break
+                except Exception:
+                    pass
+
+        if data is None:
+            return texto_data
+
+    if data.tzinfo is None:
+        data = data.replace(tzinfo=FUSO_UTC)
+
+    return data.astimezone(FUSO_BRASILIA).strftime("%d/%m/%Y %H:%M")
+
+
+def converter_texto_legado_utc_para_brasilia(valor):
+    """Converte registros antigos gravados como texto pelo servidor em UTC."""
+    texto_data = str(valor or "").strip()
+
+    if not texto_data:
+        return "", ""
+
+    for formato in ["%d/%m/%Y %H:%M", "%d/%m/%Y"]:
+        try:
+            data_utc = datetime.strptime(texto_data, formato).replace(tzinfo=FUSO_UTC)
+            data_brasilia = data_utc.astimezone(FUSO_BRASILIA)
+            formato_saida = "%d/%m/%Y %H:%M" if "%H" in formato else "%d/%m/%Y"
+            return data_brasilia.strftime(formato_saida), data_brasilia.strftime("%Y-%m-%d")
+        except Exception:
+            pass
+
+    return texto_data, ""
 
 
 def executar_backup():
@@ -182,7 +262,32 @@ def salvar_historico_producao(historico):
 
 
 def carregar_datas_uso_cnpj():
-    return carregar_dados_postgres("datas_uso_cnpj", {})
+    dados = carregar_dados_postgres("datas_uso_cnpj", {})
+    alterou = False
+
+    if isinstance(dados, dict):
+        for registros_usuario in dados.values():
+            if not isinstance(registros_usuario, dict):
+                continue
+
+            for item in registros_usuario.values():
+                if not isinstance(item, dict) or item.get("fuso_horario") == NOME_FUSO_BRASILIA:
+                    continue
+
+                data_convertida, data_iso = converter_texto_legado_utc_para_brasilia(item.get("data_hora", ""))
+
+                if data_convertida:
+                    item["data_hora"] = data_convertida
+                if data_iso:
+                    item["data_iso"] = data_iso
+
+                item["fuso_horario"] = NOME_FUSO_BRASILIA
+                alterou = True
+
+    if alterou:
+        salvar_dados_postgres("datas_uso_cnpj", dados)
+
+    return dados
 
 
 def salvar_datas_uso_cnpj(dados):
@@ -200,11 +305,12 @@ def registrar_data_uso_cnpj(usuario, cnpj, status):
         dados[usuario] = {}
 
     if cnpj_limpo not in dados[usuario]:
-        agora = datetime.now()
+        agora = agora_brasilia()
         dados[usuario][cnpj_limpo] = {
             "data_iso": agora.strftime("%Y-%m-%d"),
             "data_hora": agora.strftime("%d/%m/%Y %H:%M"),
-            "status_inicial": status
+            "status_inicial": status,
+            "fuso_horario": NOME_FUSO_BRASILIA
         }
         salvar_datas_uso_cnpj(dados)
 
@@ -275,15 +381,50 @@ def perfil_dentro_periodo(perfil, data_inicio="", data_fim=""):
 
 
 def carregar_perfis_meta():
-    return carregar_dados_postgres("perfis_meta", [])
+    perfis = carregar_dados_postgres("perfis_meta", [])
+    alterou = False
+
+    if not isinstance(perfis, list):
+        return []
+
+    campos_data_hora = ["criado_em", "atualizado_em", "status_bm_atualizado_em"]
+
+    for perfil in perfis:
+        if not isinstance(perfil, dict) or perfil.get("fuso_horario") == NOME_FUSO_BRASILIA:
+            continue
+
+        data_iso_principal = ""
+
+        for campo in campos_data_hora:
+            data_convertida, data_iso = converter_texto_legado_utc_para_brasilia(perfil.get(campo, ""))
+
+            if data_convertida:
+                perfil[campo] = data_convertida
+            if campo == "criado_em" and data_iso:
+                data_iso_principal = data_iso
+
+        if data_iso_principal:
+            perfil["criado_em_iso"] = data_iso_principal
+
+        perfil["fuso_horario"] = NOME_FUSO_BRASILIA
+        alterou = True
+
+    if alterou:
+        salvar_dados_postgres("perfis_meta", perfis)
+
+    return perfis
 
 
 def salvar_perfis_meta(perfis):
+    for perfil in perfis:
+        if isinstance(perfil, dict):
+            perfil["fuso_horario"] = NOME_FUSO_BRASILIA
+
     salvar_dados_postgres("perfis_meta", perfis)
 
 
 def gerar_id_perfil():
-    return datetime.now().strftime("%Y%m%d%H%M%S%f")
+    return agora_brasilia().strftime("%Y%m%d%H%M%S%f")
 
 
 def cnpjs_vinculados_perfis():
@@ -305,6 +446,12 @@ def carregar_base_leve_para_perfis(cnpjs_interesse=None, usuario=None):
     colunas_necessarias = [
         "cnpj",
         "razao_social",
+        "logradouro",
+        "numero",
+        "complemento",
+        "cep",
+        "bairro",
+        "bairro_distrito",
         "uf",
         "municipio",
         "capital_social"
@@ -357,13 +504,25 @@ def carregar_base_leve_para_perfis(cnpjs_interesse=None, usuario=None):
     else:
         df["capital_formatado"] = ""
 
+    for coluna_endereco in ["logradouro", "numero", "complemento", "cep", "bairro", "bairro_distrito"]:
+        if coluna_endereco not in df.columns:
+            df[coluna_endereco] = ""
+
     df["municipio_nome"] = df["municipio"].map(municipios).fillna(df["municipio"])
+    df["endereco_completo"] = df.apply(lambda linha: montar_endereco_empresa(linha), axis=1)
 
     for coluna in [
         "razao_social",
+        "logradouro",
+        "numero",
+        "complemento",
+        "cep",
+        "bairro",
+        "bairro_distrito",
         "uf",
         "municipio",
         "municipio_nome",
+        "endereco_completo",
         "capital_formatado",
         "status_bm",
         "data_uso_bm",
@@ -409,6 +568,7 @@ def empresas_disponiveis_para_perfil():
         "cnpj_limpo",
         "cnpj_formatado",
         "razao_social",
+        "endereco_completo",
         "uf",
         "municipio_nome",
         "status_bm",
@@ -460,6 +620,7 @@ def enriquecer_perfis_meta(perfis):
             item["razao_social"] = empresa.get("razao_social", item.get("razao_social", ""))
             item["uf"] = empresa.get("uf", "")
             item["municipio_nome"] = empresa.get("municipio_nome", "")
+            item["endereco_completo"] = empresa.get("endereco_completo", "Endereço não informado")
             status_empresa = empresa.get("status_bm", STATUS_PADRAO)
             status_salvo = status_perfil_salvo(item)
             item["status_bm"] = status_empresa if status_empresa != STATUS_PADRAO else status_salvo
@@ -471,6 +632,7 @@ def enriquecer_perfis_meta(perfis):
             item["razao_social"] = item.get("razao_social", "")
             item["uf"] = item.get("uf", "")
             item["municipio_nome"] = item.get("municipio_nome", "")
+            item["endereco_completo"] = item.get("endereco_completo", "Endereço não informado")
             item["status_bm"] = item.get("status_bm", STATUS_PADRAO)
             item["data_uso_bm"] = item.get("data_uso_bm", "")
             item["data_uso_bm_iso"] = item.get("data_uso_bm_iso", "")
@@ -502,7 +664,7 @@ def sincronizar_status_perfis_meta(cnpj, novo_status, usuario=""):
 
     perfis = carregar_perfis_meta()
     alterou = False
-    agora = datetime.now().strftime("%d/%m/%Y %H:%M")
+    agora = agora_brasilia().strftime("%d/%m/%Y %H:%M")
 
     for perfil in perfis:
         perfil_cnpj = limpar_cnpj(perfil.get("cnpj_limpo", "")) if perfil.get("cnpj_limpo") else ""
@@ -573,7 +735,7 @@ def resumo_perfis_meta(perfis):
 
 
 def data_hoje():
-    return datetime.now().strftime("%Y-%m-%d")
+    return agora_brasilia().strftime("%Y-%m-%d")
 
 
 def registrar_historico_producao(usuario, status_antigo, status_novo):
@@ -662,7 +824,7 @@ def resumo_evolucao_diaria(dias=15):
     valores = []
     sucessos = []
 
-    hoje = datetime.now()
+    hoje = agora_brasilia()
 
     for indice in range(dias - 1, -1, -1):
         data_obj = hoje - timedelta(days=indice)
@@ -712,7 +874,7 @@ def calcular_idade_empresa(data_raw):
     try:
         data_raw = str(data_raw).replace(".0", "").strip().zfill(8)
         abertura = datetime.strptime(data_raw, "%Y%m%d")
-        hoje = datetime.now()
+        hoje = agora_brasilia()
         idade = hoje.year - abertura.year
 
         if (hoje.month, hoje.day) < (abertura.month, abertura.day):
@@ -1141,9 +1303,19 @@ def carregar_base():
     status_geral = carregar_status_bm()
     datas_uso = carregar_datas_uso_cnpj()
 
+    if "municipio" not in df.columns:
+        df["municipio"] = ""
+    if "uf" not in df.columns:
+        df["uf"] = ""
+
+    for coluna_endereco in ["logradouro", "numero", "complemento", "cep", "bairro", "bairro_distrito"]:
+        if coluna_endereco not in df.columns:
+            df[coluna_endereco] = ""
+
     df["cnpj_formatado"] = df["cnpj_limpo"].apply(formatar_cnpj)
     df["capital_formatado"] = df["capital_social_num"].apply(formatar_capital)
     df["municipio_nome"] = df["municipio"].map(municipios).fillna(df["municipio"])
+    df["endereco_completo"] = df.apply(lambda linha: montar_endereco_empresa(linha), axis=1)
     df["favorito"] = df["cnpj_limpo"].isin(favoritos)
 
     df["status_bm"] = df["cnpj_limpo"].apply(lambda cnpj: status_usuario(status_geral, usuario, cnpj))
@@ -1166,7 +1338,9 @@ def carregar_base():
     for coluna in [
         "telefone_formatado", "email", "nome_socio", "razao_social",
         "nome_fantasia", "sexo_provavel", "categoria_cnae",
-        "data_inicio", "cnae_principal", "situacao_cadastral", "uf", "municipio"
+        "data_inicio", "cnae_principal", "situacao_cadastral", "logradouro",
+        "numero", "complemento", "cep", "bairro", "bairro_distrito",
+        "endereco_completo", "uf", "municipio", "municipio_nome"
     ]:
         if coluna in df.columns:
             df[coluna] = df[coluna].fillna("")
@@ -1308,6 +1482,7 @@ def aplicar_filtros(df, form):
             + " " + df["email"].astype(str).str.upper()
             + " " + df["telefone_formatado"].astype(str).str.upper()
             + " " + df["municipio_nome"].astype(str).str.upper()
+            + " " + df["endereco_completo"].astype(str).str.upper()
             + " " + df["status_bm"].astype(str).str.upper()
             + " " + df["ia_recomendacao"].astype(str).str.upper()
             + " " + df["score_ia"].astype(str).str.upper()
@@ -1649,7 +1824,7 @@ def resumo_evolucao_diaria_perfis_meta(dias=15, perfis=None):
     valores = []
     sucessos = []
 
-    hoje = datetime.now()
+    hoje = agora_brasilia()
 
     for indice in range(dias - 1, -1, -1):
         data_obj = hoje - timedelta(days=indice)
@@ -2112,37 +2287,52 @@ def gerar_nome_arquivo_site(empresa):
     return f"index {primeiro_nome}.html"
 
 
+def obter_campo_endereco(empresa, *nomes):
+    for nome in nomes:
+        valor = valor_texto(empresa.get(nome, ""))
+        if valor:
+            return valor
+    return ""
+
+
+def formatar_cep_endereco(cep):
+    cep_texto = valor_texto(cep, "")
+    digitos = re.sub(r"\D", "", cep_texto)
+
+    if len(digitos) == 8:
+        return f"{digitos[:2]}.{digitos[2:5]}-{digitos[5:]}"
+
+    return cep_texto
+
+
 def montar_endereco_empresa(empresa):
     endereco_personalizado = valor_texto(empresa.get("endereco_site", ""))
 
     if endereco_personalizado:
         return endereco_personalizado
 
+    logradouro = obter_campo_endereco(empresa, "logradouro", "descricao_logradouro")
+    numero = obter_campo_endereco(empresa, "numero", "numero_estabelecimento")
+    complemento = obter_campo_endereco(empresa, "complemento")
+    cep = formatar_cep_endereco(obter_campo_endereco(empresa, "cep"))
+    bairro = obter_campo_endereco(empresa, "bairro", "bairro_distrito", "distrito")
+    municipio = obter_campo_endereco(empresa, "municipio_nome", "municipio", "nome_municipio")
+    uf = obter_campo_endereco(empresa, "uf")
+
     partes = []
 
-    for campo in ["logradouro", "numero", "complemento", "bairro"]:
-        valor = valor_texto(empresa.get(campo, ""))
-
+    for valor in [logradouro, numero, complemento]:
         if valor:
             partes.append(valor)
-
-    municipio = valor_texto(empresa.get("municipio_nome", "")) or valor_texto(empresa.get("municipio", ""))
-    uf = valor_texto(empresa.get("uf", ""))
-
-    cidade_uf = " - ".join([item for item in [municipio, uf] if item])
-
-    if cidade_uf:
-        partes.append(cidade_uf)
-
-    cep = valor_texto(empresa.get("cep", ""))
 
     if cep:
         partes.append(f"CEP {cep}")
 
-    if partes:
-        return ", ".join(partes)
+    for valor in [bairro, municipio, uf]:
+        if valor:
+            partes.append(valor)
 
-    return cidade_uf or "Endereço não informado"
+    return ", ".join(partes) if partes else "Endereço não informado"
 
 
 def identificar_segmento_site(empresa):
@@ -2909,7 +3099,7 @@ def gerar_html_site_meta_waba_clean(empresa, meta_tag, observacoes=""):
         "__TELEFONE_DISPLAY__": escape(telefone_display),
         "__TELEFONE_HREF__": escape(telefone_href),
         "__WHATSAPP_HREF__": escape(whatsapp_href),
-        "__ANO__": escape(str(datetime.now().year)),
+        "__ANO__": escape(str(agora_brasilia().year)),
     }
 
     template = """<!doctype html>
@@ -3722,7 +3912,7 @@ def gerar_nome_worker_site(site, nome_personalizado=""):
     )
     slug = normalizar_slug_site(base).replace("_", "-")
     cnpj = limpar_cnpj(site.get("cnpj", ""))
-    sufixo_cnpj = cnpj[-4:] if cnpj else datetime.now().strftime("%H%M")
+    sufixo_cnpj = cnpj[-4:] if cnpj else agora_brasilia().strftime("%H%M")
     sufixo_id = valor_texto(site.get("id", ""))
 
     partes = [slug, sufixo_cnpj]
@@ -4142,7 +4332,7 @@ def publicar_site_na_cloudflare(site, nome_personalizado=""):
 
 
 def gerar_wrangler_toml_site(nome_worker):
-    hoje = datetime.now().strftime("%Y-%m-%d")
+    hoje = agora_brasilia().strftime("%Y-%m-%d")
 
     return f"""name = \"{nome_worker}\"
 main = \"src/worker.js\"
@@ -4341,7 +4531,15 @@ def listar_sites_gerados(modelo_site="", busca=""):
             params
         ).mappings().fetchall()
 
-    return [dict(row) for row in resultado]
+    sites = []
+
+    for row in resultado:
+        item = dict(row)
+        item["criado_em"] = converter_data_hora_sql_para_brasilia(item.get("criado_em"))
+        item["cloudflare_publicado_em"] = converter_data_hora_sql_para_brasilia(item.get("cloudflare_publicado_em"))
+        sites.append(item)
+
+    return sites
 
 
 def buscar_site_gerado(site_id):
@@ -4365,7 +4563,13 @@ def buscar_site_gerado(site_id):
             params
         ).mappings().fetchone()
 
-    return dict(resultado) if resultado else None
+    if not resultado:
+        return None
+
+    site = dict(resultado)
+    site["criado_em"] = converter_data_hora_sql_para_brasilia(site.get("criado_em"))
+    site["cloudflare_publicado_em"] = converter_data_hora_sql_para_brasilia(site.get("cloudflare_publicado_em"))
+    return site
 
 
 def estatisticas_sites_gerados():
@@ -5540,7 +5744,9 @@ def parse_datetime_bm(valor):
         return None
 
     if isinstance(valor, datetime):
-        return valor
+        if valor.tzinfo is None:
+            return valor.replace(tzinfo=FUSO_UTC).astimezone(FUSO_BRASILIA)
+        return valor.astimezone(FUSO_BRASILIA)
 
     valor = str(valor).strip()
 
@@ -5561,7 +5767,8 @@ def parse_datetime_bm(valor):
 
     for formato in formatos:
         try:
-            return datetime.strptime(valor_limpo[:26], formato)
+            data = datetime.strptime(valor_limpo[:26], formato)
+            return data.replace(tzinfo=FUSO_UTC).astimezone(FUSO_BRASILIA)
         except Exception:
             pass
 
@@ -5575,14 +5782,14 @@ def horas_desde_bm(valor):
         return 0
 
     try:
-        return max(0, int((datetime.now() - data).total_seconds() // 3600))
+        return max(0, int((agora_brasilia() - data).total_seconds() // 3600))
     except Exception:
         return 0
 
 
 def data_bm_eh_hoje(valor):
     data = parse_datetime_bm(valor)
-    return bool(data and data.date() == datetime.now().date())
+    return bool(data and data.date() == agora_brasilia().date())
 
 
 def primeiro_texto_bm(item, *chaves):
@@ -5615,7 +5822,7 @@ def montar_acao_radar(tipo, titulo, descricao, url, prioridade="media"):
 
 def montar_radar_bm():
     verificacoes = listar_verificacoes_bm({})
-    agora = datetime.now()
+    agora = agora_brasilia()
 
     for item in verificacoes:
         data_ref = item.get("atualizado_em") or item.get("criado_em")
@@ -6102,7 +6309,7 @@ def estatisticas_fila_bm():
     with engine.connect() as conn:
         linhas = conn.execute(text("SELECT status_tarefa, prioridade, operador, concluido_em FROM fila_bm_tarefas")).fetchall()
 
-    hoje = datetime.now().date()
+    hoje = agora_brasilia().date()
     stats = {"total": 0, "pendentes": 0, "alta": 0, "sem_responsavel": 0, "concluidas_hoje": 0, "problemas": 0}
     operadores = {}
 
@@ -7017,7 +7224,7 @@ def perfis_meta():
                         erro = "Este CNPJ já está vinculado a outro perfil."
 
                 if not erro:
-                    agora = datetime.now()
+                    agora = agora_brasilia()
 
                     novo_perfil = {
                         "id": gerar_id_perfil(),
@@ -7035,7 +7242,8 @@ def perfis_meta():
                         "observacoes": observacoes,
                         "criado_em": agora.strftime("%d/%m/%Y %H:%M"),
                         "criado_em_iso": agora.strftime("%Y-%m-%d"),
-                        "atualizado_em": agora.strftime("%d/%m/%Y %H:%M")
+                        "atualizado_em": agora.strftime("%d/%m/%Y %H:%M"),
+                        "fuso_horario": NOME_FUSO_BRASILIA
                     }
 
                     perfis.append(novo_perfil)
@@ -7075,7 +7283,7 @@ def perfis_meta():
                         perfil["conta_facebook"] = conta_facebook
                         perfil["senha_facebook"] = senha_facebook
                         perfil["observacoes"] = observacoes
-                        perfil["atualizado_em"] = datetime.now().strftime("%d/%m/%Y %H:%M")
+                        perfil["atualizado_em"] = agora_brasilia().strftime("%d/%m/%Y %H:%M")
                         atualizado = True
                         break
 
@@ -7114,8 +7322,8 @@ def perfis_meta():
                         perfil["razao_social"] = empresa.get("razao_social", "")
                         perfil["status_bm"] = empresa.get("status_bm", STATUS_PADRAO)
                         perfil["status_bm_usuario"] = usuario_atual()
-                        perfil["status_bm_atualizado_em"] = datetime.now().strftime("%d/%m/%Y %H:%M")
-                        perfil["atualizado_em"] = datetime.now().strftime("%d/%m/%Y %H:%M")
+                        perfil["status_bm_atualizado_em"] = agora_brasilia().strftime("%d/%m/%Y %H:%M")
+                        perfil["atualizado_em"] = agora_brasilia().strftime("%d/%m/%Y %H:%M")
                         nome_perfil = perfil.get("nome", "")
                         atualizado = True
                         break
@@ -7216,7 +7424,7 @@ def perfis_meta_status(perfil_id):
         salvar_status(usuario, cnpj, novo_status)
         registrar_data_uso_cnpj(usuario, cnpj, novo_status)
 
-    agora_status_perfil = datetime.now().strftime("%d/%m/%Y %H:%M")
+    agora_status_perfil = agora_brasilia().strftime("%d/%m/%Y %H:%M")
     perfil_encontrado["status_bm"] = novo_status
     perfil_encontrado["status_bm_usuario"] = usuario
     perfil_encontrado["status_bm_atualizado_em"] = agora_status_perfil
@@ -7398,6 +7606,7 @@ def admin_usuario(usuario):
                     "capital_formatado": "R$ 0,00",
                     "uf": "",
                     "municipio_nome": "",
+                    "endereco_completo": "Endereço não informado",
                     "status_bm": status
                 })
             else:
@@ -7469,7 +7678,7 @@ def historico_hoje():
 @app.route("/relatorios-bm", methods=["GET", "POST"])
 @login_obrigatorio
 def relatorios_bm():
-    hoje = datetime.now()
+    hoje = agora_brasilia()
     inicio_padrao = (hoje - timedelta(days=5)).strftime("%Y-%m-%d")
     fim_padrao = hoje.strftime("%Y-%m-%d")
 
@@ -7859,7 +8068,7 @@ def exportar():
     df = aplicar_filtros(df_base.copy(), request.form)
 
     colunas = [
-        "cnpj_formatado", "razao_social", "capital_formatado", "uf",
+        "cnpj_formatado", "razao_social", "endereco_completo", "capital_formatado", "uf",
         "municipio_nome", "telefone_formatado", "email", "nome_socio",
         "sexo_provavel", "categoria_cnae", "status_bm", "score_ia",
         "ia_recomendacao", "usado_por", "data_uso_bm", "data_inicio_formatada", "cnae_principal"
@@ -7870,6 +8079,7 @@ def exportar():
     df.rename(columns={
         "cnpj_formatado": "CNPJ",
         "razao_social": "Razão Social",
+        "endereco_completo": "Endereço Completo",
         "capital_formatado": "Capital Social",
         "uf": "UF",
         "municipio_nome": "Município",

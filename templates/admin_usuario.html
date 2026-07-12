@@ -29,7 +29,6 @@
                 <a class="menu-item" href="/master">📊 Dashboard Master</a>
                 <a class="menu-item" href="/usados">📌 Meus CNPJs Usados</a>
                 <a class="menu-item" href="/favoritos">⭐ Favoritos</a>
-                <a class="menu-item" href="/estatisticas">📈 Estatísticas</a>
                 <a class="menu-item active" href="/admin">👑 Painel Admin</a>
                 <a class="menu-item sair" href="/logout">🚪 Sair</a>
             </nav>
@@ -136,8 +135,7 @@
                         <th>CNPJ</th>
                         <th>Razão Social</th>
                         <th>Capital</th>
-                        <th>UF</th>
-                        <th>Município</th>
+                        <th>Endereço</th>
                         <th>Status Atual</th>
                         <th>Alterar Status</th>
                     </tr>
@@ -155,9 +153,7 @@
 
                         <td>{{ empresa.capital_formatado }}</td>
 
-                        <td>{{ empresa.uf }}</td>
-
-                        <td>{{ empresa.municipio_nome }}</td>
+                        <td>{{ empresa.endereco_completo }}</td>
 
                         <td>{{ empresa.status_bm }}</td>
 
