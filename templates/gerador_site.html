@@ -46,10 +46,39 @@
             <div>
               <strong id="companyLookupName">{{ empresa.razao_social if empresa else 'Digite um CNPJ válido' }}</strong>
               <small id="companyLookupDetails">
-                {% if empresa %}{{ empresa.cnae_principal }}{% else %}A empresa será localizada na base do LTDAFinder.{% endif %}
+                {% if empresa %}{{ atividade_site }}{% else %}A empresa será localizada na base do LTDAFinder.{% endif %}
               </small>
             </div>
           </div>
+        </div>
+
+        <div class="build-field">
+          <label for="siteNameInput">Nome exibido no site</label>
+          <input
+            id="siteNameInput"
+            name="nome_site"
+            type="text"
+            value="{{ nome_site }}"
+            placeholder="Nome da empresa ou marca"
+            required
+          >
+          <small>Este nome aparecerá no cabeçalho e no conteúdo do site.</small>
+        </div>
+
+        <div class="build-field">
+          <label for="slugInput">Nome do site / subdomínio</label>
+          <input
+            id="slugInput"
+            name="cloudflare_slug"
+            type="text"
+            value="{{ cloudflare_slug }}"
+            placeholder="nome-do-site"
+            minlength="3"
+            maxlength="63"
+            autocomplete="off"
+            required
+          >
+          <small>Use letras, números e hífens. Esse será o endereço antes do domínio.</small>
         </div>
 
         <div class="build-field">
@@ -60,7 +89,7 @@
 
         <div class="build-field">
           <label for="domainSelect">Domínio</label>
-          <select id="domainSelect" name="dominio_publicacao">
+          <select id="domainSelect" name="dominio_publicacao" data-auto-domain="{{ dominio_auto }}">
             <option value="auto" {% if dominio_escolhido == 'auto' %}selected{% endif %}>Automático (menor ocupação)</option>
             {% for item in dominios_publicacao %}
             <option value="{{ item.dominio }}" {% if dominio_escolhido == item.dominio %}selected{% endif %}>
@@ -87,15 +116,13 @@
         </div>
 
         <div class="build-subdomain-preview">
-          <span>Subdomínio sugerido</span>
-          <strong id="subdomainPreview">{{ cloudflare_slug or 'nome-da-empresa' }}</strong>
-          <small>O nome é gerado a partir da empresa e permanece editável após a identificação.</small>
+          <span>Endereço previsto</span>
+          <strong id="urlPreview">{% if hostname_previsto %}https://{{ hostname_previsto }}{% else %}https://nome-do-site.seudominio.com{% endif %}</strong>
+          <small id="subdomainStatus">O sistema verificará se o endereço está disponível.</small>
         </div>
 
-        <input type="hidden" name="nome_site" id="nomeSiteHidden" value="{{ nome_site }}">
         <input type="hidden" name="telefone_site" id="telefoneSiteHidden" value="{{ telefone_site }}">
         <input type="hidden" name="endereco_site" id="enderecoSiteHidden" value="{{ endereco_site }}">
-        <input type="hidden" name="cloudflare_slug" id="slugHidden" value="{{ cloudflare_slug }}">
 
         <button class="build-primary-button" id="publishButton" type="submit" {% if not empresa %}disabled{% endif %}>
           <span>↗</span> Gerar e publicar
@@ -112,15 +139,21 @@
   const lookupName = document.getElementById('companyLookupName');
   const lookupDetails = document.getElementById('companyLookupDetails');
   const email = document.getElementById('emailSite');
-  const nameHidden = document.getElementById('nomeSiteHidden');
+  const siteName = document.getElementById('siteNameInput');
   const phoneHidden = document.getElementById('telefoneSiteHidden');
   const addressHidden = document.getElementById('enderecoSiteHidden');
-  const slugHidden = document.getElementById('slugHidden');
-  const slugPreview = document.getElementById('subdomainPreview');
+  const slugInput = document.getElementById('slugInput');
+  const domainSelect = document.getElementById('domainSelect');
+  const urlPreview = document.getElementById('urlPreview');
+  const subdomainStatus = document.getElementById('subdomainStatus');
   const publishButton = document.getElementById('publishButton');
   const templateSelect = document.getElementById('templateSelect');
   const templateDescription = document.getElementById('templateDescription');
   let lookupTimer = null;
+  let availabilityTimer = null;
+  let companyFound = {{ 'true' if empresa else 'false' }};
+  let slugEditedManually = Boolean(slugInput.value);
+  let hostnameAvailable = true;
 
   function digits(value) {
     return String(value || '').replace(/\D/g, '').slice(0, 14);
@@ -135,6 +168,74 @@
       .replace(/(\d{4})(\d)/, '$1-$2');
   }
 
+  function slugify(value) {
+    return String(value || '')
+      .normalize('NFD')
+      .replace(/[̀-ͯ]/g, '')
+      .toLowerCase()
+      .replace(/(ltda|eireli|epp|mei)/g, ' ')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '')
+      .slice(0, 63)
+      .replace(/-$/g, '');
+  }
+
+  function selectedDomain() {
+    return domainSelect.value === 'auto'
+      ? (domainSelect.dataset.autoDomain || '')
+      : domainSelect.value;
+  }
+
+  function refreshButton() {
+    publishButton.disabled = !companyFound || !hostnameAvailable || slugInput.value.length < 3;
+  }
+
+  function updateUrlPreview() {
+    const slug = slugify(slugInput.value);
+    if (slugInput.value !== slug) slugInput.value = slug;
+    const domain = selectedDomain();
+    urlPreview.textContent = slug && domain
+      ? `https://${slug}.${domain}`
+      : 'https://nome-do-site.seudominio.com';
+
+    clearTimeout(availabilityTimer);
+    if (!companyFound || slug.length < 3 || !domain) {
+      subdomainStatus.textContent = slug.length < 3
+        ? 'Use pelo menos 3 caracteres no nome do site.'
+        : 'Selecione um domínio para verificar o endereço.';
+      hostnameAvailable = false;
+      refreshButton();
+      return;
+    }
+
+    subdomainStatus.textContent = 'Verificando disponibilidade…';
+    hostnameAvailable = false;
+    refreshButton();
+    availabilityTimer = setTimeout(checkAvailability, 320);
+  }
+
+  async function checkAvailability() {
+    const slug = slugify(slugInput.value);
+    const domainChoice = domainSelect.value || 'auto';
+    try {
+      const response = await fetch(`/api/subdominio-disponivel?slug=${encodeURIComponent(slug)}&dominio=${encodeURIComponent(domainChoice)}`, {
+        headers: {'Accept': 'application/json'}
+      });
+      const data = await response.json();
+      if (!response.ok || !data.ok) throw new Error(data.erro || 'Não foi possível verificar.');
+      hostnameAvailable = Boolean(data.disponivel);
+      urlPreview.textContent = `https://${data.hostname}`;
+      subdomainStatus.textContent = data.disponivel
+        ? '✓ Endereço disponível para publicação.'
+        : `Este endereço já está em uso${data.ocupado_por ? ` por ${data.ocupado_por}` : ''}.`;
+    } catch (error) {
+      hostnameAvailable = false;
+      subdomainStatus.textContent = error.message;
+    }
+    refreshButton();
+  }
+
   function setLookupState(state, title, detail) {
     lookup.classList.remove('is-found', 'is-error', 'is-loading');
     if (state) lookup.classList.add(state);
@@ -146,12 +247,15 @@
     const cnpj = digits(input.value);
     if (cnpj.length !== 14) {
       setLookupState('', 'Digite um CNPJ válido', 'A empresa será localizada na base do LTDAFinder.');
-      publishButton.disabled = true;
+      companyFound = false;
+      hostnameAvailable = false;
+      refreshButton();
       return;
     }
 
     setLookupState('is-loading', 'Localizando empresa…', 'Consultando a base do LTDAFinder.');
-    publishButton.disabled = true;
+    companyFound = false;
+    refreshButton();
 
     try {
       const response = await fetch(`/api/empresa-cnpj/${cnpj}`, {headers: {'Accept': 'application/json'}});
@@ -161,15 +265,17 @@
       const company = data.empresa;
       setLookupState('is-found', company.razao_social, company.cnae || company.endereco || 'Empresa localizada');
       if (!email.value) email.value = company.email || '';
-      nameHidden.value = company.nome_fantasia || company.razao_social || '';
+      siteName.value = company.nome_fantasia || company.razao_social || '';
       phoneHidden.value = company.telefone || '';
       addressHidden.value = company.endereco || '';
-      slugHidden.value = company.slug || '';
-      slugPreview.textContent = company.slug || 'nome-da-empresa';
-      publishButton.disabled = false;
+      if (!slugEditedManually) slugInput.value = company.slug || slugify(siteName.value);
+      companyFound = true;
+      updateUrlPreview();
     } catch (error) {
       setLookupState('is-error', 'CNPJ não encontrado', error.message);
-      publishButton.disabled = true;
+      companyFound = false;
+      hostnameAvailable = false;
+      refreshButton();
     }
   }
 
@@ -179,13 +285,30 @@
     lookupTimer = setTimeout(lookupCompany, 350);
   });
 
+  siteName.addEventListener('input', () => {
+    if (!slugEditedManually) {
+      slugInput.value = slugify(siteName.value);
+      updateUrlPreview();
+    }
+  });
+
+  slugInput.addEventListener('input', () => {
+    slugEditedManually = true;
+    updateUrlPreview();
+  });
+
+  domainSelect.addEventListener('change', updateUrlPreview);
+
   templateSelect.addEventListener('change', () => {
     const selected = templates.find(item => item.slug === templateSelect.value);
     templateDescription.textContent = selected ? selected.descricao : '';
   });
 
   {% if empresa %}
-  publishButton.disabled = false;
+  companyFound = true;
+  updateUrlPreview();
+  {% else %}
+  refreshButton();
   {% endif %}
 </script>
 <script src="{{ url_for('static', filename='app.js') }}" defer></script>

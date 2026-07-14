@@ -2496,6 +2496,7 @@ def montar_endereco_empresa(empresa):
 def identificar_segmento_site(empresa):
     texto = " ".join([
         valor_texto(empresa.get("cnae_principal", "")),
+        valor_texto(empresa.get("cnae_principal_descricao", "")),
         valor_texto(empresa.get("categoria_cnae", "")),
         valor_texto(empresa.get("razao_social", "")),
         valor_texto(empresa.get("nome_fantasia", ""))
@@ -3218,7 +3219,7 @@ def gerar_html_site_meta_waba_clean(empresa, meta_tag, observacoes=""):
     municipio = valor_texto(empresa.get("municipio_nome", "")) or valor_texto(empresa.get("municipio", ""))
     uf = valor_texto(empresa.get("uf", ""))
 
-    titulo_atividade = cnae or categoria or "Atividade empresarial cadastrada"
+    titulo_atividade = atividade_site_sem_codigo(empresa)
     nome_publico = nome_site or nome_fantasia or razao_social
     localidade = " - ".join([item for item in [municipio, uf] if item]) or "Brasil"
 
@@ -3776,10 +3777,45 @@ def normalizar_meta_tag_site(valor):
 
 
 def atividade_site_sem_codigo(empresa):
-    cnae = valor_texto(empresa.get("cnae_principal", ""))
-    if " - " in cnae:
-        return cnae.split(" - ", 1)[1].strip()
-    return cnae or valor_texto(empresa.get("categoria_cnae", ""), "Atividade empresarial")
+    """Retorna a descrição da atividade, nunca somente a numeração do CNAE."""
+
+    def somente_descricao(valor):
+        texto_valor = valor_texto(valor, "")
+        if not texto_valor:
+            return ""
+
+        # Ex.: "43.30-4-99 - Outras obras de acabamento da construção".
+        if " - " in texto_valor:
+            prefixo, descricao = texto_valor.split(" - ", 1)
+            if re.fullmatch(r"[0-9.\-/\s]+", prefixo.strip()) and descricao.strip():
+                texto_valor = descricao.strip()
+
+        # Nunca devolve um código puro como texto institucional.
+        if re.fullmatch(r"[0-9.\-/\s]+", texto_valor):
+            return ""
+
+        return texto_valor.strip()
+
+    descricao_salva = somente_descricao(empresa.get("cnae_principal_descricao", ""))
+    if descricao_salva:
+        return descricao_salva
+
+    cnae_bruto = valor_texto(empresa.get("cnae_principal", ""))
+    descricao_embutida = somente_descricao(cnae_bruto)
+    if descricao_embutida:
+        return descricao_embutida
+
+    codigo = re.sub(r"\D", "", cnae_bruto)[:7]
+    if codigo:
+        descricao_mapeada = somente_descricao(carregar_cnaes().get(codigo.zfill(7), ""))
+        if descricao_mapeada:
+            return descricao_mapeada
+
+    categoria = somente_descricao(empresa.get("categoria_cnae", ""))
+    if categoria and categoria.lower() not in {"outros", "indefinido"}:
+        return categoria
+
+    return "Atividade empresarial cadastrada"
 
 
 def situacao_cadastral_site(empresa):
@@ -4320,6 +4356,26 @@ def carregar_arquivos_verificacao_site(site):
         return {}
 
 
+def gerar_nome_worker_interno(site, slug_publico, config):
+    """Gera um nome técnico único sem alterar o subdomínio escolhido."""
+    existente = normalizar_nome_worker_cloudflare(site.get("cloudflare_worker_name", ""))
+    dominio_salvo = normalizar_dominio_cloudflare(site.get("cloudflare_dominio_base", ""))
+    dominio_config = normalizar_dominio_cloudflare(config.get("custom_domain", ""))
+
+    if existente and (not dominio_salvo or dominio_salvo == dominio_config):
+        return existente
+
+    cnpj = limpar_cnpj(site.get("cnpj", ""))
+    assinatura = hashlib.sha256(
+        f"{dominio_config}|{slug_publico}|{cnpj}".encode("utf-8")
+    ).hexdigest()[:8]
+
+    sufixo = f"-{assinatura}"
+    base_maxima = max(3, 63 - len("ltdafinder-") - len(sufixo))
+    base = normalizar_nome_worker_cloudflare(slug_publico)[:base_maxima].strip("-") or "site"
+    return normalizar_nome_worker_cloudflare(f"ltdafinder-{base}{sufixo}")
+
+
 def gerar_worker_js_site(html, politica_html="", termos_html="", arquivos_verificacao=None):
     paginas = {
         "/": html,
@@ -4410,6 +4466,52 @@ def _config_cloudflare_legado():
     }
 
 
+def _config_cloudflare_painelconectado():
+    """Configuração isolada da nova conta Cloudflare.
+
+    A configuração só entra na lista de domínios quando o token estiver
+    cadastrado na Railway, evitando que o modo automático escolha um domínio
+    ainda sem credencial.
+    """
+    api_token = valor_texto(os.environ.get(
+        "CLOUDFLARE_PAINELCONECTADO_API_TOKEN", ""
+    ))
+
+    if not api_token:
+        return None
+
+    custom_domain = normalizar_dominio_cloudflare(
+        os.environ.get(
+            "CLOUDFLARE_PAINELCONECTADO_ZONE_NAME",
+            "painelconectadobr.com"
+        )
+    ) or "painelconectadobr.com"
+
+    return {
+        "account_id": valor_texto(os.environ.get(
+            "CLOUDFLARE_PAINELCONECTADO_ACCOUNT_ID",
+            "bd343bda99621383fba856bd3476c6e6"
+        )),
+        "api_token": api_token,
+        "subdomain": "",
+        "custom_domain": custom_domain,
+        "zone_id": valor_texto(os.environ.get(
+            "CLOUDFLARE_PAINELCONECTADO_ZONE_ID",
+            "dd8b7536528f5ca7479896d4d8771729"
+        )),
+        "zone_name": custom_domain,
+        "ativo": valor_texto(os.environ.get(
+            "CLOUDFLARE_PAINELCONECTADO_ATIVO", "1"
+        )).lower() not in {"0", "false", "nao", "não", "off"},
+        "publish_mode": valor_texto(os.environ.get(
+            "CLOUDFLARE_PAINELCONECTADO_PUBLISH_MODE",
+            "custom_strict"
+        )).lower(),
+        "rotulo": "Painel Conectado BR",
+        "env_prefix": "CLOUDFLARE_PAINELCONECTADO",
+    }
+
+
 def listar_configs_cloudflare():
     bruto = valor_texto(os.environ.get("CLOUDFLARE_SITES_CONFIG", ""))
     configs = []
@@ -4433,13 +4535,31 @@ def listar_configs_cloudflare():
                         "zone_id": valor_texto(item.get("zone_id", "")),
                         "zone_name": normalizar_dominio_cloudflare(item.get("zone_name", dominio)) or dominio,
                         "ativo": bool(item.get("active", item.get("ativo", True))),
+                        "publish_mode": valor_texto(item.get("publish_mode", "")),
                     })
         except Exception as erro:
             print("CLOUDFLARE_SITES_CONFIG inválido:", erro)
 
     if not configs:
         configs = [_config_cloudflare_legado()]
-    return configs
+
+    config_painelconectado = _config_cloudflare_painelconectado()
+    if config_painelconectado:
+        dominio_novo = config_painelconectado["custom_domain"]
+        configs = [
+            config for config in configs
+            if config.get("custom_domain") != dominio_novo
+        ]
+        configs.append(config_painelconectado)
+
+    # Uma única opção por domínio, mesmo que ele tenha sido repetido no JSON.
+    unicos = {}
+    for config in configs:
+        chave = dominio_publicacao_cloudflare(config)
+        if chave:
+            unicos[chave] = config
+
+    return list(unicos.values())
 
 
 def obter_config_cloudflare(dominio=""):
@@ -4712,7 +4832,8 @@ def anexar_rota_worker_cloudflare(config, worker_name, hostname):
 def publicar_site_na_cloudflare(site, nome_personalizado="", dominio_publicacao=""):
     dominio_publicacao = dominio_publicacao or valor_texto(site.get("cloudflare_dominio_base", ""))
     config = validar_config_cloudflare(dominio_publicacao)
-    worker_name = gerar_nome_worker_site(site, nome_personalizado)
+    slug_publico = gerar_nome_worker_site(site, nome_personalizado)
+    worker_name = gerar_nome_worker_interno(site, slug_publico, config)
     worker_js = gerar_worker_js_site_registro(site)
 
     headers = {
@@ -4739,11 +4860,17 @@ def publicar_site_na_cloudflare(site, nome_personalizado="", dominio_publicacao=
         raise RuntimeError(erro)
 
     if config.get("custom_domain"):
-        hostname = f"{worker_name}.{config['custom_domain']}"
-        modo_publicacao = valor_texto(os.environ.get("CLOUDFLARE_PUBLISH_MODE", "route")).lower()
+        hostname = f"{slug_publico}.{config['custom_domain']}"
+        modo_publicacao = valor_texto(
+            config.get("publish_mode")
+            or os.environ.get("CLOUDFLARE_PUBLISH_MODE", "route")
+        ).lower()
         aviso_publicacao = ""
 
-        if modo_publicacao in ["custom", "custom_domain", "domain"]:
+        if modo_publicacao in ["custom_strict", "custom_only", "custom-only"]:
+            anexar_dominio_customizado_cloudflare(config, worker_name, hostname)
+            modo_usado = "Custom Domain"
+        elif modo_publicacao in ["custom", "custom_domain", "domain"]:
             try:
                 anexar_dominio_customizado_cloudflare(config, worker_name, hostname)
                 modo_usado = "Custom Domain"
@@ -5103,6 +5230,10 @@ def opcoes_dominios_publicacao():
     for config in listar_configs_cloudflare():
         if not config.get("ativo", True):
             continue
+        if not config.get("account_id") or not config.get("api_token"):
+            continue
+        if config.get("custom_domain") and not config.get("zone_id"):
+            continue
         dominio = dominio_publicacao_cloudflare(config)
         opcoes.append({
             "dominio": dominio,
@@ -5123,6 +5254,54 @@ def resolver_dominio_publicacao(escolha="auto"):
                 return item["dominio"], obter_config_cloudflare(item["dominio"])
     escolhido = opcoes[0]
     return escolhido["dominio"], obter_config_cloudflare(escolhido["dominio"])
+
+
+def montar_hostname_publicacao(slug, dominio):
+    slug = normalizar_nome_worker_cloudflare(slug)
+    dominio = normalizar_dominio_cloudflare(dominio)
+    return f"{slug}.{dominio}" if slug and dominio else ""
+
+
+def buscar_site_por_hostname(hostname, excluir_site_id=None):
+    criar_tabela_sites_gerados()
+    hostname = normalizar_dominio_cloudflare(hostname)
+    if not hostname:
+        return None
+
+    slug, _, dominio = hostname.partition(".")
+    filtros = ["""
+        (
+            LOWER(COALESCE(cloudflare_hostname, '')) = :hostname
+            OR (
+                LOWER(COALESCE(cloudflare_slug_personalizado, '')) = :slug
+                AND LOWER(COALESCE(cloudflare_dominio_base, '')) = :dominio
+            )
+        )
+    """]
+    params = {"hostname": hostname, "slug": slug, "dominio": dominio}
+
+    if excluir_site_id:
+        filtros.append("id != :excluir_site_id")
+        params["excluir_site_id"] = int(excluir_site_id)
+
+    with engine.connect() as conn:
+        return conn.execute(
+            text(f"""
+                SELECT id, nome_exibicao, nome_empresarial, cloudflare_status
+                FROM sites_gerados
+                WHERE {' AND '.join(filtros)}
+                LIMIT 1
+            """),
+            params
+        ).mappings().fetchone()
+
+
+def hostname_publicacao_disponivel(slug, dominio, excluir_site_id=None):
+    hostname = montar_hostname_publicacao(slug, dominio)
+    if not hostname:
+        return False, hostname, None
+    existente = buscar_site_por_hostname(hostname, excluir_site_id)
+    return existente is None, hostname, dict(existente) if existente else None
 
 
 def atualizar_site_conteudo(site_id, campos):
@@ -8344,7 +8523,7 @@ def relatorios_bm_txt():
 
     return send_file(
         output,
-        download_name="index.html",
+        download_name=nome_arquivo,
         as_attachment=True,
         mimetype="text/plain; charset=utf-8"
     )
@@ -8383,10 +8562,36 @@ def api_empresa_cnpj(cnpj):
             "nome_fantasia": valor_texto(empresa.get("nome_fantasia", "")),
             "email": valor_texto(empresa.get("email", "")),
             "telefone": valor_texto(empresa.get("telefone_formatado", "")),
-            "cnae": valor_texto(empresa.get("cnae_principal", "")),
+            "cnae": atividade_site_sem_codigo(empresa),
+            "cnae_completo": valor_texto(empresa.get("cnae_principal", "")),
             "endereco": montar_endereco_empresa(empresa),
             "slug": sugerir_nome_worker_site(empresa),
         }
+    })
+
+
+@app.route("/api/subdominio-disponivel", methods=["GET"])
+@login_obrigatorio
+def api_subdominio_disponivel():
+    slug = normalizar_nome_worker_cloudflare(request.args.get("slug", ""))
+    escolha = request.args.get("dominio", "auto")
+    dominio, _ = resolver_dominio_publicacao(escolha)
+
+    if len(slug) < 3:
+        return jsonify({
+            "ok": False,
+            "disponivel": False,
+            "hostname": montar_hostname_publicacao(slug, dominio),
+            "erro": "Use pelo menos 3 caracteres no nome do site."
+        }), 400
+
+    disponivel, hostname, existente = hostname_publicacao_disponivel(slug, dominio)
+    return jsonify({
+        "ok": True,
+        "disponivel": disponivel,
+        "hostname": hostname,
+        "ocupado_por": existente.get("nome_exibicao") or existente.get("nome_empresarial")
+                       if existente else ""
     })
 
 
@@ -8400,23 +8605,50 @@ def gerador_site(cnpj):
     modelo_site = request.values.get("modelo_site", "dinamico").strip()
     if modelo_site not in MODELOS_SITE_DICT:
         modelo_site = "dinamico"
+
     dominios = opcoes_dominios_publicacao()
     dominio_escolhido = request.values.get("dominio_publicacao", "auto").strip() or "auto"
+    dominio_auto = dominios[0]["dominio"] if dominios else ""
+
+    if empresa:
+        nome_site = request.values.get("nome_site", "").strip() or nome_exibicao_empresa(empresa)
+        telefone_site = request.values.get("telefone_site", "").strip() or valor_texto(empresa.get("telefone_formatado", ""))
+        email_site = request.values.get("email_site", "").strip() or valor_texto(empresa.get("email", ""))
+        endereco_site = request.values.get("endereco_site", "").strip() or montar_endereco_empresa(empresa)
+        cloudflare_slug = normalizar_nome_worker_cloudflare(
+            request.values.get("cloudflare_slug", "")
+        ) or sugerir_nome_worker_site({**empresa, "nome_site": nome_site})
+    else:
+        nome_site = request.values.get("nome_site", "").strip()
+        telefone_site = request.values.get("telefone_site", "").strip()
+        email_site = request.values.get("email_site", "").strip()
+        endereco_site = request.values.get("endereco_site", "").strip()
+        cloudflare_slug = normalizar_nome_worker_cloudflare(request.values.get("cloudflare_slug", ""))
+
+    dominio_previsto, _ = resolver_dominio_publicacao(dominio_escolhido)
+    hostname_previsto = montar_hostname_publicacao(cloudflare_slug, dominio_previsto)
 
     if request.method == "POST":
         if not empresa:
             erro = "CNPJ não encontrado na base do LTDAFinder."
+        elif len(cloudflare_slug) < 3:
+            erro = "O nome do site/subdomínio precisa ter pelo menos 3 caracteres."
         else:
-            nome_site = request.form.get("nome_site", "").strip() or nome_exibicao_empresa(empresa)
-            telefone_site = request.form.get("telefone_site", "").strip() or valor_texto(empresa.get("telefone_formatado", ""))
-            email_site = request.form.get("email_site", "").strip() or valor_texto(empresa.get("email", ""))
-            endereco_site = request.form.get("endereco_site", "").strip() or montar_endereco_empresa(empresa)
-            cloudflare_slug = normalizar_nome_worker_cloudflare(request.form.get("cloudflare_slug", "")) or sugerir_nome_worker_site(empresa)
-            dominio_real, _ = resolver_dominio_publicacao(dominio_escolhido)
-            if len(cloudflare_slug) < 3:
-                erro = "O subdomínio precisa ter pelo menos 3 caracteres."
+            disponivel, hostname_previsto, existente = hostname_publicacao_disponivel(
+                cloudflare_slug,
+                dominio_previsto
+            )
+
+            if not disponivel:
+                nome_existente = existente.get("nome_exibicao") or existente.get("nome_empresarial") or "outro site"
+                erro = (
+                    f"O endereço {hostname_previsto} já está vinculado a {nome_existente}. "
+                    "Escolha outro nome para o site."
+                )
             else:
-                empresa_site = aplicar_personalizacao_site(empresa, nome_site, telefone_site, email_site, endereco_site, telefone_site)
+                empresa_site = aplicar_personalizacao_site(
+                    empresa, nome_site, telefone_site, email_site, endereco_site, telefone_site
+                )
                 bundle = gerar_bundle_site_empresa(empresa_site, "", modelo_site, "")
                 cnpj_limpo = limpar_cnpj(empresa.get("cnpj_limpo", empresa.get("cnpj", cnpj_form)))
                 site_id = salvar_site_gerado({
@@ -8431,42 +8663,49 @@ def gerador_site(cnpj):
                     "whatsapp_exibicao": telefone_site, "email_exibicao": email_site,
                     "endereco_exibicao": endereco_site,
                     "cloudflare_slug_personalizado": cloudflare_slug,
-                    "cloudflare_dominio_base": dominio_real,
+                    "cloudflare_dominio_base": dominio_previsto,
+                    "cloudflare_hostname": hostname_previsto,
                     "cloudflare_status": "Não publicado", "meta_tag": "",
                     "modelo_site": modelo_site, "nome_arquivo": gerar_nome_arquivo_site(empresa_site),
                     "html_gerado": bundle["html"], "politica_html": bundle["politica"],
                     "termos_html": bundle["termos"], "arquivos_verificacao": "{}",
-                    "status": "Gerado", "observacoes": "", "versao_template": "2.0"
+                    "status": "Gerado", "observacoes": "", "versao_template": "2.1"
                 })
                 site = buscar_site_gerado(site_id)
                 try:
-                    resultado = publicar_site_na_cloudflare(site, cloudflare_slug, dominio_real)
+                    resultado = publicar_site_na_cloudflare(site, cloudflare_slug, dominio_previsto)
                     atualizar_publicacao_cloudflare_site(
                         site_id, "Publicado", resultado["worker_name"], resultado["cloudflare_url"],
                         resultado.get("aviso", ""), cloudflare_slug,
-                        resultado.get("dominio_base", dominio_real), resultado.get("hostname", "")
+                        resultado.get("dominio_base", dominio_previsto), resultado.get("hostname", "")
                     )
-                    registrar_evento(usuario_atual(), formatar_cnpj(cnpj_limpo), "-", f"Site publicado: {resultado['cloudflare_url']}")
-                    return redirect(url_for("site_gerado_preview", site_id=site_id, cloudflare_msg="Site publicado com sucesso."))
+                    registrar_evento(
+                        usuario_atual(), formatar_cnpj(cnpj_limpo), "-",
+                        f"Site publicado: {resultado['cloudflare_url']}"
+                    )
+                    return redirect(url_for(
+                        "site_gerado_preview", site_id=site_id,
+                        cloudflare_msg="Site publicado com sucesso."
+                    ))
                 except Exception as exc:
-                    atualizar_publicacao_cloudflare_site(site_id, "Erro", "", "", str(exc), cloudflare_slug, dominio_real, "")
-                    return redirect(url_for("site_gerado_preview", site_id=site_id, cloudflare_erro=str(exc)))
-
-    if empresa:
-        nome_site = nome_exibicao_empresa(empresa)
-        telefone_site = valor_texto(empresa.get("telefone_formatado", ""))
-        email_site = valor_texto(empresa.get("email", ""))
-        endereco_site = montar_endereco_empresa(empresa)
-        cloudflare_slug = sugerir_nome_worker_site(empresa)
-    else:
-        nome_site = telefone_site = email_site = endereco_site = cloudflare_slug = ""
+                    atualizar_publicacao_cloudflare_site(
+                        site_id, "Erro", "", "", str(exc), cloudflare_slug,
+                        dominio_previsto, hostname_previsto
+                    )
+                    return redirect(url_for(
+                        "site_gerado_preview", site_id=site_id,
+                        cloudflare_erro=str(exc)
+                    ))
 
     return render_template(
         "gerador_site.html", usuario_logado=usuario_atual(), tipo_usuario=tipo_usuario(),
         empresa=empresa, modelos_site=MODELOS_SITE, modelo_site=modelo_site,
         nome_site=nome_site, telefone_site=telefone_site, email_site=email_site,
         endereco_site=endereco_site, cloudflare_slug=cloudflare_slug,
-        dominios_publicacao=dominios, dominio_escolhido=dominio_escolhido, erro=erro
+        dominios_publicacao=dominios, dominio_escolhido=dominio_escolhido,
+        dominio_auto=dominio_auto, hostname_previsto=hostname_previsto,
+        atividade_site=atividade_site_sem_codigo(empresa) if empresa else "",
+        erro=erro
     )
 
 
