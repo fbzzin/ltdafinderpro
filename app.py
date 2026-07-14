@@ -8672,9 +8672,9 @@ def site_gerado_download(site_id):
 
     return send_file(
         output,
-        download_name=nome_arquivo,
+        download_name="index.html",
         as_attachment=True,
-        mimetype="text/html; charset=utf-8"
+        mimetype="text/html"
     )
 
 
