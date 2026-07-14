@@ -14,39 +14,7 @@
 
 <div class="layout">
 
-    <aside class="sidebar">
-        <div>
-            <div class="sidebar-logo">
-                <img src="{{ url_for('static', filename='logo.png') }}" alt="LtdaFinder Pro">
-            </div>
-
-            <div class="usuario-box">
-                <div>
-                    <span>Usuário logado</span>
-                    <strong>👤 {{ usuario_logado }}</strong>
-                </div>
-            </div>
-
-            <nav class="menu">
-                <a class="menu-item" href="/">🔎 Minerar CNPJs</a>
-                <a class="menu-item" href="/master">📊 Dashboard Master</a>
-                <a class="menu-item" href="/usados">📌 Meus CNPJs Usados</a>
-                <a class="menu-item" href="/favoritos">⭐ Favoritos</a>
-                <a class="menu-item" href="/perfis-meta">👤 Perfis Meta</a>
-                <a class="menu-item" href="/ia-operacional">🧠 IA Operacional</a>
-                <a class="menu-item active" href="/relatorios-bm">📄 Relatórios BM</a>
-                <a class="menu-item" href="/historico">📜 Histórico</a>
-                {% if tipo_usuario == "admin" %}
-                <a class="menu-item" href="/admin">👑 Painel Admin</a>
-                {% endif %}
-                <a class="menu-item sair" href="/logout">🚪 Sair</a>
-            </nav>
-        </div>
-
-        <div class="sidebar-footer">
-            Versão Local <strong>V1.0</strong>
-        </div>
-    </aside>
+    {% include "_sidebar.html" %}
 
     <main class="main">
 

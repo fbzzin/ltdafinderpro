@@ -1,96 +1,23 @@
-{# =========================================================
-   base.html — Layout global do LTDAFinder Pro
-   Estenda este layout em suas páginas:
-     {% extends "base.html" %}
-     {% block title %}Perfis Meta{% endblock %}
-     {% block content %} ... {% endblock %}
-   Variáveis Jinja esperadas (adapte aos nomes reais do seu app):
-     usuario_logado, tipo_usuario, active_page
-========================================================= #}
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
-  <meta charset="utf-8">
+  <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}LTDAFinder Pro{% endblock %} · LTDAFinder Pro</title>
+  <title>{% block title %}LTDAFinder Pro{% endblock %}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-  {% block head_extra %}{% endblock %}
+  {% block head %}{% endblock %}
 </head>
 <body>
-
-<div class="app">
-
-  {# ---- Sidebar ---- #}
-  <aside class="sidebar" id="sidebar">
-    <div class="sidebar__brand">
-      <div class="sidebar__logo">LT</div>
-      <div class="sidebar__title">
-        LTDAFinder
-        <small>Pro · Operação</small>
-      </div>
-    </div>
-
-    <div class="sidebar__section">Operação</div>
-    <nav class="sidebar__nav">
-      <a href="/" class="sidebar__link {% if active_page == 'mineracao' %}is-active{% endif %}">🔎 Minerar CNPJs</a>
-      <a href="/master" class="sidebar__link {% if active_page == 'master' %}is-active{% endif %}">📊 Dashboard Master</a>
-      <a href="/usados" class="sidebar__link {% if active_page == 'usados' %}is-active{% endif %}">📌 Meus CNPJs Usados</a>
-      <a href="/favoritos" class="sidebar__link {% if active_page == 'favoritos' %}is-active{% endif %}">⭐ Favoritos</a>
-      <a href="/perfis-meta" class="sidebar__link {% if active_page == 'perfis' %}is-active{% endif %}">👤 Perfis Meta</a>
-      <a href="/relatorios-bm" class="sidebar__link {% if active_page == 'relatorios' %}is-active{% endif %}">📄 Relatórios BM</a>
-      <a href="/sites" class="sidebar__link {% if active_page == 'sites' or active_page == 'gerador' %}is-active{% endif %}">🌐 Gerador de Sites</a>
-      <a href="/historico" class="sidebar__link {% if active_page == 'historico' %}is-active{% endif %}">📜 Histórico</a>
-      {% if tipo_usuario == "admin" %}
-      <a href="/admin" class="sidebar__link {% if active_page == 'admin' %}is-active{% endif %}">👑 Painel Admin</a>
-      {% endif %}
-      <a href="/logout" class="sidebar__link sair">🚪 Sair</a>
-    </nav>
-
-    <div class="sidebar__user">
-      <div class="sidebar__avatar">{{ (usuario_logado[:1] if usuario_logado else 'U') | upper }}</div>
-      <div class="sidebar__user-info">
-        <strong>{{ usuario_logado or 'Usuário' }}</strong>
-        <span>{{ tipo_usuario or 'operador' }}</span>
-      </div>
-    </div>
-  </aside>
-  <div class="sidebar-backdrop"></div>
-
-  {# ---- Main area ---- #}
-  <div class="app__main">
-    <header class="topbar">
-      <button class="topbar__toggle" data-sidebar-toggle aria-label="Abrir menu">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
-      </button>
-      <div class="topbar__title">{% block page_title %}Dashboard{% endblock %}</div>
-      <span class="topbar__crumb">{% block page_crumb %}{% endblock %}</span>
-      <div class="topbar__spacer"></div>
-      <div class="topbar__actions">
-        {% block topbar_actions %}{% endblock %}
-        <a href="/logout" class="btn btn-ghost btn-sm">Sair</a>
-      </div>
-    </header>
-
-    <main class="app__content">
-      {# Flash messages (Flask) #}
-      {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-          <div class="toast-container">
-            {% for cat, msg in messages %}
-              <div class="toast alert-{{ cat or 'info' }}" data-auto-dismiss>{{ msg }}</div>
-            {% endfor %}
-          </div>
-        {% endif %}
-      {% endwith %}
-
-      {% block content %}{% endblock %}
-    </main>
-  </div>
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
+<div class="layout">
+  {% include "_sidebar.html" %}
+  <main class="main">
+    {% block content %}{% endblock %}
+  </main>
 </div>
-
 <script src="{{ url_for('static', filename='app.js') }}" defer></script>
 {% block scripts %}{% endblock %}
 </body>

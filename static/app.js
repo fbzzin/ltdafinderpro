@@ -58,3 +58,29 @@
     setTimeout(() => t.remove(), 5000);
   });
 })();
+
+// LTDAFinder 2026 shell helpers
+(function () {
+  const menuToggle = document.getElementById('menuToggle');
+  const overlay = document.getElementById('sidebarOverlay');
+  const sidebar = document.getElementById('appSidebar');
+
+  function closeSidebar() {
+    document.body.classList.remove('sidebar-aberta');
+  }
+
+  if (menuToggle) {
+    menuToggle.addEventListener('click', function () {
+      document.body.classList.toggle('sidebar-aberta');
+    });
+  }
+
+  if (overlay) overlay.addEventListener('click', closeSidebar);
+  if (sidebar) {
+    sidebar.querySelectorAll('a').forEach(function (link) {
+      link.addEventListener('click', function () {
+        if (window.innerWidth <= 1000) closeSidebar();
+      });
+    });
+  }
+})();

@@ -1,0 +1,68 @@
+<aside class="sidebar" id="appSidebar">
+  <div class="sidebar-brand">
+    <div class="sidebar-brand-mark">
+      <img src="{{ url_for('static', filename='logo.png') }}" alt="LTDAFinder Pro">
+    </div>
+    <div class="sidebar-brand-copy">
+      <strong>LTDAFinder</strong>
+      <span>Pro</span>
+    </div>
+  </div>
+
+  <div class="sidebar-user">
+    <div class="sidebar-avatar">{{ (usuario_logado or 'U')[:1]|upper }}</div>
+    <div class="sidebar-user-copy">
+      <strong>{{ usuario_logado or 'Usuário' }}</strong>
+      <span>{{ 'Administrador' if tipo_usuario == 'admin' else 'Equipe operacional' }}</span>
+    </div>
+  </div>
+
+  <nav class="sidebar-nav" aria-label="Navegação principal">
+    <div class="sidebar-section">Operação</div>
+    <a class="sidebar-link {% if request.path == '/' %}active{% endif %}" href="/">
+      <span class="sidebar-icon">⌕</span><span>Minerar CNPJs</span>
+    </a>
+    <a class="sidebar-link {% if request.path.startswith('/master') %}active{% endif %}" href="/master">
+      <span class="sidebar-icon">⌂</span><span>Dashboard Master</span>
+    </a>
+    <a class="sidebar-link {% if request.path.startswith('/usados') %}active{% endif %}" href="/usados">
+      <span class="sidebar-icon">◫</span><span>Meus CNPJs Usados</span>
+    </a>
+    <a class="sidebar-link {% if request.path.startswith('/favoritos') %}active{% endif %}" href="/favoritos">
+      <span class="sidebar-icon">☆</span><span>Favoritos</span>
+    </a>
+    <a class="sidebar-link {% if request.path.startswith('/perfis-meta') %}active{% endif %}" href="/perfis-meta">
+      <span class="sidebar-icon">◎</span><span>Perfis Meta</span>
+    </a>
+    <a class="sidebar-link {% if request.path.startswith('/ia-operacional') %}active{% endif %}" href="/ia-operacional">
+      <span class="sidebar-icon">◇</span><span>IA Operacional</span>
+    </a>
+
+    <div class="sidebar-section">Sites</div>
+    <a class="sidebar-link {% if request.path == '/sites' or request.path.startswith('/site-gerado') %}active{% endif %}" href="/sites">
+      <span class="sidebar-icon">◎</span><span>Meus Sites</span>
+    </a>
+    <a class="sidebar-link sidebar-link-create {% if request.path.startswith('/gerador-site') %}active{% endif %}" href="/gerador-site">
+      <span class="sidebar-icon">＋</span><span>Criar Site</span>
+    </a>
+
+    <div class="sidebar-section">Relatórios</div>
+    <a class="sidebar-link {% if request.path.startswith('/relatorios-bm') %}active{% endif %}" href="/relatorios-bm">
+      <span class="sidebar-icon">▤</span><span>Relatórios BM</span>
+    </a>
+    <a class="sidebar-link {% if request.path.startswith('/historico') %}active{% endif %}" href="/historico">
+      <span class="sidebar-icon">↺</span><span>Histórico</span>
+    </a>
+
+    {% if tipo_usuario == 'admin' %}
+    <div class="sidebar-section">Administração</div>
+    <a class="sidebar-link {% if request.path.startswith('/admin') %}active{% endif %}" href="/admin">
+      <span class="sidebar-icon">⚙</span><span>Painel Admin</span>
+    </a>
+    {% endif %}
+  </nav>
+
+  <div class="sidebar-footer">
+    <a class="sidebar-exit" href="/logout"><span>↪</span> Sair</a>
+  </div>
+</aside>
