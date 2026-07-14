@@ -2205,6 +2205,12 @@ MODELOS_SITE = [
         "icone": "⚡"
     },
     {
+        "slug": "ia_2_0",
+        "nome": "Template IA 2.0",
+        "descricao": "Site institucional simples e completo, com identidade empresarial, atividade descrita, telefone associado, dados oficiais, privacidade e termos.",
+        "icone": "🧠"
+    },
+    {
         "slug": "institucional",
         "nome": "Institucional Clássico",
         "descricao": "Visual formal, confiável e corporativo. Bom para serviços, consultorias, educação e empresas tradicionais.",
@@ -3986,6 +3992,215 @@ def gerar_html_site_dinamico(empresa, meta_tag="", observacoes=""):
 </html>"""
 
 
+
+def gerar_html_site_ia_2_0(empresa, meta_tag="", observacoes=""):
+    """Template institucional enxuto e factual.
+
+    O objetivo é apresentar, no mesmo documento, a identidade pública usada no
+    site, a razão social, a atividade descrita, os dados cadastrais e os canais
+    de contato. O modelo não inventa certificações, tempo de mercado, avaliações
+    ou promessas que não existam na base.
+    """
+    segmento = identificar_segmento_site(empresa)
+    conteudo = obter_conteudo_segmento(segmento)
+
+    cnpj_limpo = limpar_cnpj(empresa.get("cnpj_limpo", empresa.get("cnpj", "")))
+    cnpj_formatado = formatar_cnpj(cnpj_limpo)
+    nome_publico = valor_texto(empresa.get("nome_site", "")) or nome_exibicao_empresa(empresa)
+    razao_social = valor_publico(empresa.get("razao_social", ""))
+    nome_fantasia = valor_texto(empresa.get("nome_fantasia", ""))
+    atividade = atividade_site_sem_codigo(empresa)
+    cnae_bruto = valor_texto(empresa.get("cnae_principal", ""))
+    natureza = valor_publico(empresa.get("natureza_juridica", ""))
+    situacao = situacao_cadastral_site(empresa)
+    data_abertura = valor_publico(empresa.get("data_inicio_formatada", ""))
+    endereco = montar_endereco_empresa(empresa)
+    municipio = valor_texto(empresa.get("municipio_nome", "")) or valor_texto(empresa.get("municipio", ""))
+    uf = valor_texto(empresa.get("uf", ""))
+    localidade = ", ".join([item for item in [municipio, uf] if item]) or "Brasil"
+    telefone = valor_texto(empresa.get("telefone_formatado", ""))
+    email = valor_texto(empresa.get("email", ""))
+    meta_tag = normalizar_meta_tag_site(meta_tag)
+
+    telefone_digitos = re.sub(r"\D", "", telefone)
+    telefone_href = f"+{telefone_digitos}" if telefone_digitos else ""
+    whatsapp_digitos = telefone_digitos
+    if whatsapp_digitos and len(whatsapp_digitos) in {10, 11}:
+        whatsapp_digitos = f"55{whatsapp_digitos}"
+    whatsapp_url = f"https://wa.me/{whatsapp_digitos}" if whatsapp_digitos else ""
+
+    if cnae_bruto and atividade.lower() not in cnae_bruto.lower():
+        cnae_oficial = f"{cnae_bruto} - {atividade}"
+    else:
+        cnae_oficial = cnae_bruto or atividade
+
+    servicos = list(conteudo.get("servicos", []))[:3]
+    while len(servicos) < 3:
+        servicos.append(f"Atendimento relacionado a {atividade.lower()}")
+
+    primary, accent, bg_soft = paleta_template_dinamico(cnpj_limpo)
+    descricao = (
+        f"{nome_publico}, identificação institucional de {razao_social}. "
+        f"Atuação em {atividade.lower()} em {localidade}, com dados cadastrais e canais de contato."
+    )
+
+    identificacao_publica = ""
+    if nome_publico and normalizar_texto_razao(nome_publico) != normalizar_texto_razao(razao_social):
+        identificacao_publica = f"""
+        <div class="identity-note">
+          <strong>Identificação utilizada neste site</strong>
+          <span>{escape(nome_publico)}</span>
+          <small>Razão social vinculada: {escape(razao_social)}</small>
+        </div>"""
+
+    contato_itens = []
+    if telefone:
+        contato_itens.append(
+            f'<div class="contact-row"><span>Telefone de atendimento</span><a href="tel:{escape(telefone_href, quote=True)}">{escape(telefone)}</a></div>'
+        )
+    if email:
+        contato_itens.append(
+            f'<div class="contact-row"><span>E-mail de contato</span><a href="mailto:{escape(email, quote=True)}">{escape(email)}</a></div>'
+        )
+    contato_html = "".join(contato_itens) or '<div class="contact-row"><span>Canais de contato</span><strong>Não informados</strong></div>'
+
+    botoes = []
+    if whatsapp_url:
+        botoes.append(f'<a class="button primary" href="{escape(whatsapp_url, quote=True)}">Falar pelo WhatsApp</a>')
+    if email:
+        botoes.append(f'<a class="button secondary" href="mailto:{escape(email, quote=True)}">Enviar e-mail</a>')
+    botoes_html = "".join(botoes)
+
+    schema = {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        "name": nome_publico,
+        "legalName": razao_social,
+        "taxID": cnpj_formatado,
+        "description": atividade,
+        "address": endereco,
+    }
+    if nome_fantasia:
+        schema["alternateName"] = nome_fantasia
+    if telefone:
+        schema["telephone"] = telefone
+    if email:
+        schema["email"] = email
+    schema_json = json.dumps(schema, ensure_ascii=False).replace("</", "<\\/")
+
+    return f"""<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{escape(nome_publico)} | {escape(atividade)}</title>
+  <meta name="description" content="{escape(descricao, quote=True)}">
+  {meta_tag}
+  <meta property="og:title" content="{escape(nome_publico, quote=True)}">
+  <meta property="og:description" content="{escape(descricao, quote=True)}">
+  <meta property="og:type" content="website">
+  <script type="application/ld+json">{schema_json}</script>
+  <style>
+    :root{{--primary:{primary};--accent:{accent};--soft:{bg_soft};--text:#172033;--muted:#64748b;--line:#dce5f0;--surface:#fff}}
+    *{{box-sizing:border-box}}
+    html{{scroll-behavior:smooth}}
+    body{{margin:0;font-family:Segoe UI,Arial,sans-serif;background:var(--soft);color:var(--text);line-height:1.6}}
+    a{{color:inherit}}
+    .wrap{{width:min(940px,calc(100% - 32px));margin:auto}}
+    header{{background:var(--primary);color:#fff;padding:42px 0 34px}}
+    .brand-row{{display:flex;align-items:center;gap:16px}}
+    .mark{{width:50px;height:50px;border-radius:14px;background:var(--accent);display:grid;place-items:center;font-weight:800;font-size:22px}}
+    h1{{font-size:clamp(1.8rem,5vw,2.65rem);line-height:1.1;margin:0 0 8px}}
+    header p{{margin:0;opacity:.88}}
+    main{{padding:28px 0 44px}}
+    .card{{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:24px;margin-bottom:18px;box-shadow:0 8px 24px rgba(15,23,42,.05)}}
+    h2{{font-size:1.22rem;margin:0 0 14px;color:var(--primary)}}
+    p{{margin:0 0 12px}}
+    .intro{{font-size:1.05rem}}
+    .identity-note{{display:grid;gap:2px;margin-top:18px;padding:14px 16px;border-left:4px solid var(--accent);background:var(--soft);border-radius:8px}}
+    .identity-note small{{color:var(--muted)}}
+    .services{{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;padding:0;margin:0;list-style:none}}
+    .services li{{padding:14px;background:var(--soft);border:1px solid var(--line);border-radius:10px}}
+    .details{{display:grid;grid-template-columns:180px 1fr;gap:0;margin:0}}
+    .details dt,.details dd{{margin:0;padding:10px 0;border-bottom:1px solid var(--line)}}
+    .details dt{{font-weight:700;color:var(--muted)}}
+    .details dd{{word-break:break-word}}
+    .contact-box{{display:grid;gap:10px}}
+    .contact-row{{display:flex;justify-content:space-between;gap:20px;padding:12px 14px;background:var(--soft);border-radius:10px}}
+    .contact-row span{{color:var(--muted);font-weight:700}}
+    .contact-row a{{font-weight:700;color:var(--primary);text-decoration:none;word-break:break-all}}
+    .actions{{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}}
+    .button{{display:inline-flex;text-decoration:none;border-radius:9px;padding:11px 16px;font-weight:700}}
+    .button.primary{{background:var(--accent);color:#fff}}
+    .button.secondary{{border:1px solid var(--primary);color:var(--primary)}}
+    footer{{background:#111827;color:#fff;padding:24px 0;text-align:center;font-size:.92rem}}
+    footer p{{margin:0 0 8px}}
+    footer a{{color:#bae6fd;text-decoration:none;margin:0 8px}}
+    @media(max-width:700px){{.services{{grid-template-columns:1fr}}.details{{grid-template-columns:1fr}}.details dt{{padding-bottom:0;border-bottom:0}}.contact-row{{flex-direction:column;gap:2px}}}}
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap brand-row">
+      <div class="mark" aria-hidden="true">{escape((nome_publico or 'E')[:1].upper())}</div>
+      <div>
+        <h1>{escape(nome_publico)}</h1>
+        <p>{escape(atividade)} · {escape(localidade)}</p>
+      </div>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="card intro">
+      <h2>Sobre a empresa</h2>
+      <p>A <strong>{escape(razao_social)}</strong> exerce atividades relacionadas a <strong>{escape(atividade.lower())}</strong> em {escape(localidade)}. Este site reúne sua identificação empresarial, dados cadastrais e canais informados de atendimento.</p>
+      {identificacao_publica}
+    </section>
+
+    <section class="card">
+      <h2>Atuação</h2>
+      <ul class="services">
+        <li>{escape(servicos[0])}</li>
+        <li>{escape(servicos[1])}</li>
+        <li>{escape(servicos[2])}</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>Dados oficiais da empresa</h2>
+      <dl class="details">
+        <dt>Nome exibido</dt><dd>{escape(nome_publico)}</dd>
+        <dt>Razão social</dt><dd>{escape(razao_social)}</dd>
+        <dt>CNPJ</dt><dd>{escape(cnpj_formatado)}</dd>
+        <dt>Situação cadastral</dt><dd>{escape(situacao)}</dd>
+        <dt>Natureza jurídica</dt><dd>{escape(natureza)}</dd>
+        <dt>Atividade principal</dt><dd>{escape(cnae_oficial)}</dd>
+        <dt>Data de abertura</dt><dd>{escape(data_abertura)}</dd>
+        <dt>Endereço</dt><dd>{escape(endereco)}</dd>
+        <dt>Telefone informado</dt><dd>{escape(telefone or 'Não informado')}</dd>
+        <dt>E-mail informado</dt><dd>{escape(email or 'Não informado')}</dd>
+      </dl>
+    </section>
+
+    <section class="card">
+      <h2>Canais de atendimento</h2>
+      <p>Os canais abaixo são apresentados neste site como formas de contato com a empresa.</p>
+      <div class="contact-box">{contato_html}</div>
+      {f'<div class="actions">{botoes_html}</div>' if botoes_html else ''}
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <p>{escape(razao_social)} · {escape(cnpj_formatado)} · {agora_brasilia().year}</p>
+      <a href="/politica-de-privacidade.html">Política de Privacidade</a>
+      <a href="/termos-de-uso.html">Termos de Uso</a>
+    </div>
+  </footer>
+</body>
+</html>"""
+
 def gerar_paginas_legais_site(empresa):
     nome = valor_texto(empresa.get("nome_site", "")) or nome_exibicao_empresa(empresa)
     razao = valor_publico(empresa.get("razao_social", ""))
@@ -4024,6 +4239,9 @@ def gerar_html_site_empresa(empresa, meta_tag, modelo_site, observacoes=""):
 
     if modelo_site == "dinamico":
         return gerar_html_site_dinamico(empresa, meta_tag, observacoes)
+
+    if modelo_site == "ia_2_0":
+        return gerar_html_site_ia_2_0(empresa, meta_tag, observacoes)
 
     if modelo_site == "meta_waba_clean":
         return gerar_html_site_meta_waba_clean(empresa, meta_tag, observacoes)
