@@ -37,6 +37,7 @@
             {{ 'ativo' if site.cloudflare_status == 'Publicado' else site.cloudflare_status or 'rascunho' }}
           </span>
           {% if site.cloudflare_url %}<button type="button" class="build-copy-button" data-copy="{{ site.cloudflare_url }}">▣ URL</button>{% endif %}
+          <a class="build-open-button" href="/site-gerado/{{ site.id }}/download">↓ index.html</a>
         </div>
       </header>
 

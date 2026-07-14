@@ -8344,7 +8344,7 @@ def relatorios_bm_txt():
 
     return send_file(
         output,
-        download_name=nome_arquivo,
+        download_name="index.html",
         as_attachment=True,
         mimetype="text/plain; charset=utf-8"
     )
@@ -8663,7 +8663,9 @@ def site_gerado_download(site_id):
         abort(404)
 
     html = site.get("html_gerado", "")
-    nome_arquivo = site.get("nome_arquivo", "index.html") or "index.html"
+
+    if not html:
+        abort(404)
 
     output = io.BytesIO(html.encode("utf-8"))
     output.seek(0)
