@@ -1282,6 +1282,10 @@ def normalizar_texto_razao(texto):
 def limpar_razao_social_para_nome(razao_social):
     texto = normalizar_texto_razao(razao_social)
 
+    # Alguns MEIs antigos possuem o número de inscrição no início da razão social,
+    # por exemplo: "07.416.669 SIDNEY DA SILVA SOARES".
+    texto = re.sub(r"^(?:\d+\s+){1,4}", "", texto)
+
     termos_juridicos = [
         "SOCIEDADE EMPRESARIA LIMITADA",
         "SOCIEDADE LIMITADA UNIPESSOAL",
@@ -1358,6 +1362,17 @@ def classificar_razao_social_nome_pessoa(razao_social):
 def carregar_base():
     usuario = usuario_atual()
     df = pd.read_csv(BASE_FINAL, dtype=str)
+
+    if "natureza_juridica" not in df.columns:
+        df["natureza_juridica"] = ""
+
+    df["natureza_juridica"] = (
+        df["natureza_juridica"]
+        .fillna("")
+        .astype(str)
+        .str.replace(".0", "", regex=False)
+        .str.strip()
+    )
 
     df["cnpj_limpo"] = df["cnpj"].apply(limpar_cnpj)
 
@@ -1462,9 +1477,12 @@ def carregar_base():
     df["sexo_razao"] = classificacao_razao.apply(lambda item: item["sexo"])
     df["sexo_provavel"] = df["sexo_razao"].replace("", "Indefinido")
 
-    # Regra nova do minerador:
-    # nome de pessoa agora é definido pela razão social, não pelo nome do sócio.
-    df = df[df["razao_nome_pessoa"] == True].copy()
+    # As LTDAs continuam seguindo a regra de nome de pessoa pela razão social.
+    # Os registros 2135 desta base foram confirmados no Simples.zip como MEI.
+    df = df[
+        (df["natureza_juridica"] == "2135") |
+        (df["razao_nome_pessoa"] == True)
+    ].copy()
 
     df["categoria_cnae"] = df["categoria_cnae"].replace("", "Outros")
     df["idade_empresa"] = df["data_inicio"].apply(calcular_idade_empresa)
@@ -1538,6 +1556,7 @@ def ordenar_dataframe(df, ordenar_por="capital_maior"):
 
 def aplicar_filtros(df, form):
     capital_minimo = form.get("capital_minimo", "0")
+    natureza_juridica = str(form.get("natureza_juridica", "") or "").strip()
     uf = form.get("uf", "")
     sexo = form.get("sexo", "")
     categoria = form.get("categoria", "")
@@ -1552,6 +1571,9 @@ def aplicar_filtros(df, form):
         capital_minimo = 0
 
     df = df[df["capital_social_num"] >= capital_minimo]
+
+    if natureza_juridica in {"2135", "2062"}:
+        df = df[df["natureza_juridica"] == natureza_juridica]
 
     if uf:
         df = df[df["uf"] == uf]
@@ -1672,6 +1694,7 @@ def montar_contexto(df_filtrado, df_base, form=None):
         "filtros": {
             "busca": form.get("busca", ""),
             "capital_minimo": form.get("capital_minimo", "0"),
+            "natureza_juridica": form.get("natureza_juridica", ""),
             "uf": form.get("uf", ""),
             "sexo": form.get("sexo", ""),
             "categoria": form.get("categoria", ""),

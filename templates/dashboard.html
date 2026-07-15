@@ -82,6 +82,15 @@
                     </div>
 
                     <div>
+                        <label>Natureza jurídica</label>
+                        <select name="natureza_juridica">
+                            <option value="" {% if not filtros.natureza_juridica %}selected{% endif %}>Todos</option>
+                            <option value="2135" {% if filtros.natureza_juridica == "2135" %}selected{% endif %}>MEI</option>
+                            <option value="2062" {% if filtros.natureza_juridica == "2062" %}selected{% endif %}>LTDA</option>
+                        </select>
+                    </div>
+
+                    <div>
                         <label>UF</label>
                         <select name="uf">
                             <option value="">Todos</option>
@@ -302,6 +311,7 @@
                 <form action="/filtrar" method="post">
                     <input type="hidden" name="busca" value="{{ filtros.busca }}">
                     <input type="hidden" name="capital_minimo" value="{{ filtros.capital_minimo }}">
+                    <input type="hidden" name="natureza_juridica" value="{{ filtros.natureza_juridica }}">
                     <input type="hidden" name="uf" value="{{ filtros.uf }}">
                     <input type="hidden" name="sexo" value="{{ filtros.sexo }}">
                     <input type="hidden" name="categoria" value="{{ filtros.categoria }}">
@@ -321,6 +331,7 @@
                     <form action="/filtrar" method="post">
                         <input type="hidden" name="busca" value="{{ filtros.busca }}">
                         <input type="hidden" name="capital_minimo" value="{{ filtros.capital_minimo }}">
+                        <input type="hidden" name="natureza_juridica" value="{{ filtros.natureza_juridica }}">
                         <input type="hidden" name="uf" value="{{ filtros.uf }}">
                         <input type="hidden" name="sexo" value="{{ filtros.sexo }}">
                         <input type="hidden" name="categoria" value="{{ filtros.categoria }}">
@@ -342,6 +353,7 @@
                 <form action="/filtrar" method="post">
                     <input type="hidden" name="busca" value="{{ filtros.busca }}">
                     <input type="hidden" name="capital_minimo" value="{{ filtros.capital_minimo }}">
+                    <input type="hidden" name="natureza_juridica" value="{{ filtros.natureza_juridica }}">
                     <input type="hidden" name="uf" value="{{ filtros.uf }}">
                     <input type="hidden" name="sexo" value="{{ filtros.sexo }}">
                     <input type="hidden" name="categoria" value="{{ filtros.categoria }}">
