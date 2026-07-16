@@ -2222,52 +2222,16 @@ def gerar_texto_relatorio_bm(resumo):
 
 MODELOS_SITE = [
     {
-        "slug": "dinamico",
-        "nome": "Institucional Dinâmico",
-        "descricao": "Estrutura institucional enxuta, conteúdo coerente com o CNAE e identidade visual estável por CNPJ.",
-        "icone": "⚡"
-    },
-    {
         "slug": "ia_2_0",
         "nome": "Template IA 2.0",
         "descricao": "Site institucional simples e completo, com identidade empresarial, atividade descrita, telefone associado, dados oficiais, privacidade e termos.",
         "icone": "🧠"
     },
     {
-        "slug": "institucional",
-        "nome": "Institucional Clássico",
-        "descricao": "Visual formal, confiável e corporativo. Bom para serviços, consultorias, educação e empresas tradicionais.",
-        "icone": "🏛️"
-    },
-    {
-        "slug": "moderno",
-        "nome": "Moderno Premium",
-        "descricao": "Layout de alto impacto, com hero forte, cards modernos e aparência mais sofisticada.",
-        "icone": "✨"
-    },
-    {
-        "slug": "varejo",
-        "nome": "Comercial Varejo",
-        "descricao": "Mais comercial, direto e visual. Bom para lojas, mercados, materiais, alimentos e comércio geral.",
-        "icone": "🛒"
-    },
-    {
-        "slug": "servicos",
-        "nome": "Serviços Profissionais",
-        "descricao": "Focado em atendimento, etapas de serviço, benefícios e credibilidade operacional.",
-        "icone": "🧰"
-    },
-    {
-        "slug": "minimalista",
-        "nome": "Minimalista Clean",
-        "descricao": "Site limpo, elegante e discreto, ideal para empresas pequenas ou com poucos dados públicos.",
-        "icone": "◻️"
-    },
-    {
-        "slug": "tech",
-        "nome": "Tech Dark",
-        "descricao": "Visual escuro, moderno e tecnológico. Bom para tecnologia, marketing, web, dados e inovação.",
-        "icone": "🛰️"
+        "slug": "ia_3_0",
+        "nome": "Template IA 3.0",
+        "descricao": "Modelo cadastral limpo e responsivo, com os dados oficiais disponíveis da empresa e sem exibir campos vazios.",
+        "icone": "🪪"
     },
     {
         "slug": "meta_waba_clean",
@@ -4250,6 +4214,147 @@ def gerar_paginas_legais_site(empresa):
     return politica, termos
 
 
+
+# ============================================================
+# TEMPLATE IA 3.0
+# Modelo cadastral responsivo baseado no HTML de referência.
+# Campos opcionais só são exibidos quando possuem valor real.
+# ============================================================
+def gerar_html_site_ia_3_0(empresa, meta_tag="", observacoes=""):
+    cnpj_limpo = limpar_cnpj(empresa.get("cnpj_limpo", empresa.get("cnpj", "")))
+    cnpj_formatado = formatar_cnpj(cnpj_limpo)
+    razao_social = valor_texto(empresa.get("razao_social", ""))
+    nome_publico = valor_texto(empresa.get("nome_site", "")) or nome_exibicao_empresa(empresa)
+    data_abertura = valor_texto(empresa.get("data_inicio_formatada", ""))
+    endereco = valor_texto(empresa.get("endereco_site", "")) or montar_endereco_empresa(empresa)
+    email = valor_texto(empresa.get("email", ""))
+    telefone = valor_texto(empresa.get("telefone_formatado", ""))
+    meta_tag = normalizar_meta_tag_site(meta_tag)
+
+    situacao_raw = valor_texto(empresa.get("situacao_cadastral", ""))
+    situacao = situacao_cadastral_site(empresa) if situacao_raw else ""
+
+    natureza_codigo = valor_texto(empresa.get("natureza_juridica", ""))
+    natureza_map = {
+        "2135": "Empresário (individual)",
+        "2062": "Sociedade Empresária Limitada",
+    }
+    natureza = natureza_map.get(natureza_codigo, natureza_codigo)
+
+    porte_raw = ""
+    for coluna in ["porte_descricao", "descricao_porte", "porte_empresa", "porte"]:
+        porte_raw = valor_texto(empresa.get(coluna, ""))
+        if porte_raw:
+            break
+
+    porte_map = {
+        "01": "MICRO EMPRESA",
+        "1": "MICRO EMPRESA",
+        "03": "EMPRESA DE PEQUENO PORTE",
+        "3": "EMPRESA DE PEQUENO PORTE",
+        "05": "DEMAIS",
+        "5": "DEMAIS",
+    }
+    porte = porte_map.get(porte_raw, porte_raw)
+
+    atividade = atividade_site_sem_codigo(empresa)
+    cnae_codigo = valor_texto(empresa.get("cnae_principal_codigo", ""))
+    if not cnae_codigo:
+        cnae_codigo = re.sub(r"\D", "", valor_texto(empresa.get("cnae_principal", "")))[:7]
+    cnae_formatado = formatar_codigo_cnae(cnae_codigo) if cnae_codigo else ""
+    atividade_principal = atividade
+    if cnae_formatado:
+        atividade_principal = f"{atividade} (CNAE {cnae_formatado})"
+
+    atividades_secundarias = ""
+    for coluna in [
+        "atividades_secundarias",
+        "cnae_secundaria_descricao",
+        "cnaes_secundarios",
+        "cnae_secundaria",
+    ]:
+        atividades_secundarias = valor_texto(empresa.get(coluna, ""))
+        if atividades_secundarias:
+            break
+
+    linhas = []
+
+    def adicionar_linha(rotulo, valor, html_valor=None):
+        valor = valor_texto(valor, "")
+        valor_normalizado = normalizar_texto_razao(valor)
+        if (
+            not valor
+            or valor.replace("*", "").strip() == ""
+            or valor_normalizado in {
+                "NAO INFORMADO", "NAO INFORMADA", "NAO INFORMADOS", "NAO INFORMADAS",
+                "SEM INFORMACAO", "SEM INFORMACOES"
+            }
+        ):
+            return
+        conteudo = html_valor if html_valor is not None else escape(valor)
+        linhas.append(f'<p><strong>{escape(rotulo)}:</strong> {conteudo}</p>')
+
+    adicionar_linha("Razão Social", razao_social)
+    adicionar_linha("CNPJ", cnpj_formatado)
+    adicionar_linha("Data de Abertura", data_abertura)
+    adicionar_linha("Porte", porte)
+    adicionar_linha("Situação Cadastral", situacao)
+    adicionar_linha("Atividade Principal", atividade_principal)
+    adicionar_linha("Atividades Secundárias", atividades_secundarias)
+    adicionar_linha("Natureza Jurídica", natureza)
+    adicionar_linha("Endereço", endereco)
+
+    if email:
+        adicionar_linha(
+            "Email",
+            email,
+            f'<a href="mailto:{escape(email, quote=True)}">{escape(email)}</a>'
+        )
+
+    if telefone:
+        telefone_digitos = re.sub(r"\D", "", telefone)
+        telefone_href = f"+{telefone_digitos}" if telefone_digitos else ""
+        adicionar_linha(
+            "Telefone",
+            telefone,
+            f'<a href="tel:{escape(telefone_href, quote=True)}">{escape(telefone)}</a>'
+        )
+
+    descricao = f"{nome_publico} — CNPJ {cnpj_formatado}"
+    dados_html = "\n    ".join(linhas)
+
+    return f'''<!DOCTYPE html>
+<html lang="pt-BR"><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{escape(nome_publico)}</title>
+<meta name="description" content="{escape(descricao, quote=True)}">
+{meta_tag}
+<style>
+*{{margin:0;padding:0;box-sizing:border-box}}
+html,body{{background:#f5f6f8;color:#1f2937;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;line-height:1.6;-webkit-font-smoothing:antialiased}}
+.wrap{{max-width:1100px;margin:0 auto;padding:clamp(16px,4vw,40px)}}
+.card{{background:#fff;border-radius:18px;box-shadow:0 1px 3px rgba(15,23,42,.06),0 8px 24px rgba(15,23,42,.04);padding:clamp(20px,4vw,48px)}}
+h1{{color:#1d4ed8;font-weight:800;font-size:clamp(1.35rem,3.2vw,2.1rem);letter-spacing:.2px;word-wrap:break-word;overflow-wrap:break-word;line-height:1.25;margin-bottom:clamp(18px,3vw,28px)}}
+h3{{color:#1d4ed8;font-weight:700;font-size:clamp(1.05rem,2vw,1.25rem);padding-bottom:.6rem;border-bottom:1px solid #e5e7eb;margin-bottom:clamp(14px,2vw,22px)}}
+p{{font-size:clamp(.95rem,1.6vw,1rem);color:#374151;margin-bottom:clamp(12px,1.6vw,18px);word-wrap:break-word;overflow-wrap:break-word}}
+strong{{color:#111827;font-weight:700}}
+a{{color:#1d4ed8;text-decoration:none;word-break:break-all}}
+a:hover{{text-decoration:underline}}
+@media (max-width:480px){{
+  .wrap{{padding:12px}}
+  .card{{padding:18px;border-radius:14px}}
+}}
+</style></head><body>
+<div class="wrap">
+  <article class="card">
+    <h1>{escape(nome_publico)}</h1>
+    <h3>Dados da Empresa</h3>
+    {dados_html}
+  </article>
+</div>
+</body></html>'''
+
 def gerar_bundle_site_empresa(empresa, meta_tag, modelo_site, observacoes=""):
     html = gerar_html_site_empresa(empresa, meta_tag, modelo_site, observacoes)
     politica, termos = gerar_paginas_legais_site(empresa)
@@ -4257,7 +4362,7 @@ def gerar_bundle_site_empresa(empresa, meta_tag, modelo_site, observacoes=""):
 
 
 def gerar_html_site_empresa(empresa, meta_tag, modelo_site, observacoes=""):
-    modelo_site = modelo_site if modelo_site in MODELOS_SITE_DICT else "dinamico"
+    modelo_site = modelo_site if modelo_site in MODELOS_SITE_DICT else "ia_2_0"
     meta_tag = normalizar_meta_tag_site(meta_tag)
 
     if modelo_site == "dinamico":
@@ -4265,6 +4370,9 @@ def gerar_html_site_empresa(empresa, meta_tag, modelo_site, observacoes=""):
 
     if modelo_site == "ia_2_0":
         return gerar_html_site_ia_2_0(empresa, meta_tag, observacoes)
+
+    if modelo_site == "ia_3_0":
+        return gerar_html_site_ia_3_0(empresa, meta_tag, observacoes)
 
     if modelo_site == "meta_waba_clean":
         return gerar_html_site_meta_waba_clean(empresa, meta_tag, observacoes)
@@ -4753,9 +4861,53 @@ def _config_cloudflare_painelconectado():
     }
 
 
+
+def _config_cloudflare_meupainelnegocios():
+    # O token do Painel Conectado é reutilizado por padrão porque os domínios
+    # estão na mesma conta. Um token específico ainda pode ser informado.
+    api_token = valor_texto(
+        os.environ.get("CLOUDFLARE_MEUPAINELNEGOCIOS_API_TOKEN", "")
+        or os.environ.get("CLOUDFLARE_PAINELCONECTADO_API_TOKEN", "")
+    )
+    zone_id = valor_texto(os.environ.get("CLOUDFLARE_MEUPAINELNEGOCIOS_ZONE_ID", ""))
+
+    # Sem Zone ID o domínio não aparece no seletor, evitando publicação na zona errada.
+    if not api_token or not zone_id:
+        return None
+
+    custom_domain = normalizar_dominio_cloudflare(
+        os.environ.get(
+            "CLOUDFLARE_MEUPAINELNEGOCIOS_ZONE_NAME",
+            "meupainelnegocios.com"
+        )
+    ) or "meupainelnegocios.com"
+
+    return {
+        "account_id": valor_texto(os.environ.get(
+            "CLOUDFLARE_MEUPAINELNEGOCIOS_ACCOUNT_ID",
+            "bd343bda99621383fba856bd3476c6e6"
+        )),
+        "api_token": api_token,
+        "subdomain": "",
+        "custom_domain": custom_domain,
+        "zone_id": zone_id,
+        "zone_name": custom_domain,
+        "ativo": valor_texto(os.environ.get(
+            "CLOUDFLARE_MEUPAINELNEGOCIOS_ATIVO", "1"
+        )).lower() not in {"0", "false", "nao", "não", "off"},
+        "publish_mode": valor_texto(os.environ.get(
+            "CLOUDFLARE_MEUPAINELNEGOCIOS_PUBLISH_MODE",
+            "custom_strict"
+        )).lower(),
+        "rotulo": "Meu Painel Negócios",
+        "env_prefix": "CLOUDFLARE_MEUPAINELNEGOCIOS",
+    }
+
 def listar_configs_cloudflare():
+    dominios_permitidos = {"painelconectadobr.com", "meupainelnegocios.com"}
     bruto = valor_texto(os.environ.get("CLOUDFLARE_SITES_CONFIG", ""))
     configs = []
+
     if bruto:
         try:
             carregado = json.loads(bruto)
@@ -4765,43 +4917,45 @@ def listar_configs_cloudflare():
                 for item in carregado:
                     if not isinstance(item, dict):
                         continue
-                    dominio = normalizar_dominio_cloudflare(item.get("domain") or item.get("custom_domain") or item.get("zone_name"))
-                    if not dominio:
+                    dominio = normalizar_dominio_cloudflare(
+                        item.get("domain") or item.get("custom_domain") or item.get("zone_name")
+                    )
+                    if dominio not in dominios_permitidos:
                         continue
                     configs.append({
                         "account_id": valor_texto(item.get("account_id", "")),
                         "api_token": valor_texto(item.get("api_token", "")),
-                        "subdomain": valor_texto(item.get("subdomain", "")).replace(".workers.dev", ""),
+                        "subdomain": "",
                         "custom_domain": dominio,
                         "zone_id": valor_texto(item.get("zone_id", "")),
-                        "zone_name": normalizar_dominio_cloudflare(item.get("zone_name", dominio)) or dominio,
+                        "zone_name": dominio,
                         "ativo": bool(item.get("active", item.get("ativo", True))),
-                        "publish_mode": valor_texto(item.get("publish_mode", "")),
+                        "publish_mode": valor_texto(item.get("publish_mode", "custom_strict")),
                     })
         except Exception as erro:
             print("CLOUDFLARE_SITES_CONFIG inválido:", erro)
 
-    if not configs:
-        configs = [_config_cloudflare_legado()]
-
-    config_painelconectado = _config_cloudflare_painelconectado()
-    if config_painelconectado:
-        dominio_novo = config_painelconectado["custom_domain"]
+    for config_dedicada in [
+        _config_cloudflare_painelconectado(),
+        _config_cloudflare_meupainelnegocios(),
+    ]:
+        if not config_dedicada:
+            continue
+        dominio = config_dedicada["custom_domain"]
         configs = [
             config for config in configs
-            if config.get("custom_domain") != dominio_novo
+            if config.get("custom_domain") != dominio
         ]
-        configs.append(config_painelconectado)
+        configs.append(config_dedicada)
 
-    # Uma única opção por domínio, mesmo que ele tenha sido repetido no JSON.
+    # Uma única opção por domínio. O domínio legado foi removido da lista.
     unicos = {}
     for config in configs:
         chave = dominio_publicacao_cloudflare(config)
-        if chave:
+        if chave in dominios_permitidos:
             unicos[chave] = config
 
     return list(unicos.values())
-
 
 def obter_config_cloudflare(dominio=""):
     configs = listar_configs_cloudflare()
@@ -4811,7 +4965,7 @@ def obter_config_cloudflare(dominio=""):
             if config.get("custom_domain") == dominio:
                 return config
     ativos = [config for config in configs if config.get("ativo", True)]
-    return (ativos or configs)[0]
+    return (ativos or configs or [{}])[0]
 
 
 def dominio_publicacao_cloudflare(config=None):
@@ -8843,9 +8997,9 @@ def gerador_site(cnpj):
     erro = ""
     cnpj_form = request.values.get("cnpj", cnpj).strip()
     empresa = buscar_empresa_por_cnpj(cnpj_form) if cnpj_form else None
-    modelo_site = request.values.get("modelo_site", "dinamico").strip()
+    modelo_site = request.values.get("modelo_site", "ia_2_0").strip()
     if modelo_site not in MODELOS_SITE_DICT:
-        modelo_site = "dinamico"
+        modelo_site = "ia_2_0"
 
     dominios = opcoes_dominios_publicacao()
     dominio_escolhido = request.values.get("dominio_publicacao", "auto").strip() or "auto"
@@ -8910,7 +9064,8 @@ def gerador_site(cnpj):
                     "modelo_site": modelo_site, "nome_arquivo": gerar_nome_arquivo_site(empresa_site),
                     "html_gerado": bundle["html"], "politica_html": bundle["politica"],
                     "termos_html": bundle["termos"], "arquivos_verificacao": "{}",
-                    "status": "Gerado", "observacoes": "", "versao_template": "2.1"
+                    "status": "Gerado", "observacoes": "",
+                    "versao_template": "3.0" if modelo_site == "ia_3_0" else "2.1"
                 })
                 site = buscar_site_gerado(site_id)
                 try:
@@ -8981,7 +9136,7 @@ def site_gerado_editar(site_id):
     empresa = buscar_empresa_por_cnpj(site.get("cnpj", "")) or {}
     endereco = site.get("endereco_exibicao") or site.get("endereco") or montar_endereco_empresa(empresa)
     empresa_site = aplicar_personalizacao_site(empresa, nome, telefone, email, endereco, telefone)
-    bundle = gerar_bundle_site_empresa(empresa_site, site.get("meta_tag", ""), site.get("modelo_site", "dinamico"), site.get("observacoes", ""))
+    bundle = gerar_bundle_site_empresa(empresa_site, site.get("meta_tag", ""), site.get("modelo_site", "ia_2_0"), site.get("observacoes", ""))
     atualizar_site_conteudo(site_id, {
         "nome_exibicao": nome, "nome_fantasia": nome,
         "telefone_exibicao": telefone, "telefone": telefone, "whatsapp_exibicao": telefone,
@@ -9012,7 +9167,7 @@ def site_gerado_verificacao(site_id):
             if not meta_tag:
                 raise RuntimeError("Informe o código da Meta Tag.")
             empresa_site = empresa_site_a_partir_registro(site)
-            bundle = gerar_bundle_site_empresa(empresa_site, meta_tag, site.get("modelo_site", "dinamico"), site.get("observacoes", ""))
+            bundle = gerar_bundle_site_empresa(empresa_site, meta_tag, site.get("modelo_site", "ia_2_0"), site.get("observacoes", ""))
             atualizar_site_conteudo(site_id, {"meta_tag": meta_tag, "html_gerado": bundle["html"], "politica_html": bundle["politica"], "termos_html": bundle["termos"]})
             republicar_site_se_publicado(site_id)
             mensagem = "Meta Tag aplicada e site atualizado."
