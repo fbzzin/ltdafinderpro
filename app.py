@@ -1,7 +1,7 @@
 from flask import Flask, render_template, request, send_file, abort, jsonify, redirect, url_for, session
 import pandas as pd
 from pathlib import Path
-import zipfile, io, math, json, re, unicodedata, os, hashlib
+import zipfile, io, math, json, re, unicodedata, os, hashlib, threading
 from functools import wraps
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
@@ -1359,8 +1359,66 @@ def classificar_razao_social_nome_pessoa(razao_social):
 
     return {"razao_limpa": razao_limpa, "eh_nome_pessoa": False, "sexo": "Indefinido"}
 
-def carregar_base():
-    usuario = usuario_atual()
+# ============================================================
+# CACHE INTELIGENTE DA BASE
+# Mantém os dados estáticos processados em memória e recalcula
+# apenas os campos que mudam durante a operação.
+# ============================================================
+
+_CACHE_BASE_ESTATICA = {
+    "assinatura": None,
+    "df": None,
+}
+
+_CACHE_AVALIACOES_IA = {
+    "assinatura": None,
+    "df": None,
+}
+
+_CACHE_BASE_LOCK = threading.RLock()
+
+CAMPOS_IA_CACHE = [
+    "score_ia",
+    "score_ia_regras",
+    "score_ia_historico",
+    "ia_peso_regras",
+    "ia_peso_historico",
+    "ia_recomendacao",
+    "ia_classe",
+    "ia_confianca_historica",
+    "ia_amostras_semelhantes",
+    "ia_taxa_estimada",
+    "ia_resultado_mais_comum",
+    "ia_fase",
+    "ia_total_amostras",
+]
+
+PENALIDADES_STATUS_IA = {
+    "BM em Análise": -15,
+    "Usado em BM": -20,
+    "Verificou 250": -10,
+    "Verificou 2k": -10,
+    "Verificou 100k": -10,
+    "Restrito": -55,
+    "Checkpoint": -45,
+    "Descartado": -60,
+    "Precisa de mais informações": -40,
+    "Análise permanente": -45,
+    "WABA restrita": -50,
+    "Conta desabilitada": -55,
+}
+
+
+def assinatura_arquivo_base():
+    try:
+        status_arquivo = BASE_FINAL.stat()
+        return status_arquivo.st_mtime_ns, status_arquivo.st_size
+    except Exception:
+        return 0, 0
+
+
+def construir_base_estatica():
+    """Lê e prepara apenas os dados que não mudam entre requisições."""
     df = pd.read_csv(BASE_FINAL, dtype=str)
 
     if "natureza_juridica" not in df.columns:
@@ -1389,9 +1447,6 @@ def carregar_base():
 
     municipios = carregar_municipios()
     cnaes = carregar_cnaes()
-    favoritos = carregar_favoritos()
-    status_geral = carregar_status_bm()
-    datas_uso = carregar_datas_uso_cnpj()
 
     if "municipio" not in df.columns:
         df["municipio"] = ""
@@ -1415,20 +1470,13 @@ def carregar_base():
 
     df["municipio_nome"] = df["municipio_nome"].fillna("")
     df["endereco_completo"] = df.apply(lambda linha: montar_endereco_empresa(linha), axis=1)
-    df["favorito"] = df["cnpj_limpo"].isin(favoritos)
-
-    df["status_bm"] = df["cnpj_limpo"].apply(lambda cnpj: status_usuario(status_geral, usuario, cnpj))
-    df["bm_utilizada"] = df["status_bm"] != STATUS_PADRAO
-    df["data_uso_bm"] = df["cnpj_limpo"].apply(lambda cnpj: obter_data_uso_cnpj_usuario(datas_uso, usuario, cnpj))
-    df["data_uso_bm_iso"] = df["cnpj_limpo"].apply(lambda cnpj: obter_data_iso_uso_cnpj_usuario(datas_uso, usuario, cnpj))
-
-    df["usos_globais"] = df["cnpj_limpo"].apply(lambda cnpj: usuarios_que_usaram(status_geral, cnpj))
-    df["usado_global"] = df["usos_globais"].apply(lambda usos: len(usos) > 0)
-    df["usado_por"] = df["usos_globais"].apply(
-        lambda usos: " | ".join([f"{item['usuario']}: {item['status']}" for item in usos])
-    )
 
     if "telefone_formatado" not in df.columns:
+        if "ddd1" not in df.columns:
+            df["ddd1"] = ""
+        if "telefone1" not in df.columns:
+            df["telefone1"] = ""
+
         df["telefone_formatado"] = (
             df["ddd1"].fillna("").astype(str).str.replace(".0", "", regex=False)
             + df["telefone1"].fillna("").astype(str).str.replace(".0", "", regex=False)
@@ -1441,10 +1489,18 @@ def carregar_base():
         "numero", "complemento", "cep", "bairro", "bairro_distrito",
         "endereco_completo", "uf", "municipio", "municipio_nome"
     ]:
-        if coluna in df.columns:
+        if coluna not in df.columns:
+            df[coluna] = ""
+        else:
             df[coluna] = df[coluna].fillna("")
 
-    df["cnae_principal_codigo"] = df["cnae_principal"].astype(str).str.replace(".0", "", regex=False).str.strip().str.zfill(7)
+    df["cnae_principal_codigo"] = (
+        df["cnae_principal"]
+        .astype(str)
+        .str.replace(".0", "", regex=False)
+        .str.strip()
+        .str.zfill(7)
+    )
 
     coluna_descricao_cnae = obter_descricao_cnae_por_coluna(df)
 
@@ -1461,9 +1517,6 @@ def carregar_base():
         ),
         axis=1
     )
-
-    if "razao_social" not in df.columns:
-        df["razao_social"] = ""
 
     if "sexo_provavel" in df.columns:
         df["sexo_socio"] = df["sexo_provavel"].replace("", "Indefinido")
@@ -1488,30 +1541,222 @@ def carregar_base():
     df["idade_empresa"] = df["data_inicio"].apply(calcular_idade_empresa)
     df["data_inicio_formatada"] = df["data_inicio"].apply(formatar_data_brasil)
 
-    modelo_ia = obter_modelo_ia_operacional()
-    avaliacoes = df.apply(lambda linha: avaliar_ia_empresa(linha.to_dict(), modelo_ia), axis=1)
+    return df.reset_index(drop=True)
 
-    campos_ia = [
-        "score_ia",
-        "score_ia_regras",
-        "score_ia_historico",
-        "ia_peso_regras",
-        "ia_peso_historico",
-        "ia_recomendacao",
-        "ia_classe",
-        "ia_confianca_historica",
-        "ia_amostras_semelhantes",
-        "ia_taxa_estimada",
-        "ia_resultado_mais_comum",
-        "ia_fase",
-        "ia_total_amostras",
-    ]
 
-    for campo in campos_ia:
-        df[campo] = avaliacoes.apply(lambda item, nome=campo: item.get(nome))
+def carregar_base_estatica():
+    assinatura = assinatura_arquivo_base()
+
+    with _CACHE_BASE_LOCK:
+        cache_valido = (
+            _CACHE_BASE_ESTATICA.get("df") is not None
+            and _CACHE_BASE_ESTATICA.get("assinatura") == assinatura
+        )
+
+        if cache_valido:
+            return _CACHE_BASE_ESTATICA["df"]
+
+        df = construir_base_estatica()
+        _CACHE_BASE_ESTATICA["assinatura"] = assinatura
+        _CACHE_BASE_ESTATICA["df"] = df
+
+        # Uma base nova exige novas avaliações históricas.
+        _CACHE_AVALIACOES_IA["assinatura"] = None
+        _CACHE_AVALIACOES_IA["df"] = None
+
+        return df
+
+
+def assinatura_cache_avaliacoes_ia():
+    return (
+        assinatura_arquivo_base(),
+        _CACHE_MODELO_IA.get("assinatura"),
+    )
+
+
+def carregar_avaliacoes_ia_estaticas(df_base, modelo_ia):
+    assinatura = assinatura_cache_avaliacoes_ia()
+
+    with _CACHE_BASE_LOCK:
+        cache_valido = (
+            _CACHE_AVALIACOES_IA.get("df") is not None
+            and _CACHE_AVALIACOES_IA.get("assinatura") == assinatura
+            and len(_CACHE_AVALIACOES_IA["df"]) == len(df_base)
+        )
+
+        if cache_valido:
+            return _CACHE_AVALIACOES_IA["df"]
+
+        registros = df_base.to_dict(orient="records")
+        avaliacoes = [
+            avaliar_ia_empresa(registro, modelo_ia)
+            for registro in registros
+        ]
+
+        df_avaliacoes = pd.DataFrame(avaliacoes, index=df_base.index)
+
+        for campo in CAMPOS_IA_CACHE:
+            if campo not in df_avaliacoes.columns:
+                df_avaliacoes[campo] = None
+
+        df_avaliacoes = df_avaliacoes[CAMPOS_IA_CACHE]
+        _CACHE_AVALIACOES_IA["assinatura"] = assinatura
+        _CACHE_AVALIACOES_IA["df"] = df_avaliacoes
+        return df_avaliacoes
+
+
+def montar_mapas_datas_usuario(datas_uso, usuario):
+    mapa_data_hora = {}
+    mapa_data_iso = {}
+
+    registros = datas_uso.get(usuario, {}) if isinstance(datas_uso, dict) else {}
+    if not isinstance(registros, dict):
+        return mapa_data_hora, mapa_data_iso
+
+    for cnpj, item in registros.items():
+        cnpj_limpo = limpar_cnpj(cnpj)
+        if not cnpj_limpo:
+            continue
+
+        if isinstance(item, dict):
+            mapa_data_hora[cnpj_limpo] = item.get("data_hora", "") or "Não registrada"
+            mapa_data_iso[cnpj_limpo] = item.get("data_iso", "") or ""
+        elif isinstance(item, str) and item.strip():
+            mapa_data_hora[cnpj_limpo] = item.strip()
+            mapa_data_iso[cnpj_limpo] = ""
+
+    return mapa_data_hora, mapa_data_iso
+
+
+def montar_mapas_usos_globais(status_geral):
+    usos_por_cnpj = {}
+    texto_por_cnpj = {}
+
+    if not isinstance(status_geral, dict):
+        return usos_por_cnpj, texto_por_cnpj
+
+    for nome_usuario, registros in status_geral.items():
+        if not isinstance(registros, dict):
+            continue
+
+        for cnpj, status in registros.items():
+            status = str(status or "").strip()
+            if not status or status == STATUS_PADRAO:
+                continue
+
+            cnpj_limpo = limpar_cnpj(cnpj)
+            if not cnpj_limpo:
+                continue
+
+            usos_por_cnpj.setdefault(cnpj_limpo, []).append({
+                "usuario": nome_usuario,
+                "status": status,
+            })
+
+    for cnpj, usos in usos_por_cnpj.items():
+        texto_por_cnpj[cnpj] = " | ".join(
+            f"{item['usuario']}: {item['status']}"
+            for item in usos
+        )
+
+    return usos_por_cnpj, texto_por_cnpj
+
+
+def aplicar_ajustes_ia_dinamicos(df):
+    penalidade_status = df["status_bm"].map(PENALIDADES_STATUS_IA).fillna(0).astype(int)
+    penalidade_uso = df["usado_global"].astype(int) * -20
+
+    score_regras = (
+        pd.to_numeric(df["score_ia_regras"], errors="coerce").fillna(40)
+        + penalidade_status
+        + penalidade_uso
+    ).clip(lower=0, upper=100).astype(int)
+
+    df["score_ia_regras"] = score_regras
+
+    peso_regras = pd.to_numeric(df["ia_peso_regras"], errors="coerce").fillna(100) / 100
+    peso_historico = pd.to_numeric(df["ia_peso_historico"], errors="coerce").fillna(0) / 100
+    score_historico = pd.to_numeric(df["score_ia_historico"], errors="coerce").fillna(50)
+
+    score = (
+        (score_regras * peso_regras)
+        + (score_historico * peso_historico)
+    ).round().clip(lower=0, upper=100).astype(int)
+
+    mascara_negativa = df["status_bm"].isin(STATUS_NEGATIVOS)
+    mascara_atencao = (~mascara_negativa) & (
+        (df["status_bm"] != STATUS_PADRAO) |
+        (df["usado_global"] == True)
+    )
+
+    score = score.where(~mascara_negativa, score.clip(upper=25))
+    score = score.where(~mascara_atencao, score.clip(upper=59))
+    df["score_ia"] = score.astype(int)
+
+    df["ia_recomendacao"] = "🔴 Evitar"
+    df["ia_classe"] = "evitar"
+
+    mascara_excelente = (~mascara_negativa) & (~mascara_atencao) & (df["score_ia"] >= 80)
+    mascara_regular = (~mascara_negativa) & (~mascara_atencao) & (df["score_ia"] >= 60) & (~mascara_excelente)
+
+    df.loc[mascara_atencao | mascara_regular, "ia_recomendacao"] = "🟡 Atenção"
+    df.loc[mascara_atencao | mascara_regular, "ia_classe"] = "atencao"
+    df.loc[mascara_excelente, "ia_recomendacao"] = "🟢 Excelente"
+    df.loc[mascara_excelente, "ia_classe"] = "excelente"
 
     return df
 
+
+def carregar_base():
+    usuario = usuario_atual()
+    df_base = carregar_base_estatica()
+
+    # A cópia rasa compartilha somente os blocos estáticos e recebe colunas
+    # dinâmicas novas, reduzindo tempo e consumo de memória por requisição.
+    df = df_base.copy(deep=False)
+
+    favoritos = carregar_favoritos()
+    status_geral = carregar_status_bm()
+    datas_uso = carregar_datas_uso_cnpj()
+
+    favoritos = {
+        limpar_cnpj(cnpj)
+        for cnpj in favoritos
+        if limpar_cnpj(cnpj)
+    }
+
+    status_usuario_atual = status_geral.get(usuario, {}) if isinstance(status_geral, dict) else {}
+    if not isinstance(status_usuario_atual, dict):
+        status_usuario_atual = {}
+
+    status_usuario_atual = {
+        limpar_cnpj(cnpj): str(status or STATUS_PADRAO).strip() or STATUS_PADRAO
+        for cnpj, status in status_usuario_atual.items()
+        if limpar_cnpj(cnpj)
+    }
+
+    mapa_data_hora, mapa_data_iso = montar_mapas_datas_usuario(datas_uso, usuario)
+    usos_por_cnpj, texto_usos_por_cnpj = montar_mapas_usos_globais(status_geral)
+
+    df["favorito"] = df["cnpj_limpo"].isin(favoritos)
+    df["status_bm"] = df["cnpj_limpo"].map(status_usuario_atual).fillna(STATUS_PADRAO)
+    df["bm_utilizada"] = df["status_bm"] != STATUS_PADRAO
+    df["data_uso_bm"] = df["cnpj_limpo"].map(mapa_data_hora).fillna("Não registrada")
+    df["data_uso_bm_iso"] = df["cnpj_limpo"].map(mapa_data_iso).fillna("")
+    df["usos_globais"] = df["cnpj_limpo"].map(usos_por_cnpj)
+    df["usos_globais"] = df["usos_globais"].apply(
+        lambda usos: usos if isinstance(usos, list) else []
+    )
+    df["usado_global"] = df["cnpj_limpo"].isin(usos_por_cnpj.keys())
+    df["usado_por"] = df["cnpj_limpo"].map(texto_usos_por_cnpj).fillna("")
+
+    modelo_ia = obter_modelo_ia_operacional()
+    avaliacoes_ia = carregar_avaliacoes_ia_estaticas(df_base, modelo_ia)
+
+    for campo in CAMPOS_IA_CACHE:
+        df[campo] = avaliacoes_ia[campo].to_numpy(copy=False)
+
+    return aplicar_ajustes_ia_dinamicos(df)
 
 def ordenar_dataframe(df, ordenar_por="capital_maior"):
     ordenar_por = str(ordenar_por or "capital_maior").strip()
