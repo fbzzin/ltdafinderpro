@@ -1,0 +1,67 @@
+LTDAFinder Pro - Integração painelconectadobr.com
+=================================================
+
+ARQUIVOS DO PATCH
+- app.py
+- templates/gerador_site.html
+
+O QUE FOI IMPLEMENTADO
+1. Nova conta Cloudflare separada para painelconectadobr.com.
+2. Nome exibido no site editável na pré-publicação.
+3. Nome do site/subdomínio editável na pré-publicação.
+4. Prévia da URL final em tempo real.
+5. Verificação no PostgreSQL para impedir hostname repetido.
+6. Domínio Automático continua escolhendo o domínio ativo com menos publicações.
+7. O subdomínio público é exatamente o nome escolhido.
+8. O nome técnico do Worker é único e não altera a URL pública.
+9. Textos institucionais usam a descrição do CNAE, nunca apenas a numeração.
+10. Na seção cadastral oficial, o CNAE pode continuar como código + descrição.
+11. Publicação da nova conta usa Custom Domain estrito, compatível com o token criado.
+12. Download de index.html permanece disponível mesmo quando a publicação falha.
+
+VARIÁVEIS NA RAILWAY
+Cadastre em Variables, sem aspas:
+
+CLOUDFLARE_PAINELCONECTADO_API_TOKEN=COLE_AQUI_O_TOKEN_SECRETO
+CLOUDFLARE_PAINELCONECTADO_ACCOUNT_ID=bd343bda99621383fba856bd3476c6e6
+CLOUDFLARE_PAINELCONECTADO_ZONE_ID=dd8b7536528f5ca7479896d4d8771729
+CLOUDFLARE_PAINELCONECTADO_ZONE_NAME=painelconectadobr.com
+CLOUDFLARE_PAINELCONECTADO_PUBLISH_MODE=custom_strict
+
+Opcional:
+CLOUDFLARE_PAINELCONECTADO_ATIVO=1
+
+IMPORTANTE
+- Nunca coloque o token dentro do app.py.
+- Nunca envie o token no GitHub.
+- O domínio só aparece na lista quando API_TOKEN está configurado.
+- As variáveis antigas da Cloudflare não devem ser apagadas.
+
+COMO APLICAR
+Extraia o ZIP na raiz do projeto e confirme a substituição.
+
+Validação:
+python -m py_compile app.py
+
+git diff --check
+git status
+
+Commit:
+git add app.py templates/gerador_site.html
+git commit -m "Integra painelconectadobr e nome personalizado do site"
+git push
+
+TESTE APÓS O DEPLOY
+1. Abra Criar Site.
+2. Digite um CNPJ.
+3. Edite Nome exibido no site.
+4. Edite Nome do site / subdomínio.
+5. Selecione painelconectadobr.com.
+6. Confira a URL prevista.
+7. Aguarde a mensagem Endereço disponível.
+8. Gere e publique.
+
+Exemplo:
+Nome exibido: Empresa Exemplo
+Nome do site: empresa-exemplo
+URL: https://empresa-exemplo.painelconectadobr.com

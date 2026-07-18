@@ -1,0 +1,45 @@
+LTDAFinder Pro - Patch de fuso horário e endereço completo
+Data: 12/07/2026
+
+ALTERAÇÕES
+1. Todo horário gerado pelo Python passa a usar America/Sao_Paulo, independentemente do fuso do servidor.
+2. Horários antigos de Perfis Meta, Histórico e Data de Uso são corrigidos uma única vez na primeira leitura e marcados como normalizados.
+3. Timestamps UTC dos sites gerados e das publicações Cloudflare são convertidos para Brasília somente na exibição.
+4. O endereço completo passa a seguir esta ordem:
+   LOGRADOURO, NÚMERO, COMPLEMENTO, CEP, BAIRRO/DISTRITO, MUNICÍPIO, UF
+5. O complemento é ignorado automaticamente quando estiver vazio.
+6. CEPs com 8 dígitos são exibidos como 00.000-000.
+7. O endereço completo foi aplicado no Minerador, Perfis Meta, Meus CNPJs Usados, página da Empresa, painel individual do Admin, cópia de dados, exportação e Gerador de Sites.
+8. Links das funcionalidades antigas removidas foram retirados dos templates ativos incluídos neste pacote.
+
+ARQUIVOS DO PACOTE
+- app.py
+- historico_utils.py
+- templates/dashboard.html
+- templates/perfis_meta.html
+- templates/usados.html
+- templates/admin_usuario.html
+- templates/empresa.html
+- templates/sites.html
+- templates/admin.html
+- templates/historico.html
+- templates/relatorios_bm.html
+
+COMO APLICAR
+1. Faça uma cópia de segurança dos arquivos atuais.
+2. Extraia este ZIP na raiz do projeto minerador-cnpj.
+3. Confirme a substituição dos arquivos.
+4. Rode:
+
+   python -m py_compile app.py historico_utils.py
+   git diff --check
+   git status
+
+5. Se estiver tudo certo:
+
+   git add app.py historico_utils.py templates
+   git commit -m "Padroniza horario de Brasilia e endereco completo"
+   git push
+
+OBSERVAÇÃO
+Não é necessário alterar DATABASE_URL nem enviar credenciais. O banco continua armazenando os timestamps SQL em UTC; a aplicação converte corretamente para Brasília na exibição.

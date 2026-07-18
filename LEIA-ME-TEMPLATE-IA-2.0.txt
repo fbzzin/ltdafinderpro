@@ -1,0 +1,52 @@
+LTDAFinder Pro - Template IA 2.0
+================================
+
+Este pacote é cumulativo: ele mantém a integração preparada para
+painelconectadobr.com e acrescenta o novo modelo "Template IA 2.0".
+
+ARQUIVOS
+- app.py
+- templates/gerador_site.html
+
+O QUE O TEMPLATE MOSTRA
+- Nome exibido no site
+- Razão social vinculada
+- CNPJ
+- Situação cadastral
+- Natureza jurídica
+- Atividade principal com código e descrição
+- Descrição institucional usando a função do CNAE, nunca somente o código
+- Data de abertura
+- Endereço completo
+- Telefone informado, visível junto aos dados da empresa
+- E-mail informado
+- Botões de telefone/WhatsApp e e-mail quando os dados existirem
+- Política de Privacidade
+- Termos de Uso
+- Dados estruturados Organization no HTML
+
+O modelo não inventa prêmios, certificações, avaliações, tempo de mercado
+ou afirmações que não existam na base.
+
+IMPORTANTE
+Nenhum HTML garante a remoção do aviso "WhatsApp needs more information".
+O modelo reduz lacunas do lado do site e melhora a coerência entre nome,
+empresa, atividade e telefone. Validação do número, PIN, nome de exibição e
+solicitações abertas no Gerenciador do WhatsApp continuam sendo etapas da Meta.
+
+APLICAÇÃO
+1. Extraia o ZIP na raiz do projeto.
+2. Confirme a substituição de app.py e templates/gerador_site.html.
+3. Rode:
+
+   python -m py_compile app.py
+   git diff --check
+   git status
+
+4. Publique:
+
+   git add app.py templates/gerador_site.html
+   git commit -m "Adiciona Template IA 2.0"
+   git push
+
+Depois do deploy, escolha "Template IA 2.0" no seletor de templates.

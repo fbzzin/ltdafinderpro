@@ -1,0 +1,63 @@
+CORREÇÃO DEFINITIVA DE ENDEREÇO — LTDAFinder Pro
+================================================
+
+CAUSA
+-----
+A base resultados/base_final_minerador_cnpj.csv não contém logradouro,
+número, complemento, CEP nem bairro. Ela também guarda o município como
+código da Receita, por exemplo 7107.
+
+ARQUIVOS DESTE PACOTE
+---------------------
+1. app.py
+   - preserva municipio_nome quando ele já existir na base;
+   - usa Municipios.zip apenas como fallback;
+   - impede que código numérico como 7107 seja exibido como município.
+
+2. atualizar_enderecos_base.py
+   - lê downloads/Estabelecimentos0-9.zip;
+   - busca somente os CNPJs que já existem na base final;
+   - inclui logradouro, número, complemento, CEP, bairro, município,
+     municipio_nome e UF;
+   - cria um backup CSV antes de substituir a base.
+
+COMO APLICAR
+------------
+Extraia app.py e atualizar_enderecos_base.py na raiz do projeto:
+
+C:\Users\Dutra\Desktop\minerador-cnpj
+
+Depois execute:
+
+python atualizar_enderecos_base.py
+
+Quando concluir:
+
+python -m py_compile app.py atualizar_enderecos_base.py
+git diff --check
+git status
+
+IMPORTANTE SOBRE O GIT
+----------------------
+O script cria um arquivo de backup dentro de resultados/. Não adicione esse
+backup ao Git. Adicione somente:
+
+app.py
+atualizar_enderecos_base.py
+resultados/base_final_minerador_cnpj.csv
+
+Exemplo:
+
+git add app.py atualizar_enderecos_base.py resultados/base_final_minerador_cnpj.csv
+git commit -m "Inclui enderecos completos na base de CNPJs"
+git push
+
+RESULTADO ESPERADO
+------------------
+Em vez de:
+
+7107, SP
+
+O painel e o gerador passarão a receber algo como:
+
+RUA EXEMPLO, 123, SALA 02, CEP 01.234-567, CENTRO, SÃO PAULO, SP

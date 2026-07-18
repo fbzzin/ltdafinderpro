@@ -1,0 +1,129 @@
+LTDAFINDER PRO — REFORMA VISUAL E NOVO FLUXO DE SITES
+======================================================
+
+ARQUIVOS ALTERADOS
+------------------
+- app.py
+- templates/_sidebar.html
+- templates/base.html
+- templates/admin.html
+- templates/admin_usuario.html
+- templates/dashboard.html
+- templates/empresa.html
+- templates/gerador_site.html
+- templates/historico.html
+- templates/ia_operacional.html
+- templates/master.html
+- templates/perfis_meta.html
+- templates/relatorios_bm.html
+- templates/sites.html
+- templates/site_preview.html
+- templates/usados.html
+- static/style.css
+- static/app.js
+- static/logo.png
+
+O QUE FOI IMPLEMENTADO
+----------------------
+1. Visual global compacto, inspirado no painel de referência, usando azul e ciano do LTDAFinder.
+2. Sidebar única para todas as telas ativas.
+3. Tela Criar Site com:
+   - CNPJ com consulta automática à base;
+   - identificação imediata da empresa;
+   - domínio manual ou automático pelo menor número de publicações;
+   - seleção de template;
+   - subdomínio sugerido pelo nome da empresa;
+   - geração e publicação em um único botão.
+4. Template Institucional Dinâmico:
+   - mantém o corpo do template de referência;
+   - conteúdo factual baseado no CNAE;
+   - dados cadastrais oficiais;
+   - telefone, e-mail e endereço consistentes;
+   - política de privacidade e termos de uso;
+   - paleta estável definida pelo CNPJ.
+5. Página do site publicado com somente:
+   - Informações;
+   - Editar;
+   - Verificação: Meta Tag, DNS TXT e Arquivo HTML.
+6. Certificado e E-mails não foram implementados.
+7. A Meta Tag deixou de ser obrigatória antes da criação. Ela pode ser aplicada depois, na aba Verificação.
+8. O Worker agora responde às páginas:
+   - /
+   - /index.html
+   - /politica-de-privacidade.html
+   - /termos-de-uso.html
+   - /robots.txt
+   - arquivos HTML de verificação adicionados no painel.
+
+APLICAÇÃO
+---------
+Extraia o ZIP na raiz do projeto e confirme a substituição dos arquivos.
+
+Execute:
+
+python -m py_compile app.py ia_operacional.py historico_utils.py
+git diff --check
+git status
+
+Depois:
+
+git add app.py templates static
+git commit -m "Reformula painel e fluxo de publicacao de sites"
+git push
+
+BANCO DE DADOS
+--------------
+Não é necessário executar migração manual.
+O app.py adiciona automaticamente as novas colunas à tabela sites_gerados.
+
+CLOUDFLARE — CONFIGURAÇÃO ATUAL
+-------------------------------
+Se você usa somente um domínio, mantenha as variáveis atuais:
+
+CLOUDFLARE_ACCOUNT_ID
+CLOUDFLARE_API_TOKEN
+CLOUDFLARE_ZONE_ID
+CLOUDFLARE_ZONE_NAME
+CLOUDFLARE_CUSTOM_DOMAIN
+CLOUDFLARE_WORKERS_SUBDOMAIN
+
+CLOUDFLARE — VÁRIOS DOMÍNIOS
+----------------------------
+Para mostrar vários domínios no seletor, crie uma variável Railway chamada:
+
+CLOUDFLARE_SITES_CONFIG
+
+Exemplo sem dados reais:
+
+[
+  {
+    "domain": "espacoempresarial.com",
+    "account_id": "SEU_ACCOUNT_ID",
+    "api_token": "SEU_TOKEN",
+    "zone_id": "SEU_ZONE_ID",
+    "zone_name": "espacoempresarial.com",
+    "active": true
+  },
+  {
+    "domain": "ambienteempresarial.com",
+    "account_id": "SEU_ACCOUNT_ID",
+    "api_token": "SEU_TOKEN",
+    "zone_id": "OUTRO_ZONE_ID",
+    "zone_name": "ambienteempresarial.com",
+    "active": true
+  }
+]
+
+O modo Automático seleciona o domínio ativo com menos sites publicados.
+Nunca envie tokens ou IDs sensíveis no chat ou para o GitHub.
+
+VALIDAÇÕES REALIZADAS
+---------------------
+- Compilação Python do app.py;
+- parsing Jinja dos templates ativos;
+- renderização de Criar Site, Meus Sites e das três abas do site publicado;
+- geração do HTML dinâmico;
+- geração das páginas de política e termos;
+- aplicação posterior de Meta Tag;
+- publicação de arquivo HTML de verificação;
+- Worker com múltiplas rotas.

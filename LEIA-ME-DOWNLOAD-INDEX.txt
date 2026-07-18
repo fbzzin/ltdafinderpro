@@ -1,0 +1,15 @@
+LTDAFinder Pro - Download do index.html
+
+Arquivos alterados:
+- app.py
+- templates/site_preview.html
+
+O botão "index.html" fica sempre disponível na página de detalhes do site, independentemente de a publicação ter sido concluída ou ter retornado erro.
+O arquivo baixado usa sempre o nome index.html e corresponde ao HTML salvo/publicado pelo sistema.
+
+Aplicação:
+1. Extraia este pacote na raiz do projeto e confirme a substituição.
+2. Rode: python -m py_compile app.py
+3. Rode: git diff --check
+4. Rode: git status
+5. Commit sugerido: git commit -m "Adiciona download do index HTML dos sites"

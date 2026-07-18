@@ -1,0 +1,94 @@
+LTDAFinder Pro — IA Operacional Fase 2
+======================================
+
+O QUE FOI IMPLEMENTADO
+----------------------
+1. Nova página /ia-operacional com:
+   - Total de Perfis Meta.
+   - Quantidade de resultados concluídos.
+   - Taxa geral de sucesso.
+   - Distribuição dos resultados.
+   - Aprendizado por capital social, idade, categoria CNAE, UF, telefone e e-mail.
+   - Padrões positivos e padrões de atenção.
+   - Progresso automático entre as fases da IA.
+
+2. Score híbrido no Minerador:
+   - De 50 a 149 resultados concluídos: 60% regras + 40% histórico.
+   - De 150 a 299: 45% regras + 55% histórico.
+   - De 300 a 499: 35% regras + 65% histórico.
+   - A partir de 500: 25% regras + 75% histórico.
+   - Abaixo de 50 concluídos, o sistema permanece na Fase 1.
+
+3. Página individual da empresa:
+   - Score final.
+   - Score das regras.
+   - Score histórico.
+   - Confiança histórica.
+   - Quantidade de amostras semelhantes.
+   - Resultado histórico mais frequente.
+   - Motivos separados entre regras e histórico.
+
+4. Exportação Excel ampliada com os componentes da IA.
+
+5. Link “IA Operacional” adicionado aos menus ativos.
+   As páginas antigas removidas não foram reativadas.
+
+COMO A IA APRENDE
+-----------------
+Entram como resultados positivos:
+- Verificou 250
+- Verificou 2k
+- Verificou 100k
+
+Entram como resultados negativos finais:
+- Precisa de mais informações
+- Análise permanente
+- Restrito
+- WABA restrita
+- Conta desabilitada
+- Checkpoint
+- Descartado
+
+Não entram no aprendizado enquanto estiverem pendentes:
+- Disponível
+- BM em Análise
+- Usado em BM
+
+A IA usa suavização estatística. Grupos com poucas amostras são aproximados da média geral para impedir que 1 ou 2 casos dominem o score.
+
+ARMAZENAMENTO
+-------------
+Nenhum JSON novo foi criado. A Fase 2 lê os resultados diretamente dos Perfis Meta armazenados no PostgreSQL e cruza com a base de CNPJs.
+Não há migração de banco para executar.
+
+COMO APLICAR
+------------
+Extraia o conteúdo deste ZIP na raiz do projeto e confirme a substituição dos arquivos.
+
+Depois execute:
+
+python -m py_compile app.py ia_operacional.py
+git diff --check
+git status
+
+Se estiver tudo certo:
+
+git add app.py ia_operacional.py templates
+git commit -m "Ativa Fase 2 da IA Operacional"
+git push
+
+VALIDAÇÃO APÓS O DEPLOY
+-----------------------
+1. Abra /ia-operacional.
+2. Confira quantos resultados concluídos foram reconhecidos.
+3. Confirme a fase e os pesos exibidos.
+4. Abra o Minerador e veja “R” (regras) e “H” (histórico) no card da IA.
+5. Abra uma empresa e confira o detalhamento completo.
+6. Teste a exportação Excel.
+
+OBSERVAÇÕES
+-----------
+- O primeiro acesso após o deploy pode demorar alguns segundos enquanto o modelo é montado.
+- Depois disso, o modelo fica em cache e só é recalculado quando os Perfis Meta ou a base mudam.
+- O botão “Recalcular aprendizado” força uma nova leitura imediatamente.
+- Não é necessário executar novamente atualizar_enderecos_base.py.
