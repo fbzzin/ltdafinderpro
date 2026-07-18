@@ -5150,48 +5150,61 @@ def _config_cloudflare_meupainelnegocios():
 
 
 def _config_cloudflare_mpaineldigital():
-    """Configuração do novo domínio mpaineldigital.com"""
+    """Configuração isolada do domínio mpaineldigital.com.
+
+    Segue o mesmo padrão dos demais domínios dedicados: só entra na lista
+    quando estiver marcado como ativo e com as credenciais cadastradas na
+    Railway, sem interferir nos domínios já existentes (painelconectadobr.com
+    e meupainelnegocios.com continuam funcionando exatamente como antes).
+    """
+    ativo = valor_texto(os.environ.get(
+        "CLOUDFLARE_MPAINELDIGITAL_ATIVO", "0"
+    )).lower() not in {"0", "false", "nao", "não", "off", ""}
+
+    if not ativo:
+        return None
+
+    account_id = valor_texto(os.environ.get("CLOUDFLARE_MPAINELDIGITAL_ACCOUNT_ID", ""))
+    zone_id = valor_texto(os.environ.get("CLOUDFLARE_MPAINELDIGITAL_ZONE_ID", ""))
+    # Reaproveita o token do Painel Conectado por padrão, como já acontece
+    # com o Meu Painel Negócios, caso um token próprio não seja informado.
     api_token = valor_texto(
         os.environ.get("CLOUDFLARE_MPAINELDIGITAL_API_TOKEN", "")
         or os.environ.get("CLOUDFLARE_PAINELCONECTADO_API_TOKEN", "")
     )
-    
-    zone_id = valor_texto(os.environ.get("CLOUDFLARE_MPAINELDIGITAL_ZONE_ID", ""))
-    
-    # Sem Zone ID o domínio não aparece no seletor
-    if not api_token or not zone_id:
+
+    # Sem conta, zona ou token o domínio não aparece no seletor, evitando
+    # publicação incompleta ou na zona errada.
+    if not account_id or not zone_id or not api_token:
         return None
 
     custom_domain = normalizar_dominio_cloudflare(
-        os.environ.get(
-            "CLOUDFLARE_MPAINELDIGITAL_ZONE_NAME",
-            "mpaineldigital.com"
-        )
+        os.environ.get("CLOUDFLARE_MPAINELDIGITAL_ZONE_NAME", "mpaineldigital.com")
     ) or "mpaineldigital.com"
 
     return {
-        "account_id": valor_texto(os.environ.get(
-            "CLOUDFLARE_MPAINELDIGITAL_ACCOUNT_ID",
-            ""
-        )),
+        "account_id": account_id,
         "api_token": api_token,
         "subdomain": "",
         "custom_domain": custom_domain,
         "zone_id": zone_id,
         "zone_name": custom_domain,
-        "ativo": valor_texto(os.environ.get(
-            "CLOUDFLARE_MPAINELDIGITAL_ATIVO", "1"
-        )).lower() not in {"0", "false", "nao", "não", "off"},
+        "ativo": True,
         "publish_mode": valor_texto(os.environ.get(
             "CLOUDFLARE_MPAINELDIGITAL_PUBLISH_MODE",
             "custom_strict"
         )).lower(),
-        "rotulo": "MPainel Digital",
+        "rotulo": "M Painel Digital",
         "env_prefix": "CLOUDFLARE_MPAINELDIGITAL",
     }
 
+
 def listar_configs_cloudflare():
-    dominios_permitidos = {"painelconectadobr.com", "meupainelnegocios.com", "mpaineldigital.com"}
+    dominios_permitidos = {
+        "painelconectadobr.com",
+        "meupainelnegocios.com",
+        "mpaineldigital.com",
+    }
     bruto = valor_texto(os.environ.get("CLOUDFLARE_SITES_CONFIG", ""))
     configs = []
 
