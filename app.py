@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 from html import escape
 import requests
-from urllib.parse import urlparse
+from urllib.parse import urlparse, quote
 from sqlalchemy import text
 from database import engine
 
@@ -2479,6 +2479,12 @@ MODELOS_SITE = [
         "icone": "🪪"
     },
     {
+        "slug": "ia_4_0",
+        "nome": "Template IA 4.0",
+        "descricao": "Site institucional completo em página única, com SEO, dados estruturados, cadastro empresarial, contatos, mapa, LGPD, termos e rodapé legal.",
+        "icone": "🏢"
+    },
+    {
         "slug": "meta_waba_clean",
         "nome": "Meta/WABA Clean",
         "descricao": "Modelo limpo para verificação Meta/WhatsApp: CNPJ, atividade, contato, privacidade e termos sem excesso visual.",
@@ -4600,6 +4606,572 @@ a:hover{{text-decoration:underline}}
 </div>
 </body></html>'''
 
+# ============================================================
+# TEMPLATE IA 4.0
+# Página institucional completa baseada no HTML de referência.
+# O HTML exportado pelo Next.js foi convertido para um documento
+# autônomo, sem scripts de hidratação, chunks ou valores fixos.
+# ============================================================
+def gerar_html_site_ia_4_0(empresa, meta_tag="", observacoes=""):
+    cnpj_limpo = limpar_cnpj(empresa.get("cnpj_limpo", empresa.get("cnpj", "")))
+    cnpj_formatado = formatar_cnpj(cnpj_limpo)
+    nome_publico = valor_texto(empresa.get("nome_site", "")) or nome_exibicao_empresa(empresa)
+    razao_social = valor_texto(empresa.get("razao_social", "")) or nome_publico
+    nome_fantasia = valor_texto(empresa.get("nome_fantasia", ""))
+    atividade = atividade_site_sem_codigo(empresa)
+    meta_tag = normalizar_meta_tag_site(meta_tag)
+
+    def primeiro_valor(*campos):
+        for campo in campos:
+            valor = valor_texto(empresa.get(campo, ""))
+            if valor and valor.replace("*", "").strip():
+                return valor
+        return ""
+
+    def valor_real(valor):
+        texto = valor_texto(valor, "")
+        normalizado = normalizar_texto_razao(texto)
+        return bool(texto and texto.replace("*", "").strip() and normalizado not in {
+            "NAO INFORMADO", "NAO INFORMADA", "NAO INFORMADOS", "NAO INFORMADAS",
+            "SEM INFORMACAO", "SEM INFORMACOES", "ENDERECO NAO INFORMADO",
+            "NAN", "NONE", "NULL"
+        })
+
+    municipio = primeiro_valor("municipio_nome", "nome_municipio")
+    if not municipio:
+        municipio_bruto = primeiro_valor("municipio")
+        if municipio_bruto and not municipio_bruto.isdigit():
+            municipio = municipio_bruto
+    uf = primeiro_valor("uf")
+    localidade = "/".join([parte for parte in [municipio, uf] if parte]) or "Brasil"
+
+    endereco = primeiro_valor("endereco_site") or montar_endereco_empresa(empresa)
+    cep = formatar_cep_endereco(primeiro_valor("cep"))
+    telefone = primeiro_valor("telefone_formatado", "telefone")
+    whatsapp = primeiro_valor("whatsapp_site") or telefone
+    email = primeiro_valor("email")
+    responsavel = primeiro_valor("nome_socio", "responsavel") or razao_social
+
+    data_abertura = primeiro_valor("data_inicio_formatada")
+    if not data_abertura:
+        data_abertura = formatar_data_brasil(primeiro_valor("data_inicio"))
+
+    data_abertura_schema = ""
+    for formato in ("%d/%m/%Y", "%Y-%m-%d", "%Y%m%d"):
+        try:
+            data_abertura_schema = datetime.strptime(data_abertura, formato).strftime("%Y-%m-%d")
+            break
+        except Exception:
+            pass
+
+    situacao = situacao_cadastral_site(empresa)
+    natureza_raw = primeiro_valor("natureza_juridica_descricao", "descricao_natureza_juridica", "natureza_juridica")
+    natureza_map = {
+        "2062": "SOCIEDADE EMPRESÁRIA LIMITADA",
+        "2135": "EMPRESÁRIO (INDIVIDUAL)",
+    }
+    natureza = natureza_map.get(natureza_raw, natureza_raw)
+
+    porte_raw = primeiro_valor("porte_descricao", "descricao_porte", "porte_empresa", "porte")
+    porte_map = {
+        "01": "MICRO EMPRESA", "1": "MICRO EMPRESA",
+        "03": "EMPRESA DE PEQUENO PORTE", "3": "EMPRESA DE PEQUENO PORTE",
+        "05": "DEMAIS", "5": "DEMAIS",
+    }
+    porte = porte_map.get(porte_raw, porte_raw)
+
+    tipo_raw = primeiro_valor("tipo_estabelecimento", "identificador_matriz_filial", "tipo")
+    tipo_map = {"1": "MATRIZ", "01": "MATRIZ", "2": "FILIAL", "02": "FILIAL"}
+    tipo_estabelecimento = tipo_map.get(tipo_raw, tipo_raw)
+
+    capital_raw = empresa.get("capital_social_num")
+    if capital_raw is None or str(capital_raw).strip().lower() in {"", "nan", "none", "null"}:
+        capital_raw = empresa.get("capital_social")
+    capital = formatar_capital(capital_raw) if capital_raw is not None and str(capital_raw).strip() else ""
+
+    cnae_bruto = primeiro_valor("cnae_principal")
+    cnae_codigo = primeiro_valor("cnae_principal_codigo") or re.sub(r"\D", "", cnae_bruto)[:7]
+    cnae_formatado = formatar_codigo_cnae(cnae_codigo) if cnae_codigo else ""
+    atividade_oficial = f"{cnae_formatado} - {atividade.upper()}" if cnae_formatado else atividade.upper()
+
+    telefone_digitos = re.sub(r"\D", "", telefone)
+    telefone_internacional = telefone_digitos
+    if telefone_internacional and len(telefone_internacional) in {10, 11}:
+        telefone_internacional = f"55{telefone_internacional}"
+    telefone_href = f"+{telefone_internacional}" if telefone_internacional else ""
+
+    whatsapp_digitos = re.sub(r"\D", "", whatsapp)
+    if whatsapp_digitos and len(whatsapp_digitos) in {10, 11}:
+        whatsapp_digitos = f"55{whatsapp_digitos}"
+    whatsapp_url = f"https://wa.me/{whatsapp_digitos}" if whatsapp_digitos else ""
+
+    site_url = primeiro_valor("site_url", "cloudflare_url")
+    if not site_url:
+        hostname = primeiro_valor("cloudflare_hostname")
+        if hostname:
+            site_url = f"https://{hostname}"
+    site_url = site_url.rstrip("/")
+    site_exibicao = site_url.replace("https://", "").replace("http://", "")
+
+    descricao = (
+        f"Site oficial de {nome_publico}. CNPJ {cnpj_formatado}. "
+        "Confira contatos, localização e informações cadastrais da empresa."
+    )
+    descricao_hero = (
+        f"A {nome_publico} atua em {atividade.lower()}"
+        f"{f' em {localidade} e região' if localidade != 'Brasil' else ''}, "
+        "com foco em atendimento responsável, transparência e organização."
+    )
+    descricao_sobre = (
+        f"A {razao_social}, registrada sob o CNPJ {cnpj_formatado}"
+        f"{f' e com início de atividades em {data_abertura}' if data_abertura else ''}, "
+        f"está localizada em {localidade}.\n\n"
+        f"A empresa atua no segmento de {atividade.lower()}."
+        f"{f' Conforme seu cadastro, é uma empresa de porte {porte}' if porte else ''}"
+        f"{f' e constituída como {natureza}' if natureza else ''}."
+    )
+
+    icone_texto = "".join(parte[0] for parte in re.findall(r"[A-Za-zÀ-ÿ0-9]+", nome_publico)[:2]).upper() or "E"
+    favicon_svg = (
+        "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'>"
+        "<rect width='64' height='64' rx='14' fill='#115e59'/>"
+        f"<text x='50%' y='54%' dominant-baseline='middle' text-anchor='middle' "
+        f"font-family='Arial,sans-serif' font-weight='900' font-size='24' fill='white'>{escape(icone_texto)}</text>"
+        "</svg>"
+    )
+    favicon_data = f"data:image/svg+xml,{quote(favicon_svg, safe='')}"
+
+    schema = {
+        "@context": "https://schema.org",
+        "@type": "LocalBusiness",
+        "name": nome_publico,
+        "legalName": razao_social,
+        "taxID": cnpj_limpo,
+        "description": atividade_oficial,
+        "address": {
+            "@type": "PostalAddress",
+            "streetAddress": endereco if valor_real(endereco) else "",
+            "addressLocality": municipio,
+            "addressRegion": uf,
+            "postalCode": re.sub(r"\D", "", cep),
+            "addressCountry": "BR",
+        },
+    }
+    if nome_fantasia:
+        schema["alternateName"] = nome_fantasia
+    if telefone:
+        schema["telephone"] = telefone_href or telefone
+    if email:
+        schema["email"] = email
+    if site_url:
+        schema["url"] = site_url
+    if data_abertura_schema:
+        schema["foundingDate"] = data_abertura_schema
+    if telefone:
+        schema["contactPoint"] = {
+            "@type": "ContactPoint",
+            "telephone": telefone_href or telefone,
+            "contactType": "customer service",
+            "areaServed": "BR",
+            "availableLanguage": "Portuguese",
+        }
+    schema["address"] = {chave: valor for chave, valor in schema["address"].items() if valor}
+    schema_json = json.dumps(schema, ensure_ascii=False).replace("</", "<\\/")
+
+    canonical_html = f'<link rel="canonical" href="{escape(site_url, quote=True)}">' if site_url else ""
+    og_url_html = f'<meta property="og:url" content="{escape(site_url, quote=True)}">' if site_url else ""
+
+    cards = []
+
+    def card(rotulo, valor, classe=""):
+        if not valor_real(valor):
+            return
+        span_class = f' class="{classe}"' if classe else ""
+        cards.append(
+            f'<div class="info-box"><strong>{escape(rotulo)}</strong>'
+            f'<span{span_class}>{escape(valor)}</span></div>'
+        )
+
+    card("Razão Social", razao_social)
+    card("CNPJ", cnpj_formatado)
+    card("Situação Cadastral", f"✓ {situacao}", "status-ativa" if situacao.upper() == "ATIVA" else "")
+    card("Data de Abertura", data_abertura)
+    card("Localização", localidade)
+    card("Atividade", atividade_oficial)
+    card("Capital Social", capital)
+    card("Porte", porte)
+    card("Natureza Jurídica", natureza)
+    card("CEP", cep)
+    card("Tipo", tipo_estabelecimento)
+    card("Nome Fantasia", nome_fantasia)
+
+    horario = primeiro_valor("horario_funcionamento", "horario_atendimento")
+    card("Horário de Funcionamento", horario)
+
+    endereco_card = ""
+    if valor_real(endereco):
+        endereco_card = (
+            '<div class="info-box info-box-wide"><strong>Endereço Registrado</strong>'
+            f'<span>{escape(endereco)}</span></div>'
+        )
+    cards_html = "".join(cards) + endereco_card
+
+    contato_linhas = []
+
+    def linha_contato(rotulo, valor, html_valor=None):
+        if not valor_real(valor):
+            return
+        contato_linhas.append(
+            f"<tr><td>{escape(rotulo)}</td><td>{html_valor if html_valor is not None else escape(valor)}</td></tr>"
+        )
+
+    linha_contato("Responsável", responsavel)
+    linha_contato("CNPJ", cnpj_formatado)
+    linha_contato("Endereço", endereco)
+    if telefone:
+        linha_contato("Telefone", telefone, f'<a href="tel:{escape(telefone_href, quote=True)}">{escape(telefone)}</a>')
+    if whatsapp_url:
+        linha_contato("WhatsApp", whatsapp, f'<a href="{escape(whatsapp_url, quote=True)}" target="_blank" rel="noopener noreferrer">{escape(whatsapp)}</a>')
+    if email:
+        linha_contato("E-mail", email, f'<a href="mailto:{escape(email, quote=True)}">{escape(email)}</a>')
+    if site_url:
+        linha_contato("Site", site_exibicao, f'<a href="{escape(site_url, quote=True)}">{escape(site_exibicao)}</a>')
+    if horario:
+        linha_contato("Horário de Funcionamento", horario)
+    contato_html = "".join(contato_linhas)
+
+    mapa_html = ""
+    if valor_real(endereco) and normalizar_texto_razao(endereco) != "ENDERECO NAO INFORMADO":
+        mapa_query = quote(endereco, safe="")
+        mapa_html = f'''
+        <div class="map-container">
+          <iframe title="Mapa de localização" width="100%" height="300" src="https://maps.google.com/maps?q={mapa_query}&amp;t=&amp;z=15&amp;ie=UTF8&amp;iwloc=&amp;output=embed" allowfullscreen loading="lazy"></iframe>
+        </div>
+        <div class="map-actions">
+          <a class="map-button map-button-primary" href="https://www.google.com/maps/search/?api=1&amp;query={mapa_query}" target="_blank" rel="noopener noreferrer">Abrir no Google Maps ↗</a>
+          <a class="map-button" href="https://www.google.com/maps/place/{mapa_query}/@?hl=pt-BR" target="_blank" rel="noopener noreferrer">Ver satélite e terreno ↗</a>
+        </div>'''
+
+    contato_privacidade = " · ".join(parte for parte in [email, telefone] if parte) or "pelos canais indicados neste site"
+
+    footer_dados = []
+
+    def footer_item(rotulo, valor, html_valor=None):
+        if not valor_real(valor):
+            return
+        footer_dados.append(
+            '<div class="foot-dados-item">'
+            f'<span class="foot-dados-label">{escape(rotulo)}:</span>'
+            f'<span class="foot-dados-value">{html_valor if html_valor is not None else escape(valor)}</span>'
+            '</div>'
+        )
+
+    footer_item("Razão Social", razao_social)
+    footer_item("Nome Fantasia", nome_fantasia)
+    footer_item("CNPJ", cnpj_formatado)
+    footer_item("Situação Cadastral", situacao)
+    footer_item("Atividade", atividade_oficial)
+    footer_item("Porte", porte)
+    footer_item("Natureza Jurídica", natureza)
+    footer_item("Capital Social", capital)
+    footer_item("Tipo", tipo_estabelecimento)
+    footer_item("Data de Abertura", data_abertura)
+    footer_item("Endereço", endereco)
+    footer_item("Telefone", telefone)
+    if email:
+        footer_item("E-mail", email, f'<a href="mailto:{escape(email, quote=True)}">{escape(email)}</a>')
+    footer_item("Horário", horario)
+    footer_dados_html = "".join(footer_dados)
+
+    css = """
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 15px;
+  color: #2d3748;
+  background: #f4fbfb;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+a { color: inherit; }
+nav {
+  background: #115e59;
+  padding: 0 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 60px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: 0 2px 12px rgba(15, 23, 42, .12);
+}
+.nav-logo {
+  color: #ffffff;
+  font-size: 18px;
+  font-weight: 700;
+  text-decoration: none;
+  letter-spacing: .4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: min(48vw, 420px);
+}
+.nav-links { display: flex; gap: 22px; list-style: none; }
+.nav-links a {
+  color: rgba(255,255,255,.86);
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 650;
+  transition: color .2s;
+}
+.nav-links a:hover, .nav-links a:focus { color: #ffffff; }
+.hero {
+  background: linear-gradient(145deg, #115e59 0%, #0f766e 100%);
+  color: #ffffff;
+  padding: 64px 24px;
+  text-align: center;
+}
+.hero h1 {
+  color: #ffffff;
+  font-size: clamp(24px, 4vw, 34px);
+  line-height: 1.25;
+  margin: 0 auto 12px;
+  max-width: 900px;
+  font-weight: 760;
+}
+.hero p {
+  color: rgba(255,255,255,.88);
+  font-size: 15px;
+  max-width: 720px;
+  margin: 0 auto 22px;
+  white-space: pre-line;
+}
+.cnpj-tag {
+  display: inline-block;
+  background: rgba(255,255,255,.12);
+  border: 1px solid rgba(255,255,255,.32);
+  color: #ffffff;
+  font-size: 13px;
+  padding: 8px 20px;
+  border-radius: 5px;
+  letter-spacing: .35px;
+}
+.section { padding: 52px 24px; max-width: 1008px; margin: 0 auto; }
+h2 {
+  font-size: 22px;
+  color: #111827;
+  margin-bottom: 16px;
+  border-bottom: 2px solid #0f766e;
+  padding-bottom: 7px;
+  font-weight: 740;
+}
+h3 { font-size: 16px; color: #111827; margin: 20px 0 8px; font-weight: 720; }
+p { margin-bottom: 12px; color: #2d3748; }
+.info-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin: 24px 0 0;
+}
+.info-box {
+  border: 1px solid #e2e8f0;
+  border-radius: 7px;
+  padding: 18px;
+  background: #ffffff;
+  box-shadow: 0 2px 12px rgba(15,23,42,.035);
+}
+.info-box-wide { grid-column: 1 / -1; }
+.info-box strong {
+  display: block;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .8px;
+  color: #718096;
+  margin-bottom: 6px;
+}
+.info-box span { font-size: 14px; color: #2d3748; font-weight: 650; }
+.info-box .status-ativa { color: #15803d; }
+.contact-table { width: 100%; border-collapse: collapse; margin: 20px 0; background: #fff; }
+.contact-table td { padding: 11px 16px; border: 1px solid #e2e8f0; vertical-align: top; font-size: 14px; }
+.contact-table td:first-child { background: #eef8f7; font-weight: 700; color: #111827; font-size: 13px; width: 190px; }
+.contact-table a { color: #0f766e; text-decoration: none; font-weight: 650; }
+.contact-table a:hover { text-decoration: underline; }
+.map-container { margin-top: 24px; border-radius: 8px; overflow: hidden; border: 1px solid #d8e4e4; background: #fff; }
+.map-container iframe { border: 0; display: block; }
+.map-actions { margin-top: 14px; display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; }
+.map-button {
+  display: inline-flex;
+  align-items: center;
+  color: #2d3748;
+  text-decoration: none;
+  font-weight: 650;
+  font-size: 13px;
+  padding: 10px 18px;
+  border-radius: 5px;
+  border: 1px solid #d7e1e1;
+  background: #ffffff;
+}
+.map-button-primary { color: #0f766e; border-color: #0f766e; }
+.doc-box { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 7px; padding: 24px; line-height: 1.8; font-size: 14px; }
+hr { border: none; border-top: 1px solid #e2e8f0; margin: 0; }
+footer { background: #115e59; color: #ccfbf1; padding: 48px 24px 32px; font-size: 13px; border-top: 1px solid #134e4a; }
+.foot-inner { max-width: 1008px; margin: 0 auto; display: grid; grid-template-columns: 1fr .8fr 1.3fr; gap: 32px; text-align: left; }
+.foot-col h4 { color: #ffffff; font-size: 14px; font-weight: 720; margin-bottom: 16px; text-transform: uppercase; letter-spacing: .5px; }
+.foot-col p { color: #ccfbf1; line-height: 1.65; margin-bottom: 12px; }
+.foot-links-list { list-style: none; display: flex; flex-direction: column; gap: 10px; }
+.foot-links-list a, .foot-dados-value a { color: #ccfbf1; text-decoration: none; }
+.foot-links-list a:hover, .foot-dados-value a:hover { color: #ffffff; text-decoration: underline; }
+.foot-dados-list { display: flex; flex-direction: column; gap: 8px; font-size: 12px; line-height: 1.5; }
+.foot-dados-item { display: flex; gap: 6px; align-items: flex-start; }
+.foot-dados-label { font-weight: 720; color: #ffffff; white-space: nowrap; }
+.foot-dados-value { color: #ccfbf1; }
+.foot-copy { margin-top: 32px; padding-top: 20px; border-top: 1px solid #28756f; text-align: center; font-size: 12px; color: #ccfbf1; grid-column: 1 / -1; }
+@media (max-width: 820px) {
+  .foot-inner { grid-template-columns: 1fr; gap: 28px; }
+  .info-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 700px) {
+  nav { padding: 0 16px; }
+  .nav-logo { max-width: 82vw; font-size: 15px; }
+  .nav-links { display: none; }
+  .hero { padding: 48px 18px; }
+  .section { padding: 40px 16px; }
+  .info-grid { grid-template-columns: 1fr; }
+  .contact-table, .contact-table tbody, .contact-table tr, .contact-table td { display: block; width: 100%; }
+  .contact-table tr { margin-bottom: 10px; border: 1px solid #e2e8f0; }
+  .contact-table td { border: 0; }
+  .contact-table td:first-child { width: 100%; border-bottom: 1px solid #e2e8f0; }
+  .foot-dados-item { flex-direction: column; gap: 1px; }
+}
+"""
+
+    return f'''<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{escape(nome_publico)}</title>
+  <meta name="description" content="{escape(descricao, quote=True)}">
+  <meta name="robots" content="index, follow">
+  {canonical_html}
+  {meta_tag}
+  <meta property="og:title" content="{escape(nome_publico, quote=True)}">
+  <meta property="og:description" content="{escape(descricao, quote=True)}">
+  {og_url_html}
+  <meta property="og:site_name" content="{escape(nome_publico, quote=True)}">
+  <meta property="og:type" content="website">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="{escape(nome_publico, quote=True)}">
+  <meta name="twitter:description" content="{escape(descricao, quote=True)}">
+  <link rel="icon" href="{escape(favicon_data, quote=True)}" type="image/svg+xml">
+  <script type="application/ld+json">{schema_json}</script>
+  <style>{css}</style>
+</head>
+<body>
+  <nav aria-label="Navegação principal">
+    <a href="#inicio" class="nav-logo">{escape(nome_publico)}</a>
+    <ul class="nav-links">
+      <li><a href="#inicio">Início</a></li>
+      <li><a href="#sobre">Sobre</a></li>
+      <li><a href="#contato">Contato</a></li>
+      <li><a href="#privacidade">Privacidade</a></li>
+      <li><a href="#termos">Termos</a></li>
+    </ul>
+  </nav>
+
+  <header class="hero" id="inicio">
+    <h1>Bem-vindo ao site oficial da {escape(nome_publico)}</h1>
+    <p>{escape(descricao_hero)}</p>
+    <div class="cnpj-tag">CNPJ: {escape(cnpj_formatado)} &nbsp;|&nbsp; Situação: {escape(situacao)}</div>
+  </header>
+
+  <hr>
+  <main>
+    <section class="section" id="sobre">
+      <h2>Sobre a Empresa</h2>
+      <p>A empresa <strong>{escape(razao_social)}</strong>, inscrita no CNPJ sob nº <strong>{escape(cnpj_formatado)}</strong>{f', é uma empresa brasileira com sede em {escape(localidade)}' if localidade != 'Brasil' else ''}{f', fundada em {escape(data_abertura)}' if data_abertura else ''}.</p>
+      <p>Atuamos no segmento de <strong>{escape(atividade_oficial)}</strong>, apresentando neste site informações cadastrais e canais oficiais de contato.</p>
+      <p style="white-space:pre-line">{escape(descricao_sobre)}</p>
+      <div class="info-grid">{cards_html}</div>
+    </section>
+
+    <hr>
+    <section class="section" id="contato">
+      <h2>Contato</h2>
+      <p>Fale com a <strong>{escape(nome_publico)}</strong> pelos canais oficiais abaixo:</p>
+      <table class="contact-table"><tbody>{contato_html}</tbody></table>
+      {mapa_html}
+    </section>
+
+    <hr>
+    <section class="section" id="privacidade">
+      <h2>Política de Privacidade</h2>
+      <div class="doc-box">
+        <p>Esta Política de Privacidade se aplica ao site operado por <strong>{escape(razao_social)}</strong>, inscrita no CNPJ sob nº <strong>{escape(cnpj_formatado)}</strong>{f', com sede em {escape(localidade)}' if localidade != 'Brasil' else ''}, em conformidade com a LGPD — Lei nº 13.709/2018.</p>
+        <h3>1. Dados Coletados</h3>
+        <p>Podem ser tratados nome, e-mail, telefone e demais informações fornecidas voluntariamente pelos canais de contato.</p>
+        <h3>2. Finalidade</h3>
+        <p>Atendimento, resposta a solicitações, comunicação relacionada às atividades da empresa e cumprimento de obrigações legais.</p>
+        <h3>3. Compartilhamento</h3>
+        <p>A empresa não comercializa dados pessoais. O compartilhamento ocorre somente quando necessário ao funcionamento dos serviços ou exigido por lei.</p>
+        <h3>4. Direitos do Titular</h3>
+        <p>O titular pode solicitar confirmação do tratamento, acesso, correção, eliminação, portabilidade e revogação do consentimento, conforme aplicável.</p>
+        <h3>5. Contato</h3>
+        <p>Dúvidas sobre esta política podem ser encaminhadas por {escape(contato_privacidade)}.</p>
+      </div>
+    </section>
+
+    <hr>
+    <section class="section" id="termos">
+      <h2>Termos de Uso</h2>
+      <div class="doc-box">
+        <p>Estes Termos regulam o acesso ao site da empresa <strong>{escape(razao_social)}</strong>, inscrita no CNPJ sob nº <strong>{escape(cnpj_formatado)}</strong>.</p>
+        <h3>1. Objeto</h3>
+        <p>Este site possui caráter institucional e informativo, apresentando dados empresariais e canais de contato.</p>
+        <h3>2. Uso do Site</h3>
+        <p>O visitante compromete-se a utilizar o site de forma lícita e de acordo com a legislação vigente.</p>
+        <h3>3. Propriedade Intelectual</h3>
+        <p>O conteúdo institucional pertence à empresa, salvo quando houver indicação expressa de outra titularidade.</p>
+        <h3>4. Limitação de Responsabilidade</h3>
+        <p>A empresa não se responsabiliza por uso indevido do conteúdo ou por indisponibilidades técnicas temporárias.</p>
+        <h3>5. Alterações</h3>
+        <p>Os termos podem ser atualizados para refletir mudanças operacionais ou legais.</p>
+        <h3>6. Contato</h3>
+        <p>Solicitações podem ser enviadas por {escape(contato_privacidade)}.</p>
+      </div>
+    </section>
+  </main>
+
+  <hr>
+  <footer>
+    <div class="foot-inner">
+      <div class="foot-col">
+        <h4>Quem Somos</h4>
+        <p><strong>{escape(nome_publico)}</strong></p>
+        <p>Empresa atuante em {escape(atividade.lower())}, com informações institucionais e canais de atendimento reunidos neste site.</p>
+      </div>
+      <div class="foot-col">
+        <h4>Links Úteis</h4>
+        <ul class="foot-links-list">
+          <li><a href="#inicio">Início</a></li>
+          <li><a href="#sobre">Sobre</a></li>
+          <li><a href="#contato">Contato</a></li>
+          <li><a href="/politica-de-privacidade.html">Política de Privacidade</a></li>
+          <li><a href="/termos-de-uso.html">Termos de Uso</a></li>
+        </ul>
+      </div>
+      <div class="foot-col">
+        <h4>Informações Legais</h4>
+        <div class="foot-dados-list">{footer_dados_html}</div>
+      </div>
+      <div class="foot-copy">© {agora_brasilia().year} {escape(nome_publico)} — Todos os direitos reservados</div>
+    </div>
+  </footer>
+</body>
+</html>'''
+
 def gerar_bundle_site_empresa(empresa, meta_tag, modelo_site, observacoes=""):
     html = gerar_html_site_empresa(empresa, meta_tag, modelo_site, observacoes)
     politica, termos = gerar_paginas_legais_site(empresa)
@@ -4618,6 +5190,9 @@ def gerar_html_site_empresa(empresa, meta_tag, modelo_site, observacoes=""):
 
     if modelo_site == "ia_3_0":
         return gerar_html_site_ia_3_0(empresa, meta_tag, observacoes)
+
+    if modelo_site == "ia_4_0":
+        return gerar_html_site_ia_4_0(empresa, meta_tag, observacoes)
 
     if modelo_site == "meta_waba_clean":
         return gerar_html_site_meta_waba_clean(empresa, meta_tag, observacoes)
@@ -4856,13 +5431,14 @@ def gerar_html_site_empresa(empresa, meta_tag, modelo_site, observacoes=""):
 
 
 
-def aplicar_personalizacao_site(empresa, nome_site="", telefone_site="", email_site="", endereco_site="", whatsapp_site=""):
+def aplicar_personalizacao_site(empresa, nome_site="", telefone_site="", email_site="", endereco_site="", whatsapp_site="", site_url=""):
     empresa_site = dict(empresa)
     empresa_site["nome_site"] = valor_texto(nome_site, "") or nome_exibicao_empresa(empresa)
     empresa_site["telefone_formatado"] = valor_texto(telefone_site, "")
     empresa_site["whatsapp_site"] = valor_texto(whatsapp_site, "") or valor_texto(telefone_site, "")
     empresa_site["email"] = valor_texto(email_site, "")
     empresa_site["endereco_site"] = valor_texto(endereco_site, "")
+    empresa_site["site_url"] = valor_texto(site_url, "")
     return empresa_site
 
 
@@ -6014,6 +6590,9 @@ def empresa_site_a_partir_registro(site):
         site.get("email_exibicao") or site.get("email"),
         site.get("endereco_exibicao") or site.get("endereco") or montar_endereco_empresa(empresa),
         site.get("whatsapp_exibicao") or site.get("telefone_exibicao") or site.get("telefone"),
+        site.get("cloudflare_url") or (
+            f"https://{site.get('cloudflare_hostname')}" if site.get("cloudflare_hostname") else ""
+        ),
     )
 
 
@@ -9330,7 +9909,8 @@ def gerador_site(cnpj):
                 )
             else:
                 empresa_site = aplicar_personalizacao_site(
-                    empresa, nome_site, telefone_site, email_site, endereco_site, telefone_site
+                    empresa, nome_site, telefone_site, email_site, endereco_site, telefone_site,
+                    f"https://{hostname_previsto}"
                 )
                 bundle = gerar_bundle_site_empresa(empresa_site, "", modelo_site, "")
                 cnpj_limpo = limpar_cnpj(empresa.get("cnpj_limpo", empresa.get("cnpj", cnpj_form)))
@@ -9353,7 +9933,12 @@ def gerador_site(cnpj):
                     "html_gerado": bundle["html"], "politica_html": bundle["politica"],
                     "termos_html": bundle["termos"], "arquivos_verificacao": "{}",
                     "status": "Gerado", "observacoes": "",
-                    "versao_template": "3.0" if modelo_site == "ia_3_0" else "2.1"
+                    "versao_template": {
+                        "ia_4_0": "4.0",
+                        "ia_3_0": "3.0",
+                        "ia_2_0": "2.1",
+                        "meta_waba_clean": "1.0",
+                    }.get(modelo_site, "1.0")
                 })
                 site = buscar_site_gerado(site_id)
                 try:
@@ -9423,7 +10008,12 @@ def site_gerado_editar(site_id):
     email = request.form.get("email_exibicao", "").strip()
     empresa = buscar_empresa_por_cnpj(site.get("cnpj", "")) or {}
     endereco = site.get("endereco_exibicao") or site.get("endereco") or montar_endereco_empresa(empresa)
-    empresa_site = aplicar_personalizacao_site(empresa, nome, telefone, email, endereco, telefone)
+    site_url = site.get("cloudflare_url") or (
+        f"https://{site.get('cloudflare_hostname')}" if site.get("cloudflare_hostname") else ""
+    )
+    empresa_site = aplicar_personalizacao_site(
+        empresa, nome, telefone, email, endereco, telefone, site_url
+    )
     bundle = gerar_bundle_site_empresa(empresa_site, site.get("meta_tag", ""), site.get("modelo_site", "ia_2_0"), site.get("observacoes", ""))
     atualizar_site_conteudo(site_id, {
         "nome_exibicao": nome, "nome_fantasia": nome,
