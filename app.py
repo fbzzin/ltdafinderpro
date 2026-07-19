@@ -1,5 +1,6 @@
 from flask import Flask, render_template, request, send_file, abort, jsonify, redirect, url_for, session
 import pandas as pd
+import numpy as np
 from pathlib import Path
 import zipfile, io, math, json, re, unicodedata, os, hashlib, threading
 from functools import wraps
@@ -1417,50 +1418,267 @@ def assinatura_arquivo_base():
         return 0, 0
 
 
-def construir_base_estatica():
-    """Lê e prepara apenas os dados que não mudam entre requisições."""
-    df = pd.read_csv(BASE_FINAL, dtype=str)
+def normalizar_serie_razao(serie):
+    """Normaliza razões sociais em lote, evitando centenas de milhares de callbacks Python."""
+    resultado = serie.fillna("").astype(str).str.strip()
 
-    if "natureza_juridica" not in df.columns:
-        df["natureza_juridica"] = ""
+    try:
+        resultado = (
+            resultado
+            .str.normalize("NFKD")
+            .str.encode("ascii", errors="ignore")
+            .str.decode("ascii")
+        )
+    except Exception:
+        # Compatibilidade com versões antigas do pandas.
+        return serie.map(normalizar_texto_razao)
+
+    return (
+        resultado
+        .str.upper()
+        .str.replace(r"[^A-Z0-9\s]", " ", regex=True)
+        .str.replace(r"\s+", " ", regex=True)
+        .str.strip()
+    )
+
+
+def classificar_razoes_sociais_vetorizado(serie):
+    """Replica as regras de nome de pessoa usando operações vetorizadas do pandas."""
+    razao_limpa = normalizar_serie_razao(serie)
+    razao_limpa = razao_limpa.str.replace(r"^(?:\d+\s+){1,4}", "", regex=True)
+
+    termos_juridicos = [
+        "SOCIEDADE EMPRESARIA LIMITADA",
+        "SOCIEDADE LIMITADA UNIPESSOAL",
+        "SOCIEDADE UNIPESSOAL",
+        "EMPRESA INDIVIDUAL DE RESPONSABILIDADE LIMITADA",
+        "EMPRESARIO INDIVIDUAL",
+        "MICROEMPREENDEDOR INDIVIDUAL",
+        "LIMITADA", "LTDA", "EIRELI", "SLU", "MEI", "ME", "EPP",
+    ]
+    regex_juridico = r"\b(?:" + "|".join(
+        re.escape(item) for item in sorted(termos_juridicos, key=len, reverse=True)
+    ) + r")\b"
+
+    razao_limpa = (
+        razao_limpa
+        .str.replace(regex_juridico, " ", regex=True)
+        .str.replace(r"\s+", " ", regex=True)
+        .str.strip()
+    )
+
+    regex_conectores = r"\b(?:" + "|".join(
+        re.escape(item) for item in sorted(CONECTORES_NOME_RAZAO)
+    ) + r")\b"
+    partes = (
+        razao_limpa
+        .str.replace(regex_conectores, " ", regex=True)
+        .str.replace(r"\s+", " ", regex=True)
+        .str.strip()
+    )
+
+    quantidade = partes.str.count(r"\S+")
+    primeiro = partes.str.extract(r"^([^\s]+)", expand=False).fillna("")
+    segundo = (
+        partes
+        .str.extract(r"^[A-Z](?:\s+[A-Z])*\s+([A-Z0-9]{2,})", expand=False)
+        .fillna("")
+    )
+
+    regex_empresa = r"\b(?:" + "|".join(
+        re.escape(item) for item in sorted(TERMOS_EMPRESA_RAZAO, key=len, reverse=True)
+    ) + r")\b"
+    possui_termo_empresa = partes.str.contains(regex_empresa, regex=True, na=False)
+
+    primeiro_masculino = primeiro.isin(NOMES_MASCULINOS_RAZAO)
+    primeiro_feminino = primeiro.isin(NOMES_FEMININOS_RAZAO)
+    primeira_inicial = primeiro.str.match(r"^[A-Z]$", na=False) & quantidade.ge(3)
+
+    estrutura_valida = (
+        quantidade.between(2, 7)
+        & ~possui_termo_empresa
+        & ~primeiro.str.match(r"^\d+$", na=False)
+    )
+    eh_nome_pessoa = estrutura_valida & (
+        primeiro_masculino | primeiro_feminino | primeira_inicial
+    )
+
+    sexo = np.select(
+        [
+            estrutura_valida & primeiro_masculino,
+            estrutura_valida & primeiro_feminino,
+            estrutura_valida & primeira_inicial & segundo.isin(NOMES_MASCULINOS_RAZAO),
+            estrutura_valida & primeira_inicial & segundo.isin(NOMES_FEMININOS_RAZAO),
+        ],
+        ["Masculino", "Feminino", "Masculino", "Feminino"],
+        default="Indefinido",
+    )
+
+    return razao_limpa, eh_nome_pessoa, pd.Series(sexo, index=serie.index)
+
+
+def formatar_cnpj_serie(cnpj_limpo):
+    return (
+        cnpj_limpo.str.slice(0, 2) + "."
+        + cnpj_limpo.str.slice(2, 5) + "."
+        + cnpj_limpo.str.slice(5, 8) + "/"
+        + cnpj_limpo.str.slice(8, 12) + "-"
+        + cnpj_limpo.str.slice(12, 14)
+    )
+
+
+def formatar_datas_serie(datas):
+    datas = datas.fillna("").astype(str).str.replace(".0", "", regex=False).str.strip()
+    mascara = datas.str.fullmatch(r"\d{8}", na=False)
+    formatadas = datas.copy()
+    formatadas.loc[mascara] = (
+        datas.loc[mascara].str.slice(6, 8) + "/"
+        + datas.loc[mascara].str.slice(4, 6) + "/"
+        + datas.loc[mascara].str.slice(0, 4)
+    )
+    return formatadas
+
+
+def calcular_idades_serie(datas):
+    datas_texto = datas.fillna("").astype(str).str.replace(".0", "", regex=False).str.zfill(8)
+    aberturas = pd.to_datetime(datas_texto, format="%Y%m%d", errors="coerce")
+    hoje = agora_brasilia()
+
+    anos = hoje.year - aberturas.dt.year
+    ainda_nao_aniversariou = (
+        (aberturas.dt.month > hoje.month)
+        | ((aberturas.dt.month == hoje.month) & (aberturas.dt.day > hoje.day))
+    )
+    idades = (anos - ainda_nao_aniversariou.fillna(False).astype(int)).fillna(0)
+    return idades.clip(lower=0).astype("int16")
+
+
+def montar_enderecos_dataframe(df):
+    """Monta os endereços por vetorização, sem df.apply(axis=1)."""
+    indice = df.index
+
+    def coluna(nome):
+        if nome in df.columns:
+            return df[nome].fillna("").astype(str).str.replace(".0", "", regex=False).str.strip()
+        return pd.Series("", index=indice, dtype=object)
+
+    endereco_personalizado = coluna("endereco_site")
+    logradouro = coluna("logradouro")
+    if not logradouro.ne("").any():
+        logradouro = coluna("descricao_logradouro")
+
+    numero = coluna("numero")
+    if not numero.ne("").any():
+        numero = coluna("numero_estabelecimento")
+
+    complemento = coluna("complemento")
+    bairro = coluna("bairro")
+    if not bairro.ne("").any():
+        bairro = coluna("bairro_distrito")
+
+    municipio = coluna("municipio_nome")
+    uf = coluna("uf")
+    cep_bruto = coluna("cep")
+    cep_digitos = cep_bruto.str.replace(r"\D", "", regex=True)
+    cep = cep_bruto.copy()
+    mascara_cep = cep_digitos.str.len().eq(8)
+    cep.loc[mascara_cep] = (
+        cep_digitos.loc[mascara_cep].str.slice(0, 2) + "."
+        + cep_digitos.loc[mascara_cep].str.slice(2, 5) + "-"
+        + cep_digitos.loc[mascara_cep].str.slice(5, 8)
+    )
+    cep = ("CEP " + cep).where(cep.ne(""), "")
+
+    # Evita endereços como "AVENIDA X 1946, 1946" sem executar a
+    # normalização Unicode completa usada na classificação de nomes.
+    logradouro_normalizado = (
+        logradouro.str.upper()
+        .str.replace(r"[^A-Z0-9]+", " ", regex=True)
+        .str.replace(r"\s+", " ", regex=True)
+        .str.strip()
+    )
+    numero_normalizado = (
+        numero.str.upper()
+        .str.replace(r"[^A-Z0-9]+", " ", regex=True)
+        .str.replace(r"\s+", " ", regex=True)
+        .str.strip()
+    )
+    numero_repetido = pd.Series(
+        [
+            bool(numero_item and len(logradouro_item.split()) >= 3 and logradouro_item.endswith(" " + numero_item))
+            for logradouro_item, numero_item in zip(logradouro_normalizado, numero_normalizado)
+        ],
+        index=indice,
+        dtype=bool,
+    )
+    numero = numero.mask(numero_repetido, "")
+
+    resultado = pd.Series("", index=indice, dtype=object)
+    for parte in [logradouro, numero, complemento, cep, bairro, municipio, uf]:
+        parte = parte.fillna("").astype(str).str.strip()
+        resultado = resultado.mask(resultado.eq("") & parte.ne(""), parte)
+        resultado = resultado.mask(resultado.ne("") & parte.ne("") & ~resultado.eq(parte), resultado + ", " + parte)
+
+    resultado = endereco_personalizado.where(endereco_personalizado.ne(""), resultado)
+    return resultado.replace("", "Endereço não informado")
+
+
+def construir_base_estatica():
+    """Lê e prepara a base com operações vetorizadas, inclusive bases acima de 400 mil linhas."""
+    df = pd.read_csv(
+        BASE_FINAL,
+        dtype=str,
+        keep_default_na=False,
+        low_memory=False,
+    )
+
+    for coluna in ["cnpj", "capital_social", "natureza_juridica"]:
+        if coluna not in df.columns:
+            df[coluna] = ""
 
     df["natureza_juridica"] = (
         df["natureza_juridica"]
-        .fillna("")
         .astype(str)
         .str.replace(".0", "", regex=False)
         .str.strip()
     )
 
-    df["cnpj_limpo"] = df["cnpj"].apply(limpar_cnpj)
-
-    df["capital_social_num"] = (
-        df["capital_social"]
+    df["cnpj_limpo"] = (
+        df["cnpj"]
         .astype(str)
-        .str.replace(",", ".", regex=False)
+        .str.replace(r"\.0$", "", regex=True)
+        .str.replace(r"[^0-9A-Za-z]", "", regex=True)
+        .str.upper()
+        .str.zfill(14)
+        .str.slice(-14)
     )
 
     df["capital_social_num"] = pd.to_numeric(
-        df["capital_social_num"],
-        errors="coerce"
+        df["capital_social"].astype(str).str.replace(",", ".", regex=False),
+        errors="coerce",
     ).fillna(0)
 
     municipios = carregar_municipios()
     cnaes = carregar_cnaes()
 
-    if "municipio" not in df.columns:
-        df["municipio"] = ""
-    if "uf" not in df.columns:
-        df["uf"] = ""
+    for coluna in [
+        "municipio", "uf", "logradouro", "numero", "complemento", "cep",
+        "bairro", "bairro_distrito", "ddd1", "telefone1", "email",
+        "nome_socio", "razao_social", "nome_fantasia", "sexo_provavel",
+        "categoria_cnae", "data_inicio", "cnae_principal", "situacao_cadastral",
+    ]:
+        if coluna not in df.columns:
+            df[coluna] = ""
+        else:
+            df[coluna] = df[coluna].fillna("").astype(str)
 
-    for coluna_endereco in ["logradouro", "numero", "complemento", "cep", "bairro", "bairro_distrito"]:
-        if coluna_endereco not in df.columns:
-            df[coluna_endereco] = ""
+    df["cnpj_formatado"] = formatar_cnpj_serie(df["cnpj_limpo"])
+    df["capital_formatado"] = df["capital_social_num"].map(formatar_capital)
 
-    df["cnpj_formatado"] = df["cnpj_limpo"].apply(formatar_cnpj)
-    df["capital_formatado"] = df["capital_social_num"].apply(formatar_capital)
-
-    municipio_mapeado = df["municipio"].map(municipios)
+    codigos_municipio = (
+        df["municipio"].astype(str).str.replace(".0", "", regex=False).str.strip()
+    )
+    municipio_mapeado = codigos_municipio.map(municipios).fillna("")
 
     if "municipio_nome" in df.columns:
         municipio_salvo = df["municipio_nome"].fillna("").astype(str).str.strip()
@@ -1469,80 +1687,98 @@ def construir_base_estatica():
         df["municipio_nome"] = municipio_mapeado
 
     df["municipio_nome"] = df["municipio_nome"].fillna("")
-    df["endereco_completo"] = df.apply(lambda linha: montar_endereco_empresa(linha), axis=1)
+    df["endereco_completo"] = montar_enderecos_dataframe(df)
 
     if "telefone_formatado" not in df.columns:
-        if "ddd1" not in df.columns:
-            df["ddd1"] = ""
-        if "telefone1" not in df.columns:
-            df["telefone1"] = ""
-
         df["telefone_formatado"] = (
-            df["ddd1"].fillna("").astype(str).str.replace(".0", "", regex=False)
-            + df["telefone1"].fillna("").astype(str).str.replace(".0", "", regex=False)
+            df["ddd1"].astype(str).str.replace(".0", "", regex=False)
+            + df["telefone1"].astype(str).str.replace(".0", "", regex=False)
         )
-
-    for coluna in [
-        "telefone_formatado", "email", "nome_socio", "razao_social",
-        "nome_fantasia", "sexo_provavel", "categoria_cnae",
-        "data_inicio", "cnae_principal", "situacao_cadastral", "logradouro",
-        "numero", "complemento", "cep", "bairro", "bairro_distrito",
-        "endereco_completo", "uf", "municipio", "municipio_nome"
-    ]:
-        if coluna not in df.columns:
-            df[coluna] = ""
-        else:
-            df[coluna] = df[coluna].fillna("")
+    else:
+        df["telefone_formatado"] = df["telefone_formatado"].fillna("").astype(str)
 
     df["cnae_principal_codigo"] = (
         df["cnae_principal"]
         .astype(str)
         .str.replace(".0", "", regex=False)
-        .str.strip()
+        .str.replace(r"\D", "", regex=True)
+        .str.slice(0, 7)
         .str.zfill(7)
     )
 
     coluna_descricao_cnae = obter_descricao_cnae_por_coluna(df)
-
     if coluna_descricao_cnae:
-        df[coluna_descricao_cnae] = df[coluna_descricao_cnae].fillna("").astype(str)
-        df["cnae_principal_descricao"] = df[coluna_descricao_cnae]
+        descricao_cnae = df[coluna_descricao_cnae].fillna("").astype(str).str.strip()
     else:
-        df["cnae_principal_descricao"] = df["cnae_principal_codigo"].map(cnaes).fillna("")
+        descricao_cnae = df["cnae_principal_codigo"].map(cnaes).fillna("").astype(str).str.strip()
+    df["cnae_principal_descricao"] = descricao_cnae
 
-    df["cnae_principal"] = df.apply(
-        lambda linha: montar_cnae_exibicao(
-            linha.get("cnae_principal_codigo", ""),
-            linha.get("cnae_principal_descricao", "")
-        ),
-        axis=1
+    codigo = df["cnae_principal_codigo"]
+    codigo_formatado = (
+        codigo.str.slice(0, 2) + "." + codigo.str.slice(2, 4)
+        + "-" + codigo.str.slice(4, 5) + "-" + codigo.str.slice(5, 7)
+    )
+    df["cnae_principal"] = codigo_formatado.where(
+        descricao_cnae.eq(""),
+        codigo_formatado + " - " + descricao_cnae,
     )
 
-    if "sexo_provavel" in df.columns:
-        df["sexo_socio"] = df["sexo_provavel"].replace("", "Indefinido")
-    else:
-        df["sexo_socio"] = "Indefinido"
+    # Os MEIs 2135 já foram confirmados no Simples.zip e não precisam
+    # passar pela classificação completa. Isso evita regex pesada em mais
+    # de 300 mil linhas. As LTDAs continuam usando a regra integral.
+    mascara_mei = df["natureza_juridica"].eq("2135")
+    mascara_outros = ~mascara_mei
 
-    classificacao_razao = df["razao_social"].apply(classificar_razao_social_nome_pessoa)
+    eh_nome_pessoa = pd.Series(False, index=df.index, dtype=bool)
+    sexo_razao = pd.Series("Indefinido", index=df.index, dtype=object)
 
-    df["razao_limpa_nome"] = classificacao_razao.apply(lambda item: item["razao_limpa"])
-    df["razao_nome_pessoa"] = classificacao_razao.apply(lambda item: item["eh_nome_pessoa"])
-    df["sexo_razao"] = classificacao_razao.apply(lambda item: item["sexo"])
-    df["sexo_provavel"] = df["sexo_razao"].replace("", "Indefinido")
+    if mascara_outros.any():
+        _, pessoas_outros, sexo_outros = classificar_razoes_sociais_vetorizado(
+            df.loc[mascara_outros, "razao_social"]
+        )
+        eh_nome_pessoa.loc[mascara_outros] = pessoas_outros
+        sexo_razao.loc[mascara_outros] = sexo_outros
 
-    # As LTDAs continuam seguindo a regra de nome de pessoa pela razão social.
-    # Os registros 2135 desta base foram confirmados no Simples.zip como MEI.
-    df = df[
-        (df["natureza_juridica"] == "2135") |
-        (df["razao_nome_pessoa"] == True)
-    ].copy()
+    if mascara_mei.any():
+        razao_mei = normalizar_serie_razao(df.loc[mascara_mei, "razao_social"])
+        razao_mei = (
+            razao_mei
+            .str.replace(r"^(?:\d+\s+){1,4}", "", regex=True)
+            .str.replace(r"\b(?:DA|DE|DO|DAS|DOS|E)\b", " ", regex=True)
+            .str.replace(r"\s+", " ", regex=True)
+            .str.strip()
+        )
+        primeiro_mei = razao_mei.str.extract(r"^([^\s]+)", expand=False).fillna("")
+        sexo_mei = np.select(
+            [
+                primeiro_mei.isin(NOMES_MASCULINOS_RAZAO),
+                primeiro_mei.isin(NOMES_FEMININOS_RAZAO),
+            ],
+            ["Masculino", "Feminino"],
+            default="Indefinido",
+        )
+        eh_nome_pessoa.loc[mascara_mei] = True
+        sexo_razao.loc[mascara_mei] = sexo_mei
+
+    df = df[mascara_mei | eh_nome_pessoa].copy()
+    df["sexo_provavel"] = sexo_razao.loc[df.index].replace("", "Indefinido")
 
     df["categoria_cnae"] = df["categoria_cnae"].replace("", "Outros")
-    df["idade_empresa"] = df["data_inicio"].apply(calcular_idade_empresa)
-    df["data_inicio_formatada"] = df["data_inicio"].apply(formatar_data_brasil)
+    df["idade_empresa"] = calcular_idades_serie(df["data_inicio"])
+    df["data_inicio_formatada"] = formatar_datas_serie(df["data_inicio"])
+
+    # Categorias reduzem consideravelmente a memória da base grande.
+    for coluna in [
+        "natureza_juridica", "situacao_cadastral", "uf",
+        "sexo_provavel", "categoria_cnae",
+    ]:
+        if coluna in df.columns:
+            try:
+                df[coluna] = df[coluna].astype("category")
+            except Exception:
+                pass
 
     return df.reset_index(drop=True)
-
 
 def carregar_base_estatica():
     assinatura = assinatura_arquivo_base()
@@ -1574,6 +1810,159 @@ def assinatura_cache_avaliacoes_ia():
     )
 
 
+def construir_avaliacoes_ia_vetorizadas(df_base, modelo_ia):
+    """Calcula os mesmos fatores da IA em lote, sem iterar registro por registro."""
+    indice = df_base.index
+    total_linhas = len(df_base)
+
+    capital = pd.to_numeric(df_base["capital_social_num"], errors="coerce").fillna(0)
+    idade = pd.to_numeric(df_base["idade_empresa"], errors="coerce").fillna(0)
+    telefone = df_base["telefone_formatado"].fillna("").astype(str).str.contains(r"[0-9A-Za-z]", regex=True)
+    email = df_base["email"].fillna("").astype(str).str.contains(r"[0-9A-Za-z]", regex=True)
+    categoria = df_base["categoria_cnae"].astype(str).replace({"nan": "", "None": ""}).replace("", "Outros")
+    categoria_identificada = ~categoria.str.strip().str.lower().isin(["outros", "indefinido", ""])
+
+    score_regras = np.full(total_linhas, 40, dtype=np.int16)
+    score_regras += np.select(
+        [capital.ge(1_000_000), capital.ge(500_000), capital.ge(100_000)],
+        [25, 20, 10],
+        default=0,
+    ).astype(np.int16)
+    score_regras += telefone.to_numpy(dtype=np.int16) * 10
+    score_regras += email.to_numpy(dtype=np.int16) * 10
+    score_regras += np.select(
+        [idade.ge(5), idade.ge(2), idade.ge(1)],
+        [15, 10, 5],
+        default=0,
+    ).astype(np.int16)
+    score_regras += categoria_identificada.to_numpy(dtype=np.int16) * 5
+    score_regras = np.clip(score_regras, 0, 100).astype(np.uint8)
+
+    faixa_capital = pd.Series(
+        np.select(
+            [capital.le(0), capital.lt(50_000), capital.lt(100_000), capital.lt(500_000), capital.lt(1_000_000)],
+            ["Sem informação", "Até R$ 50 mil", "R$ 50 mil a R$ 100 mil", "R$ 100 mil a R$ 500 mil", "R$ 500 mil a R$ 1 milhão"],
+            default="Acima de R$ 1 milhão",
+        ),
+        index=indice,
+    )
+    faixa_idade = pd.Series(
+        np.select(
+            [idade.lt(1), idade.le(2), idade.le(5), idade.le(10)],
+            ["Menos de 1 ano", "1 a 2 anos", "3 a 5 anos", "6 a 10 anos"],
+            default="Mais de 10 anos",
+        ),
+        index=indice,
+    )
+
+    caracteristicas = {
+        "faixa_capital": faixa_capital,
+        "faixa_idade": faixa_idade,
+        "categoria_cnae": categoria,
+        "uf": df_base["uf"].astype(str).replace({"nan": "", "None": ""}).str.upper().replace("", "Sem UF"),
+        "tem_telefone": pd.Series(np.where(telefone, "Sim", "Não"), index=indice),
+        "tem_email": pd.Series(np.where(email, "Sim", "Não"), index=indice),
+    }
+    pesos_fatores = {
+        "faixa_capital": 0.25,
+        "faixa_idade": 0.20,
+        "categoria_cnae": 0.25,
+        "uf": 0.10,
+        "tem_telefone": 0.10,
+        "tem_email": 0.10,
+    }
+
+    taxa_global = float((modelo_ia or {}).get("taxa_global", 50.0) or 50.0)
+    numerador = np.zeros(total_linhas, dtype=np.float32)
+    denominador = np.zeros(total_linhas, dtype=np.float32)
+    totais_fatores = []
+
+    por_fator = (modelo_ia or {}).get("por_fator", {})
+    for fator, valores in caracteristicas.items():
+        estatisticas = por_fator.get(fator, {}) if isinstance(por_fator, dict) else {}
+        mapa_total = {
+            valor: int(dados.get("total", 0) or 0)
+            for valor, dados in estatisticas.items()
+            if isinstance(dados, dict)
+        }
+        mapa_taxa = {
+            valor: float(dados.get("taxa_ajustada", taxa_global) or taxa_global)
+            for valor, dados in estatisticas.items()
+            if isinstance(dados, dict)
+        }
+
+        totais = pd.to_numeric(valores.map(mapa_total), errors="coerce").fillna(0).to_numpy(dtype=np.float32)
+        taxas = pd.to_numeric(valores.map(mapa_taxa), errors="coerce").fillna(taxa_global).to_numpy(dtype=np.float32)
+        confianca_fator = np.minimum(1.0, totais / 15.0)
+        pesos = pesos_fatores[fator] * (0.35 + 0.65 * confianca_fator)
+        pesos = np.where(totais > 0, pesos, 0).astype(np.float32)
+
+        numerador += taxas * pesos
+        denominador += pesos
+        totais_fatores.append(np.where(totais > 0, totais, np.nan))
+
+    taxa_estimada = np.divide(
+        numerador,
+        denominador,
+        out=np.full(total_linhas, taxa_global, dtype=np.float32),
+        where=denominador > 0,
+    )
+    taxa_estimada = np.round(taxa_estimada, 2)
+
+    if totais_fatores:
+        matriz_totais = np.column_stack(totais_fatores)
+        with np.errstate(all="ignore"):
+            ordenada = np.sort(matriz_totais, axis=1)
+            quantidades_validas = np.sum(~np.isnan(ordenada), axis=1)
+            posicao_inferior = np.maximum(quantidades_validas - 1, 0) // 2
+            posicao_superior = quantidades_validas // 2
+            linhas = np.arange(total_linhas)
+            inferior = ordenada[linhas, posicao_inferior]
+            superior = ordenada[linhas, posicao_superior]
+            mediana = np.where(quantidades_validas > 0, (inferior + superior) / 2, 0)
+        amostras_semelhantes = np.rint(np.nan_to_num(mediana, nan=0)).astype(np.int32)
+    else:
+        amostras_semelhantes = np.zeros(total_linhas, dtype=np.int32)
+
+    confianca_amostra = np.minimum(100, np.rint((amostras_semelhantes / 15.0) * 100))
+    confianca_geral = int((modelo_ia or {}).get("confianca_geral", 0) or 0)
+    confianca = np.rint((confianca_amostra * 0.65) + (confianca_geral * 0.35))
+    confianca = np.clip(confianca, 0, 100).astype(np.uint8)
+
+    score_historico = np.clip(np.rint(taxa_estimada), 0, 100).astype(np.uint8)
+    fase = (modelo_ia or {}).get("fase", {}) or {}
+    peso_regras = float(fase.get("peso_regras", 1) or 1)
+    peso_historico = float(fase.get("peso_historico", 0) or 0)
+    score = np.clip(
+        np.rint((score_regras.astype(np.float32) * peso_regras) + (score_historico.astype(np.float32) * peso_historico)),
+        0,
+        100,
+    ).astype(np.uint8)
+
+    recomendacao = np.where(score >= 80, "🟢 Excelente", np.where(score >= 60, "🟡 Atenção", "🔴 Evitar"))
+    classe = np.where(score >= 80, "excelente", np.where(score >= 60, "atencao", "evitar"))
+
+    distribuicao = (modelo_ia or {}).get("distribuicao_resultados", {}) or {}
+    resultado_comum = max(distribuicao, key=distribuicao.get) if distribuicao else "Sem dados"
+    total_amostras = int((modelo_ia or {}).get("total_concluidas", 0) or 0)
+
+    return pd.DataFrame({
+        "score_ia": score,
+        "score_ia_regras": score_regras,
+        "score_ia_historico": score_historico,
+        "ia_peso_regras": np.full(total_linhas, round(peso_regras * 100), dtype=np.uint8),
+        "ia_peso_historico": np.full(total_linhas, round(peso_historico * 100), dtype=np.uint8),
+        "ia_recomendacao": recomendacao,
+        "ia_classe": classe,
+        "ia_confianca_historica": confianca,
+        "ia_amostras_semelhantes": amostras_semelhantes,
+        "ia_taxa_estimada": taxa_estimada.astype(np.float32),
+        "ia_resultado_mais_comum": resultado_comum,
+        "ia_fase": fase.get("nome", "Fase 1 · Regras fixas"),
+        "ia_total_amostras": np.full(total_linhas, total_amostras, dtype=np.int32),
+    }, index=indice)
+
+
 def carregar_avaliacoes_ia_estaticas(df_base, modelo_ia):
     assinatura = assinatura_cache_avaliacoes_ia()
 
@@ -1587,13 +1976,7 @@ def carregar_avaliacoes_ia_estaticas(df_base, modelo_ia):
         if cache_valido:
             return _CACHE_AVALIACOES_IA["df"]
 
-        registros = df_base.to_dict(orient="records")
-        avaliacoes = [
-            avaliar_ia_empresa(registro, modelo_ia)
-            for registro in registros
-        ]
-
-        df_avaliacoes = pd.DataFrame(avaliacoes, index=df_base.index)
+        df_avaliacoes = construir_avaliacoes_ia_vetorizadas(df_base, modelo_ia)
 
         for campo in CAMPOS_IA_CACHE:
             if campo not in df_avaliacoes.columns:
@@ -1603,7 +1986,6 @@ def carregar_avaliacoes_ia_estaticas(df_base, modelo_ia):
         _CACHE_AVALIACOES_IA["assinatura"] = assinatura
         _CACHE_AVALIACOES_IA["df"] = df_avaliacoes
         return df_avaliacoes
-
 
 def montar_mapas_datas_usuario(datas_uso, usuario):
     mapa_data_hora = {}
