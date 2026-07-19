@@ -646,7 +646,9 @@ def buscar_empresa_por_cnpj(cnpj):
             return None
 
         return encontrado.iloc[0].to_dict()
-    except:
+    except (BaseEmCarregamento, BaseFalhouCarregamento):
+        raise
+    except Exception:
         return None
 
 
@@ -1369,6 +1371,9 @@ def classificar_razao_social_nome_pessoa(razao_social):
 _CACHE_BASE_ESTATICA = {
     "assinatura": None,
     "df": None,
+    "carregando": False,
+    "erro": None,
+    "assinatura_erro": None,
 }
 
 _CACHE_AVALIACOES_IA = {
@@ -1377,6 +1382,78 @@ _CACHE_AVALIACOES_IA = {
 }
 
 _CACHE_BASE_LOCK = threading.RLock()
+
+
+class BaseEmCarregamento(RuntimeError):
+    """Sinaliza que a base grande está sendo preparada em segundo plano."""
+
+
+class BaseFalhouCarregamento(RuntimeError):
+    """Sinaliza uma falha real durante a preparação da base."""
+
+
+@app.errorhandler(BaseEmCarregamento)
+def tratar_base_em_carregamento(_erro):
+    return """
+    <!doctype html>
+    <html lang="pt-BR">
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta http-equiv="refresh" content="5">
+      <title>Preparando base</title>
+      <style>
+        *{box-sizing:border-box}
+        body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0f172a;
+             color:#e2e8f0;font-family:Arial,Helvetica,sans-serif;padding:24px}
+        main{width:min(560px,100%);background:#111827;border:1px solid #334155;
+             border-radius:18px;padding:32px;box-shadow:0 24px 70px rgba(0,0,0,.35)}
+        h1{margin:0 0 12px;font-size:25px;color:#fff}
+        p{margin:8px 0;color:#cbd5e1;line-height:1.55}
+        .barra{height:8px;background:#1e293b;border-radius:999px;overflow:hidden;margin-top:22px}
+        .barra::after{content:"";display:block;height:100%;width:35%;background:#38bdf8;
+                     border-radius:999px;animation:carregando 1.2s ease-in-out infinite alternate}
+        @keyframes carregando{from{transform:translateX(-80%)}to{transform:translateX(280%)}}
+      </style>
+    </head>
+    <body>
+      <main>
+        <h1>Preparando a base de CNPJs</h1>
+        <p>A base ampliada está sendo carregada e otimizada em segundo plano.</p>
+        <p>Esta página será atualizada automaticamente em alguns segundos.</p>
+        <div class="barra"></div>
+      </main>
+    </body>
+    </html>
+    """, 200
+
+
+@app.errorhandler(BaseFalhouCarregamento)
+def tratar_falha_base(_erro):
+    return """
+    <!doctype html>
+    <html lang="pt-BR">
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1">
+      <title>Falha ao carregar a base</title>
+      <style>
+        body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0f172a;
+             color:#e2e8f0;font-family:Arial,Helvetica,sans-serif;padding:24px}
+        main{width:min(620px,100%);background:#111827;border:1px solid #7f1d1d;
+             border-radius:18px;padding:32px}
+        h1{margin-top:0;color:#fecaca} p{line-height:1.55;color:#cbd5e1}
+      </style>
+    </head>
+    <body>
+      <main>
+        <h1>Não foi possível preparar a base</h1>
+        <p>O sistema permaneceu ativo, mas a leitura da base de CNPJs falhou.</p>
+        <p>Consulte os logs do Railway para identificar a mensagem iniciada por <strong>[BASE]</strong>.</p>
+      </main>
+    </body>
+    </html>
+    """, 500
 
 CAMPOS_IA_CACHE = [
     "score_ia",
@@ -1551,6 +1628,87 @@ def calcular_idades_serie(datas):
     )
     idades = (anos - ainda_nao_aniversariou.fillna(False).astype(int)).fillna(0)
     return idades.clip(lower=0).astype("int16")
+
+
+def adicionar_avaliacoes_ia_rapidas(df):
+    """Adiciona o score do painel sem construir o modelo histórico para toda a base.
+
+    A avaliação histórica completa continua sendo calculada somente ao abrir
+    uma empresa individualmente. Isso evita processar mais de 400 mil linhas
+    dentro da primeira requisição do Gunicorn.
+    """
+    total_linhas = len(df)
+    if total_linhas == 0:
+        for campo in CAMPOS_IA_CACHE:
+            if campo not in df.columns:
+                df[campo] = pd.Series(dtype=object)
+        return df
+
+    capital = pd.to_numeric(df["capital_social_num"], errors="coerce").fillna(0)
+    idade = pd.to_numeric(df["idade_empresa"], errors="coerce").fillna(0)
+
+    telefone = (
+        df["telefone_formatado"]
+        .fillna("")
+        .astype(str)
+        .str.contains(r"[0-9A-Za-z]", regex=True)
+    )
+    email = (
+        df["email"]
+        .fillna("")
+        .astype(str)
+        .str.contains(r"[0-9A-Za-z]", regex=True)
+    )
+    categoria = (
+        df["categoria_cnae"]
+        .fillna("")
+        .astype(str)
+        .str.strip()
+        .str.lower()
+    )
+    categoria_identificada = ~categoria.isin(["", "outros", "indefinido", "nan", "none"])
+
+    score_regras = np.full(total_linhas, 40, dtype=np.int16)
+    score_regras += np.select(
+        [capital.ge(1_000_000), capital.ge(500_000), capital.ge(100_000)],
+        [25, 20, 10],
+        default=0,
+    ).astype(np.int16)
+    score_regras += telefone.to_numpy(dtype=np.int16) * 10
+    score_regras += email.to_numpy(dtype=np.int16) * 10
+    score_regras += np.select(
+        [idade.ge(5), idade.ge(2), idade.ge(1)],
+        [15, 10, 5],
+        default=0,
+    ).astype(np.int16)
+    score_regras += categoria_identificada.to_numpy(dtype=np.int16) * 5
+    score_regras = np.clip(score_regras, 0, 100).astype(np.uint8)
+
+    recomendacao = np.where(
+        score_regras >= 80,
+        "🟢 Excelente",
+        np.where(score_regras >= 60, "🟡 Atenção", "🔴 Evitar"),
+    )
+    classe = np.where(
+        score_regras >= 80,
+        "excelente",
+        np.where(score_regras >= 60, "atencao", "evitar"),
+    )
+
+    df["score_ia"] = score_regras
+    df["score_ia_regras"] = score_regras
+    df["score_ia_historico"] = np.full(total_linhas, 50, dtype=np.uint8)
+    df["ia_peso_regras"] = np.full(total_linhas, 100, dtype=np.uint8)
+    df["ia_peso_historico"] = np.zeros(total_linhas, dtype=np.uint8)
+    df["ia_recomendacao"] = recomendacao
+    df["ia_classe"] = classe
+    df["ia_confianca_historica"] = np.zeros(total_linhas, dtype=np.uint8)
+    df["ia_amostras_semelhantes"] = np.zeros(total_linhas, dtype=np.int32)
+    df["ia_taxa_estimada"] = np.full(total_linhas, 50.0, dtype=np.float32)
+    df["ia_resultado_mais_comum"] = "Análise detalhada ao abrir a empresa"
+    df["ia_fase"] = "Painel rápido · regras fixas"
+    df["ia_total_amostras"] = np.zeros(total_linhas, dtype=np.int32)
+    return df
 
 
 def montar_enderecos_dataframe(df):
@@ -1740,25 +1898,25 @@ def construir_base_estatica():
         sexo_razao.loc[mascara_outros] = sexo_outros
 
     if mascara_mei.any():
-        razao_mei = normalizar_serie_razao(df.loc[mascara_mei, "razao_social"])
-        razao_mei = (
-            razao_mei
-            .str.replace(r"^(?:\d+\s+){1,4}", "", regex=True)
-            .str.replace(r"\b(?:DA|DE|DO|DAS|DOS|E)\b", " ", regex=True)
-            .str.replace(r"\s+", " ", regex=True)
+        # Os registros 2135 desta base já foram confirmados como MEI pelo
+        # Simples.zip durante a importação. Não é necessário normalizar mais
+        # de 300 mil razões sociais para decidir se são nomes de pessoa.
+        # Preserva uma classificação de sexo já existente; caso contrário,
+        # usa "Indefinido" e deixa a análise detalhada para uma única empresa.
+        sexo_existente = (
+            df.loc[mascara_mei, "sexo_provavel"]
+            .fillna("")
+            .astype(str)
             .str.strip()
         )
-        primeiro_mei = razao_mei.str.extract(r"^([^\s]+)", expand=False).fillna("")
-        sexo_mei = np.select(
-            [
-                primeiro_mei.isin(NOMES_MASCULINOS_RAZAO),
-                primeiro_mei.isin(NOMES_FEMININOS_RAZAO),
-            ],
-            ["Masculino", "Feminino"],
-            default="Indefinido",
+        sexo_existente = sexo_existente.where(
+            sexo_existente.isin(["Masculino", "Feminino", "Indefinido"]),
+            "Indefinido",
         )
+        sexo_existente = sexo_existente.replace("", "Indefinido")
+
         eh_nome_pessoa.loc[mascara_mei] = True
-        sexo_razao.loc[mascara_mei] = sexo_mei
+        sexo_razao.loc[mascara_mei] = sexo_existente
 
     df = df[mascara_mei | eh_nome_pessoa].copy()
     df["sexo_provavel"] = sexo_razao.loc[df.index].replace("", "Indefinido")
@@ -1766,6 +1924,7 @@ def construir_base_estatica():
     df["categoria_cnae"] = df["categoria_cnae"].replace("", "Outros")
     df["idade_empresa"] = calcular_idades_serie(df["data_inicio"])
     df["data_inicio_formatada"] = formatar_datas_serie(df["data_inicio"])
+    df = adicionar_avaliacoes_ia_rapidas(df)
 
     # Categorias reduzem consideravelmente a memória da base grande.
     for coluna in [
@@ -1780,6 +1939,74 @@ def construir_base_estatica():
 
     return df.reset_index(drop=True)
 
+def _worker_carregar_base_estatica(assinatura_inicial):
+    try:
+        print(
+            f"[BASE] Iniciando preparação em segundo plano: "
+            f"{assinatura_inicial[1] / (1024 * 1024):.2f} MB"
+        )
+        df = construir_base_estatica()
+        assinatura_final = assinatura_arquivo_base()
+
+        with _CACHE_BASE_LOCK:
+            if assinatura_final != assinatura_inicial:
+                _CACHE_BASE_ESTATICA["df"] = None
+                _CACHE_BASE_ESTATICA["assinatura"] = None
+                _CACHE_BASE_ESTATICA["erro"] = None
+                _CACHE_BASE_ESTATICA["assinatura_erro"] = None
+            else:
+                _CACHE_BASE_ESTATICA["df"] = df
+                _CACHE_BASE_ESTATICA["assinatura"] = assinatura_final
+                _CACHE_BASE_ESTATICA["erro"] = None
+                _CACHE_BASE_ESTATICA["assinatura_erro"] = None
+
+                # Uma base nova invalida qualquer avaliação histórica antiga.
+                _CACHE_AVALIACOES_IA["assinatura"] = None
+                _CACHE_AVALIACOES_IA["df"] = None
+
+            _CACHE_BASE_ESTATICA["carregando"] = False
+
+        print(f"[BASE] Base pronta: {len(df):,} registros processados.")
+
+        if assinatura_final != assinatura_inicial:
+            print("[BASE] O arquivo mudou durante a leitura. Iniciando nova preparação.")
+            iniciar_carregamento_base_background()
+
+    except Exception as erro:
+        with _CACHE_BASE_LOCK:
+            _CACHE_BASE_ESTATICA["df"] = None
+            _CACHE_BASE_ESTATICA["assinatura"] = None
+            _CACHE_BASE_ESTATICA["carregando"] = False
+            _CACHE_BASE_ESTATICA["erro"] = repr(erro)
+            _CACHE_BASE_ESTATICA["assinatura_erro"] = assinatura_inicial
+
+        print(f"[BASE] Falha ao preparar a base: {erro!r}")
+
+
+def iniciar_carregamento_base_background():
+    assinatura = assinatura_arquivo_base()
+
+    with _CACHE_BASE_LOCK:
+        cache_valido = (
+            _CACHE_BASE_ESTATICA.get("df") is not None
+            and _CACHE_BASE_ESTATICA.get("assinatura") == assinatura
+        )
+        if cache_valido or _CACHE_BASE_ESTATICA.get("carregando"):
+            return
+
+        _CACHE_BASE_ESTATICA["carregando"] = True
+        _CACHE_BASE_ESTATICA["erro"] = None
+        _CACHE_BASE_ESTATICA["assinatura_erro"] = None
+
+    thread = threading.Thread(
+        target=_worker_carregar_base_estatica,
+        args=(assinatura,),
+        name="carregamento-base-cnpj",
+        daemon=True,
+    )
+    thread.start()
+
+
 def carregar_base_estatica():
     assinatura = assinatura_arquivo_base()
 
@@ -1788,19 +2015,23 @@ def carregar_base_estatica():
             _CACHE_BASE_ESTATICA.get("df") is not None
             and _CACHE_BASE_ESTATICA.get("assinatura") == assinatura
         )
-
         if cache_valido:
             return _CACHE_BASE_ESTATICA["df"]
 
-        df = construir_base_estatica()
-        _CACHE_BASE_ESTATICA["assinatura"] = assinatura
-        _CACHE_BASE_ESTATICA["df"] = df
+        erro = _CACHE_BASE_ESTATICA.get("erro")
+        assinatura_erro = _CACHE_BASE_ESTATICA.get("assinatura_erro")
+        carregando = bool(_CACHE_BASE_ESTATICA.get("carregando"))
 
-        # Uma base nova exige novas avaliações históricas.
-        _CACHE_AVALIACOES_IA["assinatura"] = None
-        _CACHE_AVALIACOES_IA["df"] = None
+    if erro and assinatura_erro == assinatura:
+        raise BaseFalhouCarregamento(erro)
 
-        return df
+    if not carregando:
+        iniciar_carregamento_base_background()
+
+    # Nunca prende uma requisição web durante dezenas de segundos. Enquanto a
+    # thread prepara a base, o Flask entrega uma página leve com atualização
+    # automática, impedindo o WORKER TIMEOUT do Gunicorn.
+    raise BaseEmCarregamento("A base está sendo preparada em segundo plano.")
 
 
 def assinatura_cache_avaliacoes_ia():
@@ -2093,51 +2324,46 @@ def carregar_base():
     usuario = usuario_atual()
     df_base = carregar_base_estatica()
 
-    # A cópia rasa compartilha somente os blocos estáticos e recebe colunas
-    # dinâmicas novas, reduzindo tempo e consumo de memória por requisição.
+    # A cópia rasa compartilha os blocos estáticos. Apenas os campos que
+    # realmente variam por usuário são adicionados nesta requisição.
     df = df_base.copy(deep=False)
 
-    favoritos = carregar_favoritos()
+    favoritos_brutos = carregar_favoritos()
     status_geral = carregar_status_bm()
     datas_uso = carregar_datas_uso_cnpj()
 
-    favoritos = {
-        limpar_cnpj(cnpj)
-        for cnpj in favoritos
-        if limpar_cnpj(cnpj)
-    }
+    favoritos = set()
+    for cnpj in favoritos_brutos:
+        cnpj_limpo = limpar_cnpj(cnpj)
+        if cnpj_limpo:
+            favoritos.add(cnpj_limpo)
 
-    status_usuario_atual = status_geral.get(usuario, {}) if isinstance(status_geral, dict) else {}
-    if not isinstance(status_usuario_atual, dict):
-        status_usuario_atual = {}
+    registros_usuario = status_geral.get(usuario, {}) if isinstance(status_geral, dict) else {}
+    if not isinstance(registros_usuario, dict):
+        registros_usuario = {}
 
-    status_usuario_atual = {
-        limpar_cnpj(cnpj): str(status or STATUS_PADRAO).strip() or STATUS_PADRAO
-        for cnpj, status in status_usuario_atual.items()
-        if limpar_cnpj(cnpj)
-    }
+    status_usuario_atual = {}
+    for cnpj, status in registros_usuario.items():
+        cnpj_limpo = limpar_cnpj(cnpj)
+        if cnpj_limpo:
+            status_usuario_atual[cnpj_limpo] = (
+                str(status or STATUS_PADRAO).strip() or STATUS_PADRAO
+            )
 
     mapa_data_hora, mapa_data_iso = montar_mapas_datas_usuario(datas_uso, usuario)
     usos_por_cnpj, texto_usos_por_cnpj = montar_mapas_usos_globais(status_geral)
+    cnpjs_usados = set(usos_por_cnpj)
 
     df["favorito"] = df["cnpj_limpo"].isin(favoritos)
     df["status_bm"] = df["cnpj_limpo"].map(status_usuario_atual).fillna(STATUS_PADRAO)
     df["bm_utilizada"] = df["status_bm"] != STATUS_PADRAO
     df["data_uso_bm"] = df["cnpj_limpo"].map(mapa_data_hora).fillna("Não registrada")
     df["data_uso_bm_iso"] = df["cnpj_limpo"].map(mapa_data_iso).fillna("")
-    df["usos_globais"] = df["cnpj_limpo"].map(usos_por_cnpj)
-    df["usos_globais"] = df["usos_globais"].apply(
-        lambda usos: usos if isinstance(usos, list) else []
-    )
-    df["usado_global"] = df["cnpj_limpo"].isin(usos_por_cnpj.keys())
+    df["usado_global"] = df["cnpj_limpo"].isin(cnpjs_usados)
     df["usado_por"] = df["cnpj_limpo"].map(texto_usos_por_cnpj).fillna("")
 
-    modelo_ia = obter_modelo_ia_operacional()
-    avaliacoes_ia = carregar_avaliacoes_ia_estaticas(df_base, modelo_ia)
-
-    for campo in CAMPOS_IA_CACHE:
-        df[campo] = avaliacoes_ia[campo].to_numpy(copy=False)
-
+    # O painel usa o score rápido já preparado na base estática. A avaliação
+    # histórica completa é calculada somente na rota /empresa/<cnpj>.
     return aplicar_ajustes_ia_dinamicos(df)
 
 def ordenar_dataframe(df, ordenar_por="capital_maior"):
@@ -10686,6 +10912,12 @@ def exportar():
         as_attachment=True,
         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
+
+
+# Inicia a leitura fora do ciclo de requisição do Gunicorn. O login e as
+# demais rotas leves permanecem disponíveis enquanto a base é preparada.
+if os.environ.get("DESATIVAR_AQUECIMENTO_BASE", "0") != "1":
+    iniciar_carregamento_base_background()
 
 
 if __name__ == "__main__":
