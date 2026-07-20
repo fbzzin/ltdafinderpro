@@ -1,6 +1,5 @@
 from flask import Flask, render_template, request, send_file, abort, jsonify, redirect, url_for, session
 import pandas as pd
-import numpy as np
 from pathlib import Path
 import zipfile, io, math, json, re, unicodedata, os, hashlib, threading
 from functools import wraps
@@ -8,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 from html import escape
 import requests
-from urllib.parse import urlparse, quote
+from urllib.parse import urlparse
 from sqlalchemy import text
 from database import engine
 
@@ -646,9 +645,7 @@ def buscar_empresa_por_cnpj(cnpj):
             return None
 
         return encontrado.iloc[0].to_dict()
-    except (BaseEmCarregamento, BaseFalhouCarregamento):
-        raise
-    except Exception:
+    except:
         return None
 
 
@@ -1042,42 +1039,6 @@ def montar_cnae_exibicao(codigo, descricao=""):
     return codigo_formatado
 
 
-def obter_dados_cnae_oficial(empresa):
-    """Normaliza código e descrição do CNAE sem reaproveitar texto genérico."""
-    empresa = empresa or {}
-    cnae_bruto = valor_texto(empresa.get("cnae_principal", ""))
-    codigo_bruto = valor_texto(empresa.get("cnae_principal_codigo", ""))
-    descricao = valor_texto(empresa.get("cnae_principal_descricao", ""))
-
-    if " - " in cnae_bruto:
-        prefixo, descricao_embutida = cnae_bruto.split(" - ", 1)
-        if not codigo_bruto:
-            codigo_bruto = prefixo
-        if not descricao:
-            descricao = valor_texto(descricao_embutida, "")
-
-    codigo = re.sub(r"\D", "", codigo_bruto or cnae_bruto)[:7]
-    codigo = codigo.zfill(7) if codigo else ""
-
-    descricoes_genericas = {
-        "atividade empresarial cadastrada",
-        "atividade principal cadastrada",
-        "atividade cadastrada",
-    }
-    if descricao.lower() in descricoes_genericas:
-        descricao = ""
-
-    if codigo and not descricao:
-        descricao = valor_texto(carregar_cnaes().get(codigo, ""))
-
-    cnae_completo = montar_cnae_exibicao(codigo, descricao) if codigo else descricao
-    return {
-        "codigo": codigo,
-        "codigo_formatado": formatar_codigo_cnae(codigo) if codigo else "",
-        "descricao": descricao,
-        "completo": cnae_completo,
-    }
-
 
 def status_usuario(status_geral, usuario, cnpj):
     return status_geral.get(usuario, {}).get(cnpj, STATUS_PADRAO)
@@ -1407,9 +1368,6 @@ def classificar_razao_social_nome_pessoa(razao_social):
 _CACHE_BASE_ESTATICA = {
     "assinatura": None,
     "df": None,
-    "carregando": False,
-    "erro": None,
-    "assinatura_erro": None,
 }
 
 _CACHE_AVALIACOES_IA = {
@@ -1418,78 +1376,6 @@ _CACHE_AVALIACOES_IA = {
 }
 
 _CACHE_BASE_LOCK = threading.RLock()
-
-
-class BaseEmCarregamento(RuntimeError):
-    """Sinaliza que a base grande está sendo preparada em segundo plano."""
-
-
-class BaseFalhouCarregamento(RuntimeError):
-    """Sinaliza uma falha real durante a preparação da base."""
-
-
-@app.errorhandler(BaseEmCarregamento)
-def tratar_base_em_carregamento(_erro):
-    return """
-    <!doctype html>
-    <html lang="pt-BR">
-    <head>
-      <meta charset="utf-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1">
-      <meta http-equiv="refresh" content="5">
-      <title>Preparando base</title>
-      <style>
-        *{box-sizing:border-box}
-        body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0f172a;
-             color:#e2e8f0;font-family:Arial,Helvetica,sans-serif;padding:24px}
-        main{width:min(560px,100%);background:#111827;border:1px solid #334155;
-             border-radius:18px;padding:32px;box-shadow:0 24px 70px rgba(0,0,0,.35)}
-        h1{margin:0 0 12px;font-size:25px;color:#fff}
-        p{margin:8px 0;color:#cbd5e1;line-height:1.55}
-        .barra{height:8px;background:#1e293b;border-radius:999px;overflow:hidden;margin-top:22px}
-        .barra::after{content:"";display:block;height:100%;width:35%;background:#38bdf8;
-                     border-radius:999px;animation:carregando 1.2s ease-in-out infinite alternate}
-        @keyframes carregando{from{transform:translateX(-80%)}to{transform:translateX(280%)}}
-      </style>
-    </head>
-    <body>
-      <main>
-        <h1>Preparando a base de CNPJs</h1>
-        <p>A base ampliada está sendo carregada e otimizada em segundo plano.</p>
-        <p>Esta página será atualizada automaticamente em alguns segundos.</p>
-        <div class="barra"></div>
-      </main>
-    </body>
-    </html>
-    """, 200
-
-
-@app.errorhandler(BaseFalhouCarregamento)
-def tratar_falha_base(_erro):
-    return """
-    <!doctype html>
-    <html lang="pt-BR">
-    <head>
-      <meta charset="utf-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1">
-      <title>Falha ao carregar a base</title>
-      <style>
-        body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0f172a;
-             color:#e2e8f0;font-family:Arial,Helvetica,sans-serif;padding:24px}
-        main{width:min(620px,100%);background:#111827;border:1px solid #7f1d1d;
-             border-radius:18px;padding:32px}
-        h1{margin-top:0;color:#fecaca} p{line-height:1.55;color:#cbd5e1}
-      </style>
-    </head>
-    <body>
-      <main>
-        <h1>Não foi possível preparar a base</h1>
-        <p>O sistema permaneceu ativo, mas a leitura da base de CNPJs falhou.</p>
-        <p>Consulte os logs do Railway para identificar a mensagem iniciada por <strong>[BASE]</strong>.</p>
-      </main>
-    </body>
-    </html>
-    """, 500
 
 CAMPOS_IA_CACHE = [
     "score_ia",
@@ -1531,348 +1417,50 @@ def assinatura_arquivo_base():
         return 0, 0
 
 
-def normalizar_serie_razao(serie):
-    """Normaliza razões sociais em lote, evitando centenas de milhares de callbacks Python."""
-    resultado = serie.fillna("").astype(str).str.strip()
-
-    try:
-        resultado = (
-            resultado
-            .str.normalize("NFKD")
-            .str.encode("ascii", errors="ignore")
-            .str.decode("ascii")
-        )
-    except Exception:
-        # Compatibilidade com versões antigas do pandas.
-        return serie.map(normalizar_texto_razao)
-
-    return (
-        resultado
-        .str.upper()
-        .str.replace(r"[^A-Z0-9\s]", " ", regex=True)
-        .str.replace(r"\s+", " ", regex=True)
-        .str.strip()
-    )
-
-
-def classificar_razoes_sociais_vetorizado(serie):
-    """Replica as regras de nome de pessoa usando operações vetorizadas do pandas."""
-    razao_limpa = normalizar_serie_razao(serie)
-    razao_limpa = razao_limpa.str.replace(r"^(?:\d+\s+){1,4}", "", regex=True)
-
-    termos_juridicos = [
-        "SOCIEDADE EMPRESARIA LIMITADA",
-        "SOCIEDADE LIMITADA UNIPESSOAL",
-        "SOCIEDADE UNIPESSOAL",
-        "EMPRESA INDIVIDUAL DE RESPONSABILIDADE LIMITADA",
-        "EMPRESARIO INDIVIDUAL",
-        "MICROEMPREENDEDOR INDIVIDUAL",
-        "LIMITADA", "LTDA", "EIRELI", "SLU", "MEI", "ME", "EPP",
-    ]
-    regex_juridico = r"\b(?:" + "|".join(
-        re.escape(item) for item in sorted(termos_juridicos, key=len, reverse=True)
-    ) + r")\b"
-
-    razao_limpa = (
-        razao_limpa
-        .str.replace(regex_juridico, " ", regex=True)
-        .str.replace(r"\s+", " ", regex=True)
-        .str.strip()
-    )
-
-    regex_conectores = r"\b(?:" + "|".join(
-        re.escape(item) for item in sorted(CONECTORES_NOME_RAZAO)
-    ) + r")\b"
-    partes = (
-        razao_limpa
-        .str.replace(regex_conectores, " ", regex=True)
-        .str.replace(r"\s+", " ", regex=True)
-        .str.strip()
-    )
-
-    quantidade = partes.str.count(r"\S+")
-    primeiro = partes.str.extract(r"^([^\s]+)", expand=False).fillna("")
-    segundo = (
-        partes
-        .str.extract(r"^[A-Z](?:\s+[A-Z])*\s+([A-Z0-9]{2,})", expand=False)
-        .fillna("")
-    )
-
-    regex_empresa = r"\b(?:" + "|".join(
-        re.escape(item) for item in sorted(TERMOS_EMPRESA_RAZAO, key=len, reverse=True)
-    ) + r")\b"
-    possui_termo_empresa = partes.str.contains(regex_empresa, regex=True, na=False)
-
-    primeiro_masculino = primeiro.isin(NOMES_MASCULINOS_RAZAO)
-    primeiro_feminino = primeiro.isin(NOMES_FEMININOS_RAZAO)
-    primeira_inicial = primeiro.str.match(r"^[A-Z]$", na=False) & quantidade.ge(3)
-
-    estrutura_valida = (
-        quantidade.between(2, 7)
-        & ~possui_termo_empresa
-        & ~primeiro.str.match(r"^\d+$", na=False)
-    )
-    eh_nome_pessoa = estrutura_valida & (
-        primeiro_masculino | primeiro_feminino | primeira_inicial
-    )
-
-    sexo = np.select(
-        [
-            estrutura_valida & primeiro_masculino,
-            estrutura_valida & primeiro_feminino,
-            estrutura_valida & primeira_inicial & segundo.isin(NOMES_MASCULINOS_RAZAO),
-            estrutura_valida & primeira_inicial & segundo.isin(NOMES_FEMININOS_RAZAO),
-        ],
-        ["Masculino", "Feminino", "Masculino", "Feminino"],
-        default="Indefinido",
-    )
-
-    return razao_limpa, eh_nome_pessoa, pd.Series(sexo, index=serie.index)
-
-
-def formatar_cnpj_serie(cnpj_limpo):
-    return (
-        cnpj_limpo.str.slice(0, 2) + "."
-        + cnpj_limpo.str.slice(2, 5) + "."
-        + cnpj_limpo.str.slice(5, 8) + "/"
-        + cnpj_limpo.str.slice(8, 12) + "-"
-        + cnpj_limpo.str.slice(12, 14)
-    )
-
-
-def formatar_datas_serie(datas):
-    datas = datas.fillna("").astype(str).str.replace(".0", "", regex=False).str.strip()
-    mascara = datas.str.fullmatch(r"\d{8}", na=False)
-    formatadas = datas.copy()
-    formatadas.loc[mascara] = (
-        datas.loc[mascara].str.slice(6, 8) + "/"
-        + datas.loc[mascara].str.slice(4, 6) + "/"
-        + datas.loc[mascara].str.slice(0, 4)
-    )
-    return formatadas
-
-
-def calcular_idades_serie(datas):
-    datas_texto = datas.fillna("").astype(str).str.replace(".0", "", regex=False).str.zfill(8)
-    aberturas = pd.to_datetime(datas_texto, format="%Y%m%d", errors="coerce")
-    hoje = agora_brasilia()
-
-    anos = hoje.year - aberturas.dt.year
-    ainda_nao_aniversariou = (
-        (aberturas.dt.month > hoje.month)
-        | ((aberturas.dt.month == hoje.month) & (aberturas.dt.day > hoje.day))
-    )
-    idades = (anos - ainda_nao_aniversariou.fillna(False).astype(int)).fillna(0)
-    return idades.clip(lower=0).astype("int16")
-
-
-def adicionar_avaliacoes_ia_rapidas(df):
-    """Adiciona o score do painel sem construir o modelo histórico para toda a base.
-
-    A avaliação histórica completa continua sendo calculada somente ao abrir
-    uma empresa individualmente. Isso evita processar mais de 400 mil linhas
-    dentro da primeira requisição do Gunicorn.
-    """
-    total_linhas = len(df)
-    if total_linhas == 0:
-        for campo in CAMPOS_IA_CACHE:
-            if campo not in df.columns:
-                df[campo] = pd.Series(dtype=object)
-        return df
-
-    capital = pd.to_numeric(df["capital_social_num"], errors="coerce").fillna(0)
-    idade = pd.to_numeric(df["idade_empresa"], errors="coerce").fillna(0)
-
-    telefone = (
-        df["telefone_formatado"]
-        .fillna("")
-        .astype(str)
-        .str.contains(r"[0-9A-Za-z]", regex=True)
-    )
-    email = (
-        df["email"]
-        .fillna("")
-        .astype(str)
-        .str.contains(r"[0-9A-Za-z]", regex=True)
-    )
-    categoria = (
-        df["categoria_cnae"]
-        .fillna("")
-        .astype(str)
-        .str.strip()
-        .str.lower()
-    )
-    categoria_identificada = ~categoria.isin(["", "outros", "indefinido", "nan", "none"])
-
-    score_regras = np.full(total_linhas, 40, dtype=np.int16)
-    score_regras += np.select(
-        [capital.ge(1_000_000), capital.ge(500_000), capital.ge(100_000)],
-        [25, 20, 10],
-        default=0,
-    ).astype(np.int16)
-    score_regras += telefone.to_numpy(dtype=np.int16) * 10
-    score_regras += email.to_numpy(dtype=np.int16) * 10
-    score_regras += np.select(
-        [idade.ge(5), idade.ge(2), idade.ge(1)],
-        [15, 10, 5],
-        default=0,
-    ).astype(np.int16)
-    score_regras += categoria_identificada.to_numpy(dtype=np.int16) * 5
-    score_regras = np.clip(score_regras, 0, 100).astype(np.uint8)
-
-    recomendacao = np.where(
-        score_regras >= 80,
-        "🟢 Excelente",
-        np.where(score_regras >= 60, "🟡 Atenção", "🔴 Evitar"),
-    )
-    classe = np.where(
-        score_regras >= 80,
-        "excelente",
-        np.where(score_regras >= 60, "atencao", "evitar"),
-    )
-
-    df["score_ia"] = score_regras
-    df["score_ia_regras"] = score_regras
-    df["score_ia_historico"] = np.full(total_linhas, 50, dtype=np.uint8)
-    df["ia_peso_regras"] = np.full(total_linhas, 100, dtype=np.uint8)
-    df["ia_peso_historico"] = np.zeros(total_linhas, dtype=np.uint8)
-    df["ia_recomendacao"] = recomendacao
-    df["ia_classe"] = classe
-    df["ia_confianca_historica"] = np.zeros(total_linhas, dtype=np.uint8)
-    df["ia_amostras_semelhantes"] = np.zeros(total_linhas, dtype=np.int32)
-    df["ia_taxa_estimada"] = np.full(total_linhas, 50.0, dtype=np.float32)
-    df["ia_resultado_mais_comum"] = "Análise detalhada ao abrir a empresa"
-    df["ia_fase"] = "Painel rápido · regras fixas"
-    df["ia_total_amostras"] = np.zeros(total_linhas, dtype=np.int32)
-    return df
-
-
-def montar_enderecos_dataframe(df):
-    """Monta os endereços por vetorização, sem df.apply(axis=1)."""
-    indice = df.index
-
-    def coluna(nome):
-        if nome in df.columns:
-            return df[nome].fillna("").astype(str).str.replace(".0", "", regex=False).str.strip()
-        return pd.Series("", index=indice, dtype=object)
-
-    endereco_personalizado = coluna("endereco_site")
-    logradouro = coluna("logradouro")
-    if not logradouro.ne("").any():
-        logradouro = coluna("descricao_logradouro")
-
-    numero = coluna("numero")
-    if not numero.ne("").any():
-        numero = coluna("numero_estabelecimento")
-
-    complemento = coluna("complemento")
-    bairro = coluna("bairro")
-    if not bairro.ne("").any():
-        bairro = coluna("bairro_distrito")
-
-    municipio = coluna("municipio_nome")
-    uf = coluna("uf")
-    cep_bruto = coluna("cep")
-    cep_digitos = cep_bruto.str.replace(r"\D", "", regex=True)
-    cep = cep_bruto.copy()
-    mascara_cep = cep_digitos.str.len().eq(8)
-    cep.loc[mascara_cep] = (
-        cep_digitos.loc[mascara_cep].str.slice(0, 2) + "."
-        + cep_digitos.loc[mascara_cep].str.slice(2, 5) + "-"
-        + cep_digitos.loc[mascara_cep].str.slice(5, 8)
-    )
-    cep = ("CEP " + cep).where(cep.ne(""), "")
-
-    # Evita endereços como "AVENIDA X 1946, 1946" sem executar a
-    # normalização Unicode completa usada na classificação de nomes.
-    logradouro_normalizado = (
-        logradouro.str.upper()
-        .str.replace(r"[^A-Z0-9]+", " ", regex=True)
-        .str.replace(r"\s+", " ", regex=True)
-        .str.strip()
-    )
-    numero_normalizado = (
-        numero.str.upper()
-        .str.replace(r"[^A-Z0-9]+", " ", regex=True)
-        .str.replace(r"\s+", " ", regex=True)
-        .str.strip()
-    )
-    numero_repetido = pd.Series(
-        [
-            bool(numero_item and len(logradouro_item.split()) >= 3 and logradouro_item.endswith(" " + numero_item))
-            for logradouro_item, numero_item in zip(logradouro_normalizado, numero_normalizado)
-        ],
-        index=indice,
-        dtype=bool,
-    )
-    numero = numero.mask(numero_repetido, "")
-
-    resultado = pd.Series("", index=indice, dtype=object)
-    for parte in [logradouro, numero, complemento, cep, bairro, municipio, uf]:
-        parte = parte.fillna("").astype(str).str.strip()
-        resultado = resultado.mask(resultado.eq("") & parte.ne(""), parte)
-        resultado = resultado.mask(resultado.ne("") & parte.ne("") & ~resultado.eq(parte), resultado + ", " + parte)
-
-    resultado = endereco_personalizado.where(endereco_personalizado.ne(""), resultado)
-    return resultado.replace("", "Endereço não informado")
-
-
 def construir_base_estatica():
-    """Lê e prepara a base com operações vetorizadas, inclusive bases acima de 400 mil linhas."""
-    df = pd.read_csv(
-        BASE_FINAL,
-        dtype=str,
-        keep_default_na=False,
-        low_memory=False,
-    )
+    """Lê e prepara apenas os dados que não mudam entre requisições."""
+    df = pd.read_csv(BASE_FINAL, dtype=str)
 
-    for coluna in ["cnpj", "capital_social", "natureza_juridica"]:
-        if coluna not in df.columns:
-            df[coluna] = ""
+    if "natureza_juridica" not in df.columns:
+        df["natureza_juridica"] = ""
 
     df["natureza_juridica"] = (
         df["natureza_juridica"]
+        .fillna("")
         .astype(str)
         .str.replace(".0", "", regex=False)
         .str.strip()
     )
 
-    df["cnpj_limpo"] = (
-        df["cnpj"]
+    df["cnpj_limpo"] = df["cnpj"].apply(limpar_cnpj)
+
+    df["capital_social_num"] = (
+        df["capital_social"]
         .astype(str)
-        .str.replace(r"\.0$", "", regex=True)
-        .str.replace(r"[^0-9A-Za-z]", "", regex=True)
-        .str.upper()
-        .str.zfill(14)
-        .str.slice(-14)
+        .str.replace(",", ".", regex=False)
     )
 
     df["capital_social_num"] = pd.to_numeric(
-        df["capital_social"].astype(str).str.replace(",", ".", regex=False),
-        errors="coerce",
+        df["capital_social_num"],
+        errors="coerce"
     ).fillna(0)
 
     municipios = carregar_municipios()
     cnaes = carregar_cnaes()
 
-    for coluna in [
-        "municipio", "uf", "logradouro", "numero", "complemento", "cep",
-        "bairro", "bairro_distrito", "ddd1", "telefone1", "email",
-        "nome_socio", "razao_social", "nome_fantasia", "sexo_provavel",
-        "categoria_cnae", "data_inicio", "cnae_principal", "situacao_cadastral",
-    ]:
-        if coluna not in df.columns:
-            df[coluna] = ""
-        else:
-            df[coluna] = df[coluna].fillna("").astype(str)
+    if "municipio" not in df.columns:
+        df["municipio"] = ""
+    if "uf" not in df.columns:
+        df["uf"] = ""
 
-    df["cnpj_formatado"] = formatar_cnpj_serie(df["cnpj_limpo"])
-    df["capital_formatado"] = df["capital_social_num"].map(formatar_capital)
+    for coluna_endereco in ["logradouro", "numero", "complemento", "cep", "bairro", "bairro_distrito"]:
+        if coluna_endereco not in df.columns:
+            df[coluna_endereco] = ""
 
-    codigos_municipio = (
-        df["municipio"].astype(str).str.replace(".0", "", regex=False).str.strip()
-    )
-    municipio_mapeado = codigos_municipio.map(municipios).fillna("")
+    df["cnpj_formatado"] = df["cnpj_limpo"].apply(formatar_cnpj)
+    df["capital_formatado"] = df["capital_social_num"].apply(formatar_capital)
+
+    municipio_mapeado = df["municipio"].map(municipios)
 
     if "municipio_nome" in df.columns:
         municipio_salvo = df["municipio_nome"].fillna("").astype(str).str.strip()
@@ -1881,193 +1469,79 @@ def construir_base_estatica():
         df["municipio_nome"] = municipio_mapeado
 
     df["municipio_nome"] = df["municipio_nome"].fillna("")
-    df["endereco_completo"] = montar_enderecos_dataframe(df)
+    df["endereco_completo"] = df.apply(lambda linha: montar_endereco_empresa(linha), axis=1)
 
     if "telefone_formatado" not in df.columns:
+        if "ddd1" not in df.columns:
+            df["ddd1"] = ""
+        if "telefone1" not in df.columns:
+            df["telefone1"] = ""
+
         df["telefone_formatado"] = (
-            df["ddd1"].astype(str).str.replace(".0", "", regex=False)
-            + df["telefone1"].astype(str).str.replace(".0", "", regex=False)
+            df["ddd1"].fillna("").astype(str).str.replace(".0", "", regex=False)
+            + df["telefone1"].fillna("").astype(str).str.replace(".0", "", regex=False)
         )
-    else:
-        df["telefone_formatado"] = df["telefone_formatado"].fillna("").astype(str)
+
+    for coluna in [
+        "telefone_formatado", "email", "nome_socio", "razao_social",
+        "nome_fantasia", "sexo_provavel", "categoria_cnae",
+        "data_inicio", "cnae_principal", "situacao_cadastral", "logradouro",
+        "numero", "complemento", "cep", "bairro", "bairro_distrito",
+        "endereco_completo", "uf", "municipio", "municipio_nome"
+    ]:
+        if coluna not in df.columns:
+            df[coluna] = ""
+        else:
+            df[coluna] = df[coluna].fillna("")
 
     df["cnae_principal_codigo"] = (
         df["cnae_principal"]
         .astype(str)
         .str.replace(".0", "", regex=False)
-        .str.replace(r"\D", "", regex=True)
-        .str.slice(0, 7)
+        .str.strip()
         .str.zfill(7)
     )
 
     coluna_descricao_cnae = obter_descricao_cnae_por_coluna(df)
-    descricao_mapeada_cnae = (
-        df["cnae_principal_codigo"]
-        .map(cnaes)
-        .fillna("")
-        .astype(str)
-        .str.strip()
-    )
 
     if coluna_descricao_cnae:
-        descricao_cnae = df[coluna_descricao_cnae].fillna("").astype(str).str.strip()
-        descricao_invalida = descricao_cnae.str.lower().isin([
-            "", "nan", "none", "null", "atividade empresarial cadastrada",
-            "atividade principal cadastrada", "atividade cadastrada",
-        ])
-        descricao_cnae = descricao_cnae.where(~descricao_invalida, descricao_mapeada_cnae)
+        df[coluna_descricao_cnae] = df[coluna_descricao_cnae].fillna("").astype(str)
+        df["cnae_principal_descricao"] = df[coluna_descricao_cnae]
     else:
-        descricao_cnae = descricao_mapeada_cnae
+        df["cnae_principal_descricao"] = df["cnae_principal_codigo"].map(cnaes).fillna("")
 
-    df["cnae_principal_descricao"] = descricao_cnae
-
-    codigo = df["cnae_principal_codigo"]
-    codigo_formatado = (
-        codigo.str.slice(0, 2) + "." + codigo.str.slice(2, 4)
-        + "-" + codigo.str.slice(4, 5) + "-" + codigo.str.slice(5, 7)
-    )
-    df["cnae_principal"] = codigo_formatado.where(
-        descricao_cnae.eq(""),
-        codigo_formatado + " - " + descricao_cnae,
+    df["cnae_principal"] = df.apply(
+        lambda linha: montar_cnae_exibicao(
+            linha.get("cnae_principal_codigo", ""),
+            linha.get("cnae_principal_descricao", "")
+        ),
+        axis=1
     )
 
-    # Os MEIs 2135 já foram confirmados no Simples.zip e não precisam
-    # passar pela classificação completa. Isso evita regex pesada em mais
-    # de 300 mil linhas. As LTDAs continuam usando a regra integral.
-    mascara_mei = df["natureza_juridica"].eq("2135")
-    mascara_outros = ~mascara_mei
+    if "sexo_provavel" in df.columns:
+        df["sexo_socio"] = df["sexo_provavel"].replace("", "Indefinido")
+    else:
+        df["sexo_socio"] = "Indefinido"
 
-    eh_nome_pessoa = pd.Series(False, index=df.index, dtype=bool)
-    sexo_razao = pd.Series("Indefinido", index=df.index, dtype=object)
+    classificacao_razao = df["razao_social"].apply(classificar_razao_social_nome_pessoa)
 
-    if mascara_outros.any():
-        _, pessoas_outros, sexo_outros = classificar_razoes_sociais_vetorizado(
-            df.loc[mascara_outros, "razao_social"]
-        )
-        eh_nome_pessoa.loc[mascara_outros] = pessoas_outros
-        sexo_razao.loc[mascara_outros] = sexo_outros
+    df["razao_limpa_nome"] = classificacao_razao.apply(lambda item: item["razao_limpa"])
+    df["razao_nome_pessoa"] = classificacao_razao.apply(lambda item: item["eh_nome_pessoa"])
+    df["sexo_razao"] = classificacao_razao.apply(lambda item: item["sexo"])
+    df["sexo_provavel"] = df["sexo_razao"].replace("", "Indefinido")
 
-    if mascara_mei.any():
-        # Os registros 2135 desta base já foram confirmados como MEI pelo
-        # Simples.zip durante a importação. Não é necessário normalizar mais
-        # de 300 mil razões sociais para decidir se são nomes de pessoa.
-        # Preserva uma classificação de sexo já existente; caso contrário,
-        # usa "Indefinido" e deixa a análise detalhada para uma única empresa.
-        sexo_existente = (
-            df.loc[mascara_mei, "sexo_provavel"]
-            .fillna("")
-            .astype(str)
-            .str.strip()
-        )
-        sexo_existente = sexo_existente.where(
-            sexo_existente.isin(["Masculino", "Feminino", "Indefinido"]),
-            "Indefinido",
-        )
-        sexo_existente = sexo_existente.replace("", "Indefinido")
-
-        eh_nome_pessoa.loc[mascara_mei] = True
-        sexo_razao.loc[mascara_mei] = sexo_existente
-
-    df = df[mascara_mei | eh_nome_pessoa].copy()
-    df["sexo_provavel"] = sexo_razao.loc[df.index].replace("", "Indefinido")
+    # As LTDAs continuam seguindo a regra de nome de pessoa pela razão social.
+    # Os registros 2135 desta base foram confirmados no Simples.zip como MEI.
+    df = df[
+        (df["natureza_juridica"] == "2135") |
+        (df["razao_nome_pessoa"] == True)
+    ].copy()
 
     df["categoria_cnae"] = df["categoria_cnae"].replace("", "Outros")
-    df["idade_empresa"] = calcular_idades_serie(df["data_inicio"])
-    df["data_inicio_formatada"] = formatar_datas_serie(df["data_inicio"])
-    df = adicionar_avaliacoes_ia_rapidas(df)
-
-    # Categorias reduzem consideravelmente a memória da base grande.
-    for coluna in [
-        "natureza_juridica", "situacao_cadastral", "uf",
-        "sexo_provavel", "categoria_cnae",
-    ]:
-        if coluna in df.columns:
-            try:
-                df[coluna] = df[coluna].astype("category")
-            except Exception:
-                pass
+    df["idade_empresa"] = df["data_inicio"].apply(calcular_idade_empresa)
+    df["data_inicio_formatada"] = df["data_inicio"].apply(formatar_data_brasil)
 
     return df.reset_index(drop=True)
-
-def _worker_carregar_base_estatica(assinatura_inicial):
-    try:
-        print(
-            f"[BASE] Iniciando preparação em segundo plano: "
-            f"{assinatura_inicial[1] / (1024 * 1024):.2f} MB"
-        )
-        df = construir_base_estatica()
-        assinatura_final = assinatura_arquivo_base()
-
-        with _CACHE_BASE_LOCK:
-            if assinatura_final != assinatura_inicial:
-                _CACHE_BASE_ESTATICA["df"] = None
-                _CACHE_BASE_ESTATICA["assinatura"] = None
-                _CACHE_BASE_ESTATICA["erro"] = None
-                _CACHE_BASE_ESTATICA["assinatura_erro"] = None
-            else:
-                _CACHE_BASE_ESTATICA["df"] = df
-                _CACHE_BASE_ESTATICA["assinatura"] = assinatura_final
-                _CACHE_BASE_ESTATICA["erro"] = None
-                _CACHE_BASE_ESTATICA["assinatura_erro"] = None
-
-                # Uma base nova invalida qualquer avaliação histórica antiga.
-                _CACHE_AVALIACOES_IA["assinatura"] = None
-                _CACHE_AVALIACOES_IA["df"] = None
-
-            _CACHE_BASE_ESTATICA["carregando"] = False
-
-        if assinatura_final != assinatura_inicial:
-            print("[BASE] O arquivo mudou durante a leitura. Iniciando nova preparação.")
-            iniciar_carregamento_base_background()
-            return
-
-        print(f"[BASE] Base pronta: {len(df):,} registros processados.")
-
-        try:
-            resumo_cnaes = atualizar_cnaes_sites_existentes(df_base=df)
-            if resumo_cnaes.get("total"):
-                print(
-                    "[CNAE-SITES] Atualização concluída: "
-                    f"{resumo_cnaes.get('atualizados', 0)} atualizados, "
-                    f"{resumo_cnaes.get('republicados', 0)} republicados e "
-                    f"{resumo_cnaes.get('falhas', 0)} falhas."
-                )
-        except Exception as erro_cnaes:
-            print(f"[CNAE-SITES] Falha geral na atualização automática: {erro_cnaes!r}")
-
-    except Exception as erro:
-        with _CACHE_BASE_LOCK:
-            _CACHE_BASE_ESTATICA["df"] = None
-            _CACHE_BASE_ESTATICA["assinatura"] = None
-            _CACHE_BASE_ESTATICA["carregando"] = False
-            _CACHE_BASE_ESTATICA["erro"] = repr(erro)
-            _CACHE_BASE_ESTATICA["assinatura_erro"] = assinatura_inicial
-
-        print(f"[BASE] Falha ao preparar a base: {erro!r}")
-
-
-def iniciar_carregamento_base_background():
-    assinatura = assinatura_arquivo_base()
-
-    with _CACHE_BASE_LOCK:
-        cache_valido = (
-            _CACHE_BASE_ESTATICA.get("df") is not None
-            and _CACHE_BASE_ESTATICA.get("assinatura") == assinatura
-        )
-        if cache_valido or _CACHE_BASE_ESTATICA.get("carregando"):
-            return
-
-        _CACHE_BASE_ESTATICA["carregando"] = True
-        _CACHE_BASE_ESTATICA["erro"] = None
-        _CACHE_BASE_ESTATICA["assinatura_erro"] = None
-
-    thread = threading.Thread(
-        target=_worker_carregar_base_estatica,
-        args=(assinatura,),
-        name="carregamento-base-cnpj",
-        daemon=True,
-    )
-    thread.start()
 
 
 def carregar_base_estatica():
@@ -2078,23 +1552,19 @@ def carregar_base_estatica():
             _CACHE_BASE_ESTATICA.get("df") is not None
             and _CACHE_BASE_ESTATICA.get("assinatura") == assinatura
         )
+
         if cache_valido:
             return _CACHE_BASE_ESTATICA["df"]
 
-        erro = _CACHE_BASE_ESTATICA.get("erro")
-        assinatura_erro = _CACHE_BASE_ESTATICA.get("assinatura_erro")
-        carregando = bool(_CACHE_BASE_ESTATICA.get("carregando"))
+        df = construir_base_estatica()
+        _CACHE_BASE_ESTATICA["assinatura"] = assinatura
+        _CACHE_BASE_ESTATICA["df"] = df
 
-    if erro and assinatura_erro == assinatura:
-        raise BaseFalhouCarregamento(erro)
+        # Uma base nova exige novas avaliações históricas.
+        _CACHE_AVALIACOES_IA["assinatura"] = None
+        _CACHE_AVALIACOES_IA["df"] = None
 
-    if not carregando:
-        iniciar_carregamento_base_background()
-
-    # Nunca prende uma requisição web durante dezenas de segundos. Enquanto a
-    # thread prepara a base, o Flask entrega uma página leve com atualização
-    # automática, impedindo o WORKER TIMEOUT do Gunicorn.
-    raise BaseEmCarregamento("A base está sendo preparada em segundo plano.")
+        return df
 
 
 def assinatura_cache_avaliacoes_ia():
@@ -2102,159 +1572,6 @@ def assinatura_cache_avaliacoes_ia():
         assinatura_arquivo_base(),
         _CACHE_MODELO_IA.get("assinatura"),
     )
-
-
-def construir_avaliacoes_ia_vetorizadas(df_base, modelo_ia):
-    """Calcula os mesmos fatores da IA em lote, sem iterar registro por registro."""
-    indice = df_base.index
-    total_linhas = len(df_base)
-
-    capital = pd.to_numeric(df_base["capital_social_num"], errors="coerce").fillna(0)
-    idade = pd.to_numeric(df_base["idade_empresa"], errors="coerce").fillna(0)
-    telefone = df_base["telefone_formatado"].fillna("").astype(str).str.contains(r"[0-9A-Za-z]", regex=True)
-    email = df_base["email"].fillna("").astype(str).str.contains(r"[0-9A-Za-z]", regex=True)
-    categoria = df_base["categoria_cnae"].astype(str).replace({"nan": "", "None": ""}).replace("", "Outros")
-    categoria_identificada = ~categoria.str.strip().str.lower().isin(["outros", "indefinido", ""])
-
-    score_regras = np.full(total_linhas, 40, dtype=np.int16)
-    score_regras += np.select(
-        [capital.ge(1_000_000), capital.ge(500_000), capital.ge(100_000)],
-        [25, 20, 10],
-        default=0,
-    ).astype(np.int16)
-    score_regras += telefone.to_numpy(dtype=np.int16) * 10
-    score_regras += email.to_numpy(dtype=np.int16) * 10
-    score_regras += np.select(
-        [idade.ge(5), idade.ge(2), idade.ge(1)],
-        [15, 10, 5],
-        default=0,
-    ).astype(np.int16)
-    score_regras += categoria_identificada.to_numpy(dtype=np.int16) * 5
-    score_regras = np.clip(score_regras, 0, 100).astype(np.uint8)
-
-    faixa_capital = pd.Series(
-        np.select(
-            [capital.le(0), capital.lt(50_000), capital.lt(100_000), capital.lt(500_000), capital.lt(1_000_000)],
-            ["Sem informação", "Até R$ 50 mil", "R$ 50 mil a R$ 100 mil", "R$ 100 mil a R$ 500 mil", "R$ 500 mil a R$ 1 milhão"],
-            default="Acima de R$ 1 milhão",
-        ),
-        index=indice,
-    )
-    faixa_idade = pd.Series(
-        np.select(
-            [idade.lt(1), idade.le(2), idade.le(5), idade.le(10)],
-            ["Menos de 1 ano", "1 a 2 anos", "3 a 5 anos", "6 a 10 anos"],
-            default="Mais de 10 anos",
-        ),
-        index=indice,
-    )
-
-    caracteristicas = {
-        "faixa_capital": faixa_capital,
-        "faixa_idade": faixa_idade,
-        "categoria_cnae": categoria,
-        "uf": df_base["uf"].astype(str).replace({"nan": "", "None": ""}).str.upper().replace("", "Sem UF"),
-        "tem_telefone": pd.Series(np.where(telefone, "Sim", "Não"), index=indice),
-        "tem_email": pd.Series(np.where(email, "Sim", "Não"), index=indice),
-    }
-    pesos_fatores = {
-        "faixa_capital": 0.25,
-        "faixa_idade": 0.20,
-        "categoria_cnae": 0.25,
-        "uf": 0.10,
-        "tem_telefone": 0.10,
-        "tem_email": 0.10,
-    }
-
-    taxa_global = float((modelo_ia or {}).get("taxa_global", 50.0) or 50.0)
-    numerador = np.zeros(total_linhas, dtype=np.float32)
-    denominador = np.zeros(total_linhas, dtype=np.float32)
-    totais_fatores = []
-
-    por_fator = (modelo_ia or {}).get("por_fator", {})
-    for fator, valores in caracteristicas.items():
-        estatisticas = por_fator.get(fator, {}) if isinstance(por_fator, dict) else {}
-        mapa_total = {
-            valor: int(dados.get("total", 0) or 0)
-            for valor, dados in estatisticas.items()
-            if isinstance(dados, dict)
-        }
-        mapa_taxa = {
-            valor: float(dados.get("taxa_ajustada", taxa_global) or taxa_global)
-            for valor, dados in estatisticas.items()
-            if isinstance(dados, dict)
-        }
-
-        totais = pd.to_numeric(valores.map(mapa_total), errors="coerce").fillna(0).to_numpy(dtype=np.float32)
-        taxas = pd.to_numeric(valores.map(mapa_taxa), errors="coerce").fillna(taxa_global).to_numpy(dtype=np.float32)
-        confianca_fator = np.minimum(1.0, totais / 15.0)
-        pesos = pesos_fatores[fator] * (0.35 + 0.65 * confianca_fator)
-        pesos = np.where(totais > 0, pesos, 0).astype(np.float32)
-
-        numerador += taxas * pesos
-        denominador += pesos
-        totais_fatores.append(np.where(totais > 0, totais, np.nan))
-
-    taxa_estimada = np.divide(
-        numerador,
-        denominador,
-        out=np.full(total_linhas, taxa_global, dtype=np.float32),
-        where=denominador > 0,
-    )
-    taxa_estimada = np.round(taxa_estimada, 2)
-
-    if totais_fatores:
-        matriz_totais = np.column_stack(totais_fatores)
-        with np.errstate(all="ignore"):
-            ordenada = np.sort(matriz_totais, axis=1)
-            quantidades_validas = np.sum(~np.isnan(ordenada), axis=1)
-            posicao_inferior = np.maximum(quantidades_validas - 1, 0) // 2
-            posicao_superior = quantidades_validas // 2
-            linhas = np.arange(total_linhas)
-            inferior = ordenada[linhas, posicao_inferior]
-            superior = ordenada[linhas, posicao_superior]
-            mediana = np.where(quantidades_validas > 0, (inferior + superior) / 2, 0)
-        amostras_semelhantes = np.rint(np.nan_to_num(mediana, nan=0)).astype(np.int32)
-    else:
-        amostras_semelhantes = np.zeros(total_linhas, dtype=np.int32)
-
-    confianca_amostra = np.minimum(100, np.rint((amostras_semelhantes / 15.0) * 100))
-    confianca_geral = int((modelo_ia or {}).get("confianca_geral", 0) or 0)
-    confianca = np.rint((confianca_amostra * 0.65) + (confianca_geral * 0.35))
-    confianca = np.clip(confianca, 0, 100).astype(np.uint8)
-
-    score_historico = np.clip(np.rint(taxa_estimada), 0, 100).astype(np.uint8)
-    fase = (modelo_ia or {}).get("fase", {}) or {}
-    peso_regras = float(fase.get("peso_regras", 1) or 1)
-    peso_historico = float(fase.get("peso_historico", 0) or 0)
-    score = np.clip(
-        np.rint((score_regras.astype(np.float32) * peso_regras) + (score_historico.astype(np.float32) * peso_historico)),
-        0,
-        100,
-    ).astype(np.uint8)
-
-    recomendacao = np.where(score >= 80, "🟢 Excelente", np.where(score >= 60, "🟡 Atenção", "🔴 Evitar"))
-    classe = np.where(score >= 80, "excelente", np.where(score >= 60, "atencao", "evitar"))
-
-    distribuicao = (modelo_ia or {}).get("distribuicao_resultados", {}) or {}
-    resultado_comum = max(distribuicao, key=distribuicao.get) if distribuicao else "Sem dados"
-    total_amostras = int((modelo_ia or {}).get("total_concluidas", 0) or 0)
-
-    return pd.DataFrame({
-        "score_ia": score,
-        "score_ia_regras": score_regras,
-        "score_ia_historico": score_historico,
-        "ia_peso_regras": np.full(total_linhas, round(peso_regras * 100), dtype=np.uint8),
-        "ia_peso_historico": np.full(total_linhas, round(peso_historico * 100), dtype=np.uint8),
-        "ia_recomendacao": recomendacao,
-        "ia_classe": classe,
-        "ia_confianca_historica": confianca,
-        "ia_amostras_semelhantes": amostras_semelhantes,
-        "ia_taxa_estimada": taxa_estimada.astype(np.float32),
-        "ia_resultado_mais_comum": resultado_comum,
-        "ia_fase": fase.get("nome", "Fase 1 · Regras fixas"),
-        "ia_total_amostras": np.full(total_linhas, total_amostras, dtype=np.int32),
-    }, index=indice)
 
 
 def carregar_avaliacoes_ia_estaticas(df_base, modelo_ia):
@@ -2270,7 +1587,13 @@ def carregar_avaliacoes_ia_estaticas(df_base, modelo_ia):
         if cache_valido:
             return _CACHE_AVALIACOES_IA["df"]
 
-        df_avaliacoes = construir_avaliacoes_ia_vetorizadas(df_base, modelo_ia)
+        registros = df_base.to_dict(orient="records")
+        avaliacoes = [
+            avaliar_ia_empresa(registro, modelo_ia)
+            for registro in registros
+        ]
+
+        df_avaliacoes = pd.DataFrame(avaliacoes, index=df_base.index)
 
         for campo in CAMPOS_IA_CACHE:
             if campo not in df_avaliacoes.columns:
@@ -2280,6 +1603,7 @@ def carregar_avaliacoes_ia_estaticas(df_base, modelo_ia):
         _CACHE_AVALIACOES_IA["assinatura"] = assinatura
         _CACHE_AVALIACOES_IA["df"] = df_avaliacoes
         return df_avaliacoes
+
 
 def montar_mapas_datas_usuario(datas_uso, usuario):
     mapa_data_hora = {}
@@ -2387,46 +1711,51 @@ def carregar_base():
     usuario = usuario_atual()
     df_base = carregar_base_estatica()
 
-    # A cópia rasa compartilha os blocos estáticos. Apenas os campos que
-    # realmente variam por usuário são adicionados nesta requisição.
+    # A cópia rasa compartilha somente os blocos estáticos e recebe colunas
+    # dinâmicas novas, reduzindo tempo e consumo de memória por requisição.
     df = df_base.copy(deep=False)
 
-    favoritos_brutos = carregar_favoritos()
+    favoritos = carregar_favoritos()
     status_geral = carregar_status_bm()
     datas_uso = carregar_datas_uso_cnpj()
 
-    favoritos = set()
-    for cnpj in favoritos_brutos:
-        cnpj_limpo = limpar_cnpj(cnpj)
-        if cnpj_limpo:
-            favoritos.add(cnpj_limpo)
+    favoritos = {
+        limpar_cnpj(cnpj)
+        for cnpj in favoritos
+        if limpar_cnpj(cnpj)
+    }
 
-    registros_usuario = status_geral.get(usuario, {}) if isinstance(status_geral, dict) else {}
-    if not isinstance(registros_usuario, dict):
-        registros_usuario = {}
+    status_usuario_atual = status_geral.get(usuario, {}) if isinstance(status_geral, dict) else {}
+    if not isinstance(status_usuario_atual, dict):
+        status_usuario_atual = {}
 
-    status_usuario_atual = {}
-    for cnpj, status in registros_usuario.items():
-        cnpj_limpo = limpar_cnpj(cnpj)
-        if cnpj_limpo:
-            status_usuario_atual[cnpj_limpo] = (
-                str(status or STATUS_PADRAO).strip() or STATUS_PADRAO
-            )
+    status_usuario_atual = {
+        limpar_cnpj(cnpj): str(status or STATUS_PADRAO).strip() or STATUS_PADRAO
+        for cnpj, status in status_usuario_atual.items()
+        if limpar_cnpj(cnpj)
+    }
 
     mapa_data_hora, mapa_data_iso = montar_mapas_datas_usuario(datas_uso, usuario)
     usos_por_cnpj, texto_usos_por_cnpj = montar_mapas_usos_globais(status_geral)
-    cnpjs_usados = set(usos_por_cnpj)
 
     df["favorito"] = df["cnpj_limpo"].isin(favoritos)
     df["status_bm"] = df["cnpj_limpo"].map(status_usuario_atual).fillna(STATUS_PADRAO)
     df["bm_utilizada"] = df["status_bm"] != STATUS_PADRAO
     df["data_uso_bm"] = df["cnpj_limpo"].map(mapa_data_hora).fillna("Não registrada")
     df["data_uso_bm_iso"] = df["cnpj_limpo"].map(mapa_data_iso).fillna("")
-    df["usado_global"] = df["cnpj_limpo"].isin(cnpjs_usados)
+    df["usos_globais"] = df["cnpj_limpo"].map(usos_por_cnpj)
+    df["usos_globais"] = df["usos_globais"].apply(
+        lambda usos: usos if isinstance(usos, list) else []
+    )
+    df["usado_global"] = df["cnpj_limpo"].isin(usos_por_cnpj.keys())
     df["usado_por"] = df["cnpj_limpo"].map(texto_usos_por_cnpj).fillna("")
 
-    # O painel usa o score rápido já preparado na base estática. A avaliação
-    # histórica completa é calculada somente na rota /empresa/<cnpj>.
+    modelo_ia = obter_modelo_ia_operacional()
+    avaliacoes_ia = carregar_avaliacoes_ia_estaticas(df_base, modelo_ia)
+
+    for campo in CAMPOS_IA_CACHE:
+        df[campo] = avaliacoes_ia[campo].to_numpy(copy=False)
+
     return aplicar_ajustes_ia_dinamicos(df)
 
 def ordenar_dataframe(df, ordenar_por="capital_maior"):
@@ -3150,12 +2479,6 @@ MODELOS_SITE = [
         "icone": "🪪"
     },
     {
-        "slug": "ia_4_0",
-        "nome": "Template IA 4.0",
-        "descricao": "Site institucional completo em página única, com SEO, dados estruturados, cadastro empresarial, contatos, mapa, LGPD, termos e rodapé legal.",
-        "icone": "🏢"
-    },
-    {
         "slug": "meta_waba_clean",
         "nome": "Meta/WABA Clean",
         "descricao": "Modelo limpo para verificação Meta/WhatsApp: CNPJ, atividade, contato, privacidade e termos sem excesso visual.",
@@ -3164,13 +2487,6 @@ MODELOS_SITE = [
 ]
 
 MODELOS_SITE_DICT = {modelo["slug"]: modelo for modelo in MODELOS_SITE}
-
-# Versão da correção que sincroniza o CNAE oficial da base com os sites já
-# gerados. Sites antigos ficam pendentes até terem o HTML regenerado e, quando
-# publicados, o mesmo Worker/subdomínio republicado com o conteúdo corrigido.
-VERSAO_ATUALIZACAO_CNAE_SITES = "2.0"
-CHAVE_LOCK_ATUALIZACAO_CNAE = 734821906
-_ATUALIZACAO_CNAE_SITES_LOCK = threading.Lock()
 
 
 def criar_tabela_sites_gerados():
@@ -3245,11 +2561,7 @@ def criar_tabela_sites_gerados():
             "dns_txt_nome": "TEXT",
             "dns_txt_valor": "TEXT",
             "atualizado_em": "TIMESTAMP",
-            "versao_template": "TEXT DEFAULT '1.0'",
-            "cnae_principal_descricao": "TEXT",
-            "cnae_atualizacao_versao": "TEXT DEFAULT '1.0'",
-            "cnae_atualizado_em": "TIMESTAMP",
-            "cnae_atualizacao_erro": "TEXT"
+            "versao_template": "TEXT DEFAULT '1.0'"
         }
 
         with engine.begin() as conn:
@@ -5288,572 +4600,6 @@ a:hover{{text-decoration:underline}}
 </div>
 </body></html>'''
 
-# ============================================================
-# TEMPLATE IA 4.0
-# Página institucional completa baseada no HTML de referência.
-# O HTML exportado pelo Next.js foi convertido para um documento
-# autônomo, sem scripts de hidratação, chunks ou valores fixos.
-# ============================================================
-def gerar_html_site_ia_4_0(empresa, meta_tag="", observacoes=""):
-    cnpj_limpo = limpar_cnpj(empresa.get("cnpj_limpo", empresa.get("cnpj", "")))
-    cnpj_formatado = formatar_cnpj(cnpj_limpo)
-    nome_publico = valor_texto(empresa.get("nome_site", "")) or nome_exibicao_empresa(empresa)
-    razao_social = valor_texto(empresa.get("razao_social", "")) or nome_publico
-    nome_fantasia = valor_texto(empresa.get("nome_fantasia", ""))
-    atividade = atividade_site_sem_codigo(empresa)
-    meta_tag = normalizar_meta_tag_site(meta_tag)
-
-    def primeiro_valor(*campos):
-        for campo in campos:
-            valor = valor_texto(empresa.get(campo, ""))
-            if valor and valor.replace("*", "").strip():
-                return valor
-        return ""
-
-    def valor_real(valor):
-        texto = valor_texto(valor, "")
-        normalizado = normalizar_texto_razao(texto)
-        return bool(texto and texto.replace("*", "").strip() and normalizado not in {
-            "NAO INFORMADO", "NAO INFORMADA", "NAO INFORMADOS", "NAO INFORMADAS",
-            "SEM INFORMACAO", "SEM INFORMACOES", "ENDERECO NAO INFORMADO",
-            "NAN", "NONE", "NULL"
-        })
-
-    municipio = primeiro_valor("municipio_nome", "nome_municipio")
-    if not municipio:
-        municipio_bruto = primeiro_valor("municipio")
-        if municipio_bruto and not municipio_bruto.isdigit():
-            municipio = municipio_bruto
-    uf = primeiro_valor("uf")
-    localidade = "/".join([parte for parte in [municipio, uf] if parte]) or "Brasil"
-
-    endereco = primeiro_valor("endereco_site") or montar_endereco_empresa(empresa)
-    cep = formatar_cep_endereco(primeiro_valor("cep"))
-    telefone = primeiro_valor("telefone_formatado", "telefone")
-    whatsapp = primeiro_valor("whatsapp_site") or telefone
-    email = primeiro_valor("email")
-    responsavel = primeiro_valor("nome_socio", "responsavel") or razao_social
-
-    data_abertura = primeiro_valor("data_inicio_formatada")
-    if not data_abertura:
-        data_abertura = formatar_data_brasil(primeiro_valor("data_inicio"))
-
-    data_abertura_schema = ""
-    for formato in ("%d/%m/%Y", "%Y-%m-%d", "%Y%m%d"):
-        try:
-            data_abertura_schema = datetime.strptime(data_abertura, formato).strftime("%Y-%m-%d")
-            break
-        except Exception:
-            pass
-
-    situacao = situacao_cadastral_site(empresa)
-    natureza_raw = primeiro_valor("natureza_juridica_descricao", "descricao_natureza_juridica", "natureza_juridica")
-    natureza_map = {
-        "2062": "SOCIEDADE EMPRESÁRIA LIMITADA",
-        "2135": "EMPRESÁRIO (INDIVIDUAL)",
-    }
-    natureza = natureza_map.get(natureza_raw, natureza_raw)
-
-    porte_raw = primeiro_valor("porte_descricao", "descricao_porte", "porte_empresa", "porte")
-    porte_map = {
-        "01": "MICRO EMPRESA", "1": "MICRO EMPRESA",
-        "03": "EMPRESA DE PEQUENO PORTE", "3": "EMPRESA DE PEQUENO PORTE",
-        "05": "DEMAIS", "5": "DEMAIS",
-    }
-    porte = porte_map.get(porte_raw, porte_raw)
-
-    tipo_raw = primeiro_valor("tipo_estabelecimento", "identificador_matriz_filial", "tipo")
-    tipo_map = {"1": "MATRIZ", "01": "MATRIZ", "2": "FILIAL", "02": "FILIAL"}
-    tipo_estabelecimento = tipo_map.get(tipo_raw, tipo_raw)
-
-    capital_raw = empresa.get("capital_social_num")
-    if capital_raw is None or str(capital_raw).strip().lower() in {"", "nan", "none", "null"}:
-        capital_raw = empresa.get("capital_social")
-    capital = formatar_capital(capital_raw) if capital_raw is not None and str(capital_raw).strip() else ""
-
-    cnae_bruto = primeiro_valor("cnae_principal")
-    cnae_codigo = primeiro_valor("cnae_principal_codigo") or re.sub(r"\D", "", cnae_bruto)[:7]
-    cnae_formatado = formatar_codigo_cnae(cnae_codigo) if cnae_codigo else ""
-    atividade_oficial = f"{cnae_formatado} - {atividade.upper()}" if cnae_formatado else atividade.upper()
-
-    telefone_digitos = re.sub(r"\D", "", telefone)
-    telefone_internacional = telefone_digitos
-    if telefone_internacional and len(telefone_internacional) in {10, 11}:
-        telefone_internacional = f"55{telefone_internacional}"
-    telefone_href = f"+{telefone_internacional}" if telefone_internacional else ""
-
-    whatsapp_digitos = re.sub(r"\D", "", whatsapp)
-    if whatsapp_digitos and len(whatsapp_digitos) in {10, 11}:
-        whatsapp_digitos = f"55{whatsapp_digitos}"
-    whatsapp_url = f"https://wa.me/{whatsapp_digitos}" if whatsapp_digitos else ""
-
-    site_url = primeiro_valor("site_url", "cloudflare_url")
-    if not site_url:
-        hostname = primeiro_valor("cloudflare_hostname")
-        if hostname:
-            site_url = f"https://{hostname}"
-    site_url = site_url.rstrip("/")
-    site_exibicao = site_url.replace("https://", "").replace("http://", "")
-
-    descricao = (
-        f"Site oficial de {nome_publico}. CNPJ {cnpj_formatado}. "
-        "Confira contatos, localização e informações cadastrais da empresa."
-    )
-    descricao_hero = (
-        f"A {nome_publico} atua em {atividade.lower()}"
-        f"{f' em {localidade} e região' if localidade != 'Brasil' else ''}, "
-        "com foco em atendimento responsável, transparência e organização."
-    )
-    descricao_sobre = (
-        f"A {razao_social}, registrada sob o CNPJ {cnpj_formatado}"
-        f"{f' e com início de atividades em {data_abertura}' if data_abertura else ''}, "
-        f"está localizada em {localidade}.\n\n"
-        f"A empresa atua no segmento de {atividade.lower()}."
-        f"{f' Conforme seu cadastro, é uma empresa de porte {porte}' if porte else ''}"
-        f"{f' e constituída como {natureza}' if natureza else ''}."
-    )
-
-    icone_texto = "".join(parte[0] for parte in re.findall(r"[A-Za-zÀ-ÿ0-9]+", nome_publico)[:2]).upper() or "E"
-    favicon_svg = (
-        "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'>"
-        "<rect width='64' height='64' rx='14' fill='#115e59'/>"
-        f"<text x='50%' y='54%' dominant-baseline='middle' text-anchor='middle' "
-        f"font-family='Arial,sans-serif' font-weight='900' font-size='24' fill='white'>{escape(icone_texto)}</text>"
-        "</svg>"
-    )
-    favicon_data = f"data:image/svg+xml,{quote(favicon_svg, safe='')}"
-
-    schema = {
-        "@context": "https://schema.org",
-        "@type": "LocalBusiness",
-        "name": nome_publico,
-        "legalName": razao_social,
-        "taxID": cnpj_limpo,
-        "description": atividade_oficial,
-        "address": {
-            "@type": "PostalAddress",
-            "streetAddress": endereco if valor_real(endereco) else "",
-            "addressLocality": municipio,
-            "addressRegion": uf,
-            "postalCode": re.sub(r"\D", "", cep),
-            "addressCountry": "BR",
-        },
-    }
-    if nome_fantasia:
-        schema["alternateName"] = nome_fantasia
-    if telefone:
-        schema["telephone"] = telefone_href or telefone
-    if email:
-        schema["email"] = email
-    if site_url:
-        schema["url"] = site_url
-    if data_abertura_schema:
-        schema["foundingDate"] = data_abertura_schema
-    if telefone:
-        schema["contactPoint"] = {
-            "@type": "ContactPoint",
-            "telephone": telefone_href or telefone,
-            "contactType": "customer service",
-            "areaServed": "BR",
-            "availableLanguage": "Portuguese",
-        }
-    schema["address"] = {chave: valor for chave, valor in schema["address"].items() if valor}
-    schema_json = json.dumps(schema, ensure_ascii=False).replace("</", "<\\/")
-
-    canonical_html = f'<link rel="canonical" href="{escape(site_url, quote=True)}">' if site_url else ""
-    og_url_html = f'<meta property="og:url" content="{escape(site_url, quote=True)}">' if site_url else ""
-
-    cards = []
-
-    def card(rotulo, valor, classe=""):
-        if not valor_real(valor):
-            return
-        span_class = f' class="{classe}"' if classe else ""
-        cards.append(
-            f'<div class="info-box"><strong>{escape(rotulo)}</strong>'
-            f'<span{span_class}>{escape(valor)}</span></div>'
-        )
-
-    card("Razão Social", razao_social)
-    card("CNPJ", cnpj_formatado)
-    card("Situação Cadastral", f"✓ {situacao}", "status-ativa" if situacao.upper() == "ATIVA" else "")
-    card("Data de Abertura", data_abertura)
-    card("Localização", localidade)
-    card("Atividade", atividade_oficial)
-    card("Capital Social", capital)
-    card("Porte", porte)
-    card("Natureza Jurídica", natureza)
-    card("CEP", cep)
-    card("Tipo", tipo_estabelecimento)
-    card("Nome Fantasia", nome_fantasia)
-
-    horario = primeiro_valor("horario_funcionamento", "horario_atendimento")
-    card("Horário de Funcionamento", horario)
-
-    endereco_card = ""
-    if valor_real(endereco):
-        endereco_card = (
-            '<div class="info-box info-box-wide"><strong>Endereço Registrado</strong>'
-            f'<span>{escape(endereco)}</span></div>'
-        )
-    cards_html = "".join(cards) + endereco_card
-
-    contato_linhas = []
-
-    def linha_contato(rotulo, valor, html_valor=None):
-        if not valor_real(valor):
-            return
-        contato_linhas.append(
-            f"<tr><td>{escape(rotulo)}</td><td>{html_valor if html_valor is not None else escape(valor)}</td></tr>"
-        )
-
-    linha_contato("Responsável", responsavel)
-    linha_contato("CNPJ", cnpj_formatado)
-    linha_contato("Endereço", endereco)
-    if telefone:
-        linha_contato("Telefone", telefone, f'<a href="tel:{escape(telefone_href, quote=True)}">{escape(telefone)}</a>')
-    if whatsapp_url:
-        linha_contato("WhatsApp", whatsapp, f'<a href="{escape(whatsapp_url, quote=True)}" target="_blank" rel="noopener noreferrer">{escape(whatsapp)}</a>')
-    if email:
-        linha_contato("E-mail", email, f'<a href="mailto:{escape(email, quote=True)}">{escape(email)}</a>')
-    if site_url:
-        linha_contato("Site", site_exibicao, f'<a href="{escape(site_url, quote=True)}">{escape(site_exibicao)}</a>')
-    if horario:
-        linha_contato("Horário de Funcionamento", horario)
-    contato_html = "".join(contato_linhas)
-
-    mapa_html = ""
-    if valor_real(endereco) and normalizar_texto_razao(endereco) != "ENDERECO NAO INFORMADO":
-        mapa_query = quote(endereco, safe="")
-        mapa_html = f'''
-        <div class="map-container">
-          <iframe title="Mapa de localização" width="100%" height="300" src="https://maps.google.com/maps?q={mapa_query}&amp;t=&amp;z=15&amp;ie=UTF8&amp;iwloc=&amp;output=embed" allowfullscreen loading="lazy"></iframe>
-        </div>
-        <div class="map-actions">
-          <a class="map-button map-button-primary" href="https://www.google.com/maps/search/?api=1&amp;query={mapa_query}" target="_blank" rel="noopener noreferrer">Abrir no Google Maps ↗</a>
-          <a class="map-button" href="https://www.google.com/maps/place/{mapa_query}/@?hl=pt-BR" target="_blank" rel="noopener noreferrer">Ver satélite e terreno ↗</a>
-        </div>'''
-
-    contato_privacidade = " · ".join(parte for parte in [email, telefone] if parte) or "pelos canais indicados neste site"
-
-    footer_dados = []
-
-    def footer_item(rotulo, valor, html_valor=None):
-        if not valor_real(valor):
-            return
-        footer_dados.append(
-            '<div class="foot-dados-item">'
-            f'<span class="foot-dados-label">{escape(rotulo)}:</span>'
-            f'<span class="foot-dados-value">{html_valor if html_valor is not None else escape(valor)}</span>'
-            '</div>'
-        )
-
-    footer_item("Razão Social", razao_social)
-    footer_item("Nome Fantasia", nome_fantasia)
-    footer_item("CNPJ", cnpj_formatado)
-    footer_item("Situação Cadastral", situacao)
-    footer_item("Atividade", atividade_oficial)
-    footer_item("Porte", porte)
-    footer_item("Natureza Jurídica", natureza)
-    footer_item("Capital Social", capital)
-    footer_item("Tipo", tipo_estabelecimento)
-    footer_item("Data de Abertura", data_abertura)
-    footer_item("Endereço", endereco)
-    footer_item("Telefone", telefone)
-    if email:
-        footer_item("E-mail", email, f'<a href="mailto:{escape(email, quote=True)}">{escape(email)}</a>')
-    footer_item("Horário", horario)
-    footer_dados_html = "".join(footer_dados)
-
-    css = """
-* { margin: 0; padding: 0; box-sizing: border-box; }
-html { scroll-behavior: smooth; }
-body {
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  font-size: 15px;
-  color: #2d3748;
-  background: #f4fbfb;
-  line-height: 1.7;
-  overflow-wrap: anywhere;
-}
-a { color: inherit; }
-nav {
-  background: #115e59;
-  padding: 0 24px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  min-height: 60px;
-  position: sticky;
-  top: 0;
-  z-index: 100;
-  box-shadow: 0 2px 12px rgba(15, 23, 42, .12);
-}
-.nav-logo {
-  color: #ffffff;
-  font-size: 18px;
-  font-weight: 700;
-  text-decoration: none;
-  letter-spacing: .4px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: min(48vw, 420px);
-}
-.nav-links { display: flex; gap: 22px; list-style: none; }
-.nav-links a {
-  color: rgba(255,255,255,.86);
-  text-decoration: none;
-  font-size: 13px;
-  font-weight: 650;
-  transition: color .2s;
-}
-.nav-links a:hover, .nav-links a:focus { color: #ffffff; }
-.hero {
-  background: linear-gradient(145deg, #115e59 0%, #0f766e 100%);
-  color: #ffffff;
-  padding: 64px 24px;
-  text-align: center;
-}
-.hero h1 {
-  color: #ffffff;
-  font-size: clamp(24px, 4vw, 34px);
-  line-height: 1.25;
-  margin: 0 auto 12px;
-  max-width: 900px;
-  font-weight: 760;
-}
-.hero p {
-  color: rgba(255,255,255,.88);
-  font-size: 15px;
-  max-width: 720px;
-  margin: 0 auto 22px;
-  white-space: pre-line;
-}
-.cnpj-tag {
-  display: inline-block;
-  background: rgba(255,255,255,.12);
-  border: 1px solid rgba(255,255,255,.32);
-  color: #ffffff;
-  font-size: 13px;
-  padding: 8px 20px;
-  border-radius: 5px;
-  letter-spacing: .35px;
-}
-.section { padding: 52px 24px; max-width: 1008px; margin: 0 auto; }
-h2 {
-  font-size: 22px;
-  color: #111827;
-  margin-bottom: 16px;
-  border-bottom: 2px solid #0f766e;
-  padding-bottom: 7px;
-  font-weight: 740;
-}
-h3 { font-size: 16px; color: #111827; margin: 20px 0 8px; font-weight: 720; }
-p { margin-bottom: 12px; color: #2d3748; }
-.info-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
-  margin: 24px 0 0;
-}
-.info-box {
-  border: 1px solid #e2e8f0;
-  border-radius: 7px;
-  padding: 18px;
-  background: #ffffff;
-  box-shadow: 0 2px 12px rgba(15,23,42,.035);
-}
-.info-box-wide { grid-column: 1 / -1; }
-.info-box strong {
-  display: block;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: .8px;
-  color: #718096;
-  margin-bottom: 6px;
-}
-.info-box span { font-size: 14px; color: #2d3748; font-weight: 650; }
-.info-box .status-ativa { color: #15803d; }
-.contact-table { width: 100%; border-collapse: collapse; margin: 20px 0; background: #fff; }
-.contact-table td { padding: 11px 16px; border: 1px solid #e2e8f0; vertical-align: top; font-size: 14px; }
-.contact-table td:first-child { background: #eef8f7; font-weight: 700; color: #111827; font-size: 13px; width: 190px; }
-.contact-table a { color: #0f766e; text-decoration: none; font-weight: 650; }
-.contact-table a:hover { text-decoration: underline; }
-.map-container { margin-top: 24px; border-radius: 8px; overflow: hidden; border: 1px solid #d8e4e4; background: #fff; }
-.map-container iframe { border: 0; display: block; }
-.map-actions { margin-top: 14px; display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; }
-.map-button {
-  display: inline-flex;
-  align-items: center;
-  color: #2d3748;
-  text-decoration: none;
-  font-weight: 650;
-  font-size: 13px;
-  padding: 10px 18px;
-  border-radius: 5px;
-  border: 1px solid #d7e1e1;
-  background: #ffffff;
-}
-.map-button-primary { color: #0f766e; border-color: #0f766e; }
-.doc-box { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 7px; padding: 24px; line-height: 1.8; font-size: 14px; }
-hr { border: none; border-top: 1px solid #e2e8f0; margin: 0; }
-footer { background: #115e59; color: #ccfbf1; padding: 48px 24px 32px; font-size: 13px; border-top: 1px solid #134e4a; }
-.foot-inner { max-width: 1008px; margin: 0 auto; display: grid; grid-template-columns: 1fr .8fr 1.3fr; gap: 32px; text-align: left; }
-.foot-col h4 { color: #ffffff; font-size: 14px; font-weight: 720; margin-bottom: 16px; text-transform: uppercase; letter-spacing: .5px; }
-.foot-col p { color: #ccfbf1; line-height: 1.65; margin-bottom: 12px; }
-.foot-links-list { list-style: none; display: flex; flex-direction: column; gap: 10px; }
-.foot-links-list a, .foot-dados-value a { color: #ccfbf1; text-decoration: none; }
-.foot-links-list a:hover, .foot-dados-value a:hover { color: #ffffff; text-decoration: underline; }
-.foot-dados-list { display: flex; flex-direction: column; gap: 8px; font-size: 12px; line-height: 1.5; }
-.foot-dados-item { display: flex; gap: 6px; align-items: flex-start; }
-.foot-dados-label { font-weight: 720; color: #ffffff; white-space: nowrap; }
-.foot-dados-value { color: #ccfbf1; }
-.foot-copy { margin-top: 32px; padding-top: 20px; border-top: 1px solid #28756f; text-align: center; font-size: 12px; color: #ccfbf1; grid-column: 1 / -1; }
-@media (max-width: 820px) {
-  .foot-inner { grid-template-columns: 1fr; gap: 28px; }
-  .info-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
-@media (max-width: 700px) {
-  nav { padding: 0 16px; }
-  .nav-logo { max-width: 82vw; font-size: 15px; }
-  .nav-links { display: none; }
-  .hero { padding: 48px 18px; }
-  .section { padding: 40px 16px; }
-  .info-grid { grid-template-columns: 1fr; }
-  .contact-table, .contact-table tbody, .contact-table tr, .contact-table td { display: block; width: 100%; }
-  .contact-table tr { margin-bottom: 10px; border: 1px solid #e2e8f0; }
-  .contact-table td { border: 0; }
-  .contact-table td:first-child { width: 100%; border-bottom: 1px solid #e2e8f0; }
-  .foot-dados-item { flex-direction: column; gap: 1px; }
-}
-"""
-
-    return f'''<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{escape(nome_publico)}</title>
-  <meta name="description" content="{escape(descricao, quote=True)}">
-  <meta name="robots" content="index, follow">
-  {canonical_html}
-  {meta_tag}
-  <meta property="og:title" content="{escape(nome_publico, quote=True)}">
-  <meta property="og:description" content="{escape(descricao, quote=True)}">
-  {og_url_html}
-  <meta property="og:site_name" content="{escape(nome_publico, quote=True)}">
-  <meta property="og:type" content="website">
-  <meta name="twitter:card" content="summary">
-  <meta name="twitter:title" content="{escape(nome_publico, quote=True)}">
-  <meta name="twitter:description" content="{escape(descricao, quote=True)}">
-  <link rel="icon" href="{escape(favicon_data, quote=True)}" type="image/svg+xml">
-  <script type="application/ld+json">{schema_json}</script>
-  <style>{css}</style>
-</head>
-<body>
-  <nav aria-label="Navegação principal">
-    <a href="#inicio" class="nav-logo">{escape(nome_publico)}</a>
-    <ul class="nav-links">
-      <li><a href="#inicio">Início</a></li>
-      <li><a href="#sobre">Sobre</a></li>
-      <li><a href="#contato">Contato</a></li>
-      <li><a href="#privacidade">Privacidade</a></li>
-      <li><a href="#termos">Termos</a></li>
-    </ul>
-  </nav>
-
-  <header class="hero" id="inicio">
-    <h1>Bem-vindo ao site oficial da {escape(nome_publico)}</h1>
-    <p>{escape(descricao_hero)}</p>
-    <div class="cnpj-tag">CNPJ: {escape(cnpj_formatado)} &nbsp;|&nbsp; Situação: {escape(situacao)}</div>
-  </header>
-
-  <hr>
-  <main>
-    <section class="section" id="sobre">
-      <h2>Sobre a Empresa</h2>
-      <p>A empresa <strong>{escape(razao_social)}</strong>, inscrita no CNPJ sob nº <strong>{escape(cnpj_formatado)}</strong>{f', é uma empresa brasileira com sede em {escape(localidade)}' if localidade != 'Brasil' else ''}{f', fundada em {escape(data_abertura)}' if data_abertura else ''}.</p>
-      <p>Atuamos no segmento de <strong>{escape(atividade_oficial)}</strong>, apresentando neste site informações cadastrais e canais oficiais de contato.</p>
-      <p style="white-space:pre-line">{escape(descricao_sobre)}</p>
-      <div class="info-grid">{cards_html}</div>
-    </section>
-
-    <hr>
-    <section class="section" id="contato">
-      <h2>Contato</h2>
-      <p>Fale com a <strong>{escape(nome_publico)}</strong> pelos canais oficiais abaixo:</p>
-      <table class="contact-table"><tbody>{contato_html}</tbody></table>
-      {mapa_html}
-    </section>
-
-    <hr>
-    <section class="section" id="privacidade">
-      <h2>Política de Privacidade</h2>
-      <div class="doc-box">
-        <p>Esta Política de Privacidade se aplica ao site operado por <strong>{escape(razao_social)}</strong>, inscrita no CNPJ sob nº <strong>{escape(cnpj_formatado)}</strong>{f', com sede em {escape(localidade)}' if localidade != 'Brasil' else ''}, em conformidade com a LGPD — Lei nº 13.709/2018.</p>
-        <h3>1. Dados Coletados</h3>
-        <p>Podem ser tratados nome, e-mail, telefone e demais informações fornecidas voluntariamente pelos canais de contato.</p>
-        <h3>2. Finalidade</h3>
-        <p>Atendimento, resposta a solicitações, comunicação relacionada às atividades da empresa e cumprimento de obrigações legais.</p>
-        <h3>3. Compartilhamento</h3>
-        <p>A empresa não comercializa dados pessoais. O compartilhamento ocorre somente quando necessário ao funcionamento dos serviços ou exigido por lei.</p>
-        <h3>4. Direitos do Titular</h3>
-        <p>O titular pode solicitar confirmação do tratamento, acesso, correção, eliminação, portabilidade e revogação do consentimento, conforme aplicável.</p>
-        <h3>5. Contato</h3>
-        <p>Dúvidas sobre esta política podem ser encaminhadas por {escape(contato_privacidade)}.</p>
-      </div>
-    </section>
-
-    <hr>
-    <section class="section" id="termos">
-      <h2>Termos de Uso</h2>
-      <div class="doc-box">
-        <p>Estes Termos regulam o acesso ao site da empresa <strong>{escape(razao_social)}</strong>, inscrita no CNPJ sob nº <strong>{escape(cnpj_formatado)}</strong>.</p>
-        <h3>1. Objeto</h3>
-        <p>Este site possui caráter institucional e informativo, apresentando dados empresariais e canais de contato.</p>
-        <h3>2. Uso do Site</h3>
-        <p>O visitante compromete-se a utilizar o site de forma lícita e de acordo com a legislação vigente.</p>
-        <h3>3. Propriedade Intelectual</h3>
-        <p>O conteúdo institucional pertence à empresa, salvo quando houver indicação expressa de outra titularidade.</p>
-        <h3>4. Limitação de Responsabilidade</h3>
-        <p>A empresa não se responsabiliza por uso indevido do conteúdo ou por indisponibilidades técnicas temporárias.</p>
-        <h3>5. Alterações</h3>
-        <p>Os termos podem ser atualizados para refletir mudanças operacionais ou legais.</p>
-        <h3>6. Contato</h3>
-        <p>Solicitações podem ser enviadas por {escape(contato_privacidade)}.</p>
-      </div>
-    </section>
-  </main>
-
-  <hr>
-  <footer>
-    <div class="foot-inner">
-      <div class="foot-col">
-        <h4>Quem Somos</h4>
-        <p><strong>{escape(nome_publico)}</strong></p>
-        <p>Empresa atuante em {escape(atividade.lower())}, com informações institucionais e canais de atendimento reunidos neste site.</p>
-      </div>
-      <div class="foot-col">
-        <h4>Links Úteis</h4>
-        <ul class="foot-links-list">
-          <li><a href="#inicio">Início</a></li>
-          <li><a href="#sobre">Sobre</a></li>
-          <li><a href="#contato">Contato</a></li>
-          <li><a href="/politica-de-privacidade.html">Política de Privacidade</a></li>
-          <li><a href="/termos-de-uso.html">Termos de Uso</a></li>
-        </ul>
-      </div>
-      <div class="foot-col">
-        <h4>Informações Legais</h4>
-        <div class="foot-dados-list">{footer_dados_html}</div>
-      </div>
-      <div class="foot-copy">© {agora_brasilia().year} {escape(nome_publico)} — Todos os direitos reservados</div>
-    </div>
-  </footer>
-</body>
-</html>'''
-
 def gerar_bundle_site_empresa(empresa, meta_tag, modelo_site, observacoes=""):
     html = gerar_html_site_empresa(empresa, meta_tag, modelo_site, observacoes)
     politica, termos = gerar_paginas_legais_site(empresa)
@@ -5872,9 +4618,6 @@ def gerar_html_site_empresa(empresa, meta_tag, modelo_site, observacoes=""):
 
     if modelo_site == "ia_3_0":
         return gerar_html_site_ia_3_0(empresa, meta_tag, observacoes)
-
-    if modelo_site == "ia_4_0":
-        return gerar_html_site_ia_4_0(empresa, meta_tag, observacoes)
 
     if modelo_site == "meta_waba_clean":
         return gerar_html_site_meta_waba_clean(empresa, meta_tag, observacoes)
@@ -6113,21 +4856,13 @@ def gerar_html_site_empresa(empresa, meta_tag, modelo_site, observacoes=""):
 
 
 
-def aplicar_personalizacao_site(empresa, nome_site="", telefone_site="", email_site="", endereco_site="", whatsapp_site="", site_url=""):
+def aplicar_personalizacao_site(empresa, nome_site="", telefone_site="", email_site="", endereco_site="", whatsapp_site=""):
     empresa_site = dict(empresa)
-    dados_cnae = obter_dados_cnae_oficial(empresa_site)
-
-    if dados_cnae["codigo"]:
-        empresa_site["cnae_principal_codigo"] = dados_cnae["codigo"]
-        empresa_site["cnae_principal_descricao"] = dados_cnae["descricao"]
-        empresa_site["cnae_principal"] = dados_cnae["completo"]
-
     empresa_site["nome_site"] = valor_texto(nome_site, "") or nome_exibicao_empresa(empresa)
     empresa_site["telefone_formatado"] = valor_texto(telefone_site, "")
     empresa_site["whatsapp_site"] = valor_texto(whatsapp_site, "") or valor_texto(telefone_site, "")
     empresa_site["email"] = valor_texto(email_site, "")
     empresa_site["endereco_site"] = valor_texto(endereco_site, "")
-    empresa_site["site_url"] = valor_texto(site_url, "")
     return empresa_site
 
 
@@ -6455,48 +5190,8 @@ def _config_cloudflare_mpaineldigital():
         "env_prefix": "CLOUDFLARE_MPAINELDIGITAL",
     }
 
-
-def _config_cloudflare_painelbusiness():
-    """Configuração do domínio painelbusiness.com na conta Cloudflare principal."""
-    account_id = valor_texto(os.environ.get("CLOUDFLARE_ACCOUNT_ID", ""))
-    api_token = valor_texto(os.environ.get("CLOUDFLARE_API_TOKEN", ""))
-    zone_id = valor_texto(os.environ.get(
-        "CLOUDFLARE_PAINELBUSINESS_ZONE_ID",
-        "4822193068eeee0a6c5ff57448c1db4b"
-    ))
-
-    # Usa as credenciais universais da mesma conta Cloudflare.
-    if not account_id or not api_token or not zone_id:
-        return None
-
-    custom_domain = normalizar_dominio_cloudflare(
-        os.environ.get(
-            "CLOUDFLARE_PAINELBUSINESS_ZONE_NAME",
-            "painelbusiness.com"
-        )
-    ) or "painelbusiness.com"
-
-    return {
-        "account_id": account_id,
-        "api_token": api_token,
-        "subdomain": "",
-        "custom_domain": custom_domain,
-        "zone_id": zone_id,
-        "zone_name": custom_domain,
-        "ativo": valor_texto(os.environ.get(
-            "CLOUDFLARE_PAINELBUSINESS_ATIVO", "1"
-        )).lower() not in {"0", "false", "nao", "não", "off"},
-        "publish_mode": valor_texto(os.environ.get(
-            "CLOUDFLARE_PAINELBUSINESS_PUBLISH_MODE",
-            "custom_strict"
-        )).lower(),
-        "rotulo": "Painel Business",
-        "env_prefix": "CLOUDFLARE_PAINELBUSINESS",
-    }
-
-
 def listar_configs_cloudflare():
-    dominios_permitidos = {"painelconectadobr.com", "meupainelnegocios.com", "mpaineldigital.com", "painelbusiness.com"}
+    dominios_permitidos = {"painelconectadobr.com", "meupainelnegocios.com", "mpaineldigital.com"}
     bruto = valor_texto(os.environ.get("CLOUDFLARE_SITES_CONFIG", ""))
     configs = []
 
@@ -6531,7 +5226,6 @@ def listar_configs_cloudflare():
         _config_cloudflare_painelconectado(),
         _config_cloudflare_meupainelnegocios(),
         _config_cloudflare_mpaineldigital(),
-        _config_cloudflare_painelbusiness(),
     ]:
         if not config_dedicada:
             continue
@@ -6974,9 +5668,7 @@ def salvar_site_gerado(dados):
         "nome_empresarial",
         "nome_fantasia",
         "cnae_principal",
-        "cnae_principal_descricao",
         "categoria_cnae",
-        "cnae_atualizacao_versao",
         "endereco",
         "telefone",
         "email",
@@ -7094,11 +5786,7 @@ def listar_sites_gerados(modelo_site="", busca=""):
                     nome_empresarial,
                     nome_fantasia,
                     cnae_principal,
-                    cnae_principal_descricao,
                     categoria_cnae,
-                    cnae_atualizacao_versao,
-                    cnae_atualizado_em,
-                    cnae_atualizacao_erro,
                     endereco,
                     telefone,
                     email,
@@ -7137,7 +5825,6 @@ def listar_sites_gerados(modelo_site="", busca=""):
         item["criado_em"] = converter_data_hora_sql_para_brasilia(item.get("criado_em"))
         item["cloudflare_publicado_em"] = converter_data_hora_sql_para_brasilia(item.get("cloudflare_publicado_em"))
         item["atualizado_em"] = converter_data_hora_sql_para_brasilia(item.get("atualizado_em"))
-        item["cnae_atualizado_em"] = converter_data_hora_sql_para_brasilia(item.get("cnae_atualizado_em"))
         sites.append(item)
 
     return sites
@@ -7171,7 +5858,6 @@ def buscar_site_gerado(site_id):
     site["criado_em"] = converter_data_hora_sql_para_brasilia(site.get("criado_em"))
     site["cloudflare_publicado_em"] = converter_data_hora_sql_para_brasilia(site.get("cloudflare_publicado_em"))
     site["atualizado_em"] = converter_data_hora_sql_para_brasilia(site.get("atualizado_em"))
-    site["cnae_atualizado_em"] = converter_data_hora_sql_para_brasilia(site.get("cnae_atualizado_em"))
     return site
 
 
@@ -7307,9 +5993,7 @@ def atualizar_site_conteudo(site_id, campos):
         "whatsapp_exibicao", "email_exibicao", "email", "endereco_exibicao",
         "endereco", "meta_tag", "html_gerado", "politica_html", "termos_html",
         "arquivos_verificacao", "dns_txt_nome", "dns_txt_valor", "modelo_site",
-        "versao_template", "cloudflare_dominio_base", "cnae_principal",
-        "cnae_principal_descricao", "categoria_cnae", "cnae_atualizacao_versao",
-        "cnae_atualizacao_erro"
+        "versao_template", "cloudflare_dominio_base"
     }
     dados = {chave: valor for chave, valor in campos.items() if chave in permitidos}
     if not dados:
@@ -7330,256 +6014,24 @@ def empresa_site_a_partir_registro(site):
         site.get("email_exibicao") or site.get("email"),
         site.get("endereco_exibicao") or site.get("endereco") or montar_endereco_empresa(empresa),
         site.get("whatsapp_exibicao") or site.get("telefone_exibicao") or site.get("telefone"),
-        site.get("cloudflare_url") or (
-            f"https://{site.get('cloudflare_hostname')}" if site.get("cloudflare_hostname") else ""
-        ),
     )
-
-
-def obter_slug_publico_site(site):
-    slug = normalizar_nome_worker_cloudflare(site.get("cloudflare_slug_personalizado", ""))
-    if slug:
-        return slug
-
-    hostname = normalizar_dominio_cloudflare(site.get("cloudflare_hostname", ""))
-    if not hostname:
-        hostname = normalizar_dominio_cloudflare(site.get("cloudflare_url", ""))
-
-    dominio = normalizar_dominio_cloudflare(site.get("cloudflare_dominio_base", ""))
-    if hostname and dominio and hostname.endswith(f".{dominio}"):
-        slug_hostname = hostname[:-(len(dominio) + 1)].split(".")[0]
-        slug_hostname = normalizar_nome_worker_cloudflare(slug_hostname)
-        if slug_hostname:
-            return slug_hostname
-
-    if hostname:
-        primeiro_rotulo = normalizar_nome_worker_cloudflare(hostname.split(".")[0])
-        if primeiro_rotulo:
-            return primeiro_rotulo
-
-    return normalizar_nome_worker_cloudflare(site.get("cloudflare_worker_name", ""))
 
 
 def republicar_site_se_publicado(site_id):
     site = buscar_site_gerado(site_id)
     if not site or site.get("cloudflare_status") != "Publicado":
         return ""
-    slug_publico = obter_slug_publico_site(site)
     resultado = publicar_site_na_cloudflare(
         site,
-        slug_publico,
+        site.get("cloudflare_slug_personalizado") or site.get("cloudflare_worker_name"),
         site.get("cloudflare_dominio_base", ""),
     )
     atualizar_publicacao_cloudflare_site(
         site_id, "Publicado", resultado["worker_name"], resultado["cloudflare_url"],
-        resultado.get("aviso", ""), slug_publico,
+        resultado.get("aviso", ""), site.get("cloudflare_slug_personalizado", ""),
         resultado.get("dominio_base", ""), resultado.get("hostname", "")
     )
     return resultado.get("cloudflare_url", "")
-
-
-def _listar_sites_para_atualizacao_cnae(forcar=False):
-    criar_tabela_sites_gerados()
-    where_sql = ""
-    params = {"versao": VERSAO_ATUALIZACAO_CNAE_SITES}
-
-    if not forcar:
-        where_sql = "WHERE COALESCE(cnae_atualizacao_versao, '') != :versao"
-
-    with engine.connect() as conn:
-        linhas = conn.execute(
-            text(f"""
-                SELECT *
-                FROM sites_gerados
-                {where_sql}
-                ORDER BY id ASC
-            """),
-            params,
-        ).mappings().fetchall()
-
-    return [dict(linha) for linha in linhas]
-
-
-def _registrar_resultado_atualizacao_cnae(site_id, concluido, erro=""):
-    with engine.begin() as conn:
-        conn.execute(
-            text("""
-                UPDATE sites_gerados
-                SET
-                    cnae_atualizacao_versao = CASE
-                        WHEN :concluido THEN :versao
-                        ELSE cnae_atualizacao_versao
-                    END,
-                    cnae_atualizado_em = CASE
-                        WHEN :concluido THEN CURRENT_TIMESTAMP
-                        ELSE cnae_atualizado_em
-                    END,
-                    cnae_atualizacao_erro = :erro,
-                    atualizado_em = CURRENT_TIMESTAMP
-                WHERE id = :site_id
-            """),
-            {
-                "concluido": bool(concluido),
-                "versao": VERSAO_ATUALIZACAO_CNAE_SITES,
-                "erro": valor_texto(erro, "")[:2000],
-                "site_id": int(site_id),
-            },
-        )
-
-
-def atualizar_cnaes_sites_existentes(df_base=None, forcar=False):
-    """Atualiza CNAE e HTML dos sites antigos e preserva suas URLs publicadas.
-
-    A operação é idempotente. Sites publicados só recebem a versão nova depois
-    que o mesmo Worker/subdomínio for republicado com sucesso. Falhas ficam
-    pendentes para nova tentativa no próximo carregamento da aplicação.
-    """
-    if not _ATUALIZACAO_CNAE_SITES_LOCK.acquire(blocking=False):
-        return {"executando": True, "total": 0, "atualizados": 0, "republicados": 0, "falhas": 0}
-
-    lock_conn = None
-    lock_postgres_adquirido = False
-    resumo = {
-        "executando": False,
-        "total": 0,
-        "atualizados": 0,
-        "republicados": 0,
-        "ignorados": 0,
-        "falhas": 0,
-        "erros": [],
-    }
-
-    try:
-        dialect_name = getattr(getattr(engine, "dialect", None), "name", "postgresql")
-        if dialect_name == "postgresql":
-            lock_conn = engine.connect()
-            lock_postgres_adquirido = bool(
-                lock_conn.execute(
-                    text("SELECT pg_try_advisory_lock(:chave)"),
-                    {"chave": CHAVE_LOCK_ATUALIZACAO_CNAE},
-                ).scalar()
-            )
-            if not lock_postgres_adquirido:
-                resumo["executando"] = True
-                return resumo
-
-        sites = _listar_sites_para_atualizacao_cnae(forcar=forcar)
-        resumo["total"] = len(sites)
-        if not sites:
-            return resumo
-
-        if df_base is None:
-            df_base = carregar_base_estatica()
-
-        cnpjs = {limpar_cnpj(site.get("cnpj", "")) for site in sites if site.get("cnpj")}
-        empresas_por_cnpj = {}
-        if cnpjs and df_base is not None and not df_base.empty:
-            encontrados = df_base[df_base["cnpj_limpo"].isin(cnpjs)]
-            for empresa in encontrados.to_dict(orient="records"):
-                cnpj_empresa = limpar_cnpj(empresa.get("cnpj_limpo", empresa.get("cnpj", "")))
-                if cnpj_empresa and cnpj_empresa not in empresas_por_cnpj:
-                    empresas_por_cnpj[cnpj_empresa] = empresa
-
-        for site in sites:
-            site_id = int(site.get("id"))
-            cnpj = limpar_cnpj(site.get("cnpj", ""))
-            empresa = empresas_por_cnpj.get(cnpj)
-
-            if not empresa:
-                erro = f"CNPJ {cnpj or 'não informado'} não encontrado na base atual."
-                _registrar_resultado_atualizacao_cnae(site_id, False, erro)
-                resumo["falhas"] += 1
-                resumo["erros"].append({"site_id": site_id, "erro": erro})
-                continue
-
-            try:
-                dados_cnae = obter_dados_cnae_oficial(empresa)
-                if not dados_cnae["codigo"]:
-                    raise RuntimeError("A base atual não possui o código CNAE principal deste CNPJ.")
-                if not dados_cnae["descricao"]:
-                    raise RuntimeError(
-                        "A descrição oficial do CNAE não foi encontrada. "
-                        "Confirme se downloads/Cnaes.zip está disponível."
-                    )
-
-                site_url = site.get("cloudflare_url") or (
-                    f"https://{site.get('cloudflare_hostname')}" if site.get("cloudflare_hostname") else ""
-                )
-                empresa_site = aplicar_personalizacao_site(
-                    empresa,
-                    site.get("nome_exibicao") or site.get("nome_fantasia") or site.get("nome_empresarial"),
-                    site.get("telefone_exibicao") or site.get("telefone"),
-                    site.get("email_exibicao") or site.get("email"),
-                    site.get("endereco_exibicao") or site.get("endereco") or montar_endereco_empresa(empresa),
-                    site.get("whatsapp_exibicao") or site.get("telefone_exibicao") or site.get("telefone"),
-                    site_url,
-                )
-                bundle = gerar_bundle_site_empresa(
-                    empresa_site,
-                    site.get("meta_tag", ""),
-                    site.get("modelo_site", "ia_2_0"),
-                    site.get("observacoes", ""),
-                )
-
-                campos_atualizados = {
-                    "cnae_principal": dados_cnae["completo"],
-                    "cnae_principal_descricao": dados_cnae["descricao"],
-                    "categoria_cnae": valor_texto(empresa.get("categoria_cnae", "")),
-                    "html_gerado": bundle["html"],
-                    "politica_html": bundle["politica"],
-                    "termos_html": bundle["termos"],
-                    "cnae_atualizacao_erro": "",
-                }
-                atualizar_site_conteudo(site_id, campos_atualizados)
-                site_atualizado = dict(site)
-                site_atualizado.update(campos_atualizados)
-                resumo["atualizados"] += 1
-
-                if site.get("cloudflare_status") == "Publicado":
-                    slug_publico = obter_slug_publico_site(site)
-                    resultado = publicar_site_na_cloudflare(
-                        site_atualizado,
-                        slug_publico,
-                        site.get("cloudflare_dominio_base", ""),
-                    )
-                    atualizar_publicacao_cloudflare_site(
-                        site_id,
-                        "Publicado",
-                        resultado["worker_name"],
-                        resultado["cloudflare_url"],
-                        resultado.get("aviso", ""),
-                        slug_publico,
-                        resultado.get("dominio_base", site.get("cloudflare_dominio_base", "")),
-                        resultado.get("hostname", site.get("cloudflare_hostname", "")),
-                    )
-                    resumo["republicados"] += 1
-
-                _registrar_resultado_atualizacao_cnae(site_id, True, "")
-                print(
-                    f"[CNAE-SITES] Site #{site_id} atualizado para "
-                    f"{dados_cnae['completo']}."
-                )
-            except Exception as exc:
-                erro = str(exc)
-                _registrar_resultado_atualizacao_cnae(site_id, False, erro)
-                resumo["falhas"] += 1
-                resumo["erros"].append({"site_id": site_id, "erro": erro})
-                print(f"[CNAE-SITES] Falha no site #{site_id}: {erro}")
-
-        return resumo
-    finally:
-        if lock_conn is not None:
-            try:
-                if lock_postgres_adquirido:
-                    lock_conn.execute(
-                        text("SELECT pg_advisory_unlock(:chave)"),
-                        {"chave": CHAVE_LOCK_ATUALIZACAO_CNAE},
-                    )
-                    lock_conn.commit()
-            except Exception:
-                pass
-            lock_conn.close()
-        _ATUALIZACAO_CNAE_SITES_LOCK.release()
 
 
 def criar_dns_txt_cloudflare(site, nome, valor):
@@ -10878,21 +9330,17 @@ def gerador_site(cnpj):
                 )
             else:
                 empresa_site = aplicar_personalizacao_site(
-                    empresa, nome_site, telefone_site, email_site, endereco_site, telefone_site,
-                    f"https://{hostname_previsto}"
+                    empresa, nome_site, telefone_site, email_site, endereco_site, telefone_site
                 )
                 bundle = gerar_bundle_site_empresa(empresa_site, "", modelo_site, "")
                 cnpj_limpo = limpar_cnpj(empresa.get("cnpj_limpo", empresa.get("cnpj", cnpj_form)))
-                dados_cnae = obter_dados_cnae_oficial(empresa)
                 site_id = salvar_site_gerado({
                     "usuario": usuario_atual(), "cnpj": cnpj_limpo,
                     "cnpj_formatado": formatar_cnpj(cnpj_limpo),
                     "nome_empresarial": valor_texto(empresa.get("razao_social", "")),
                     "nome_fantasia": valor_texto(empresa.get("nome_fantasia", "")),
-                    "cnae_principal": dados_cnae["completo"],
-                    "cnae_principal_descricao": dados_cnae["descricao"],
+                    "cnae_principal": valor_texto(empresa.get("cnae_principal", "")),
                     "categoria_cnae": valor_texto(empresa.get("categoria_cnae", "")),
-                    "cnae_atualizacao_versao": VERSAO_ATUALIZACAO_CNAE_SITES,
                     "endereco": endereco_site, "telefone": telefone_site, "email": email_site,
                     "nome_exibicao": nome_site, "telefone_exibicao": telefone_site,
                     "whatsapp_exibicao": telefone_site, "email_exibicao": email_site,
@@ -10905,12 +9353,7 @@ def gerador_site(cnpj):
                     "html_gerado": bundle["html"], "politica_html": bundle["politica"],
                     "termos_html": bundle["termos"], "arquivos_verificacao": "{}",
                     "status": "Gerado", "observacoes": "",
-                    "versao_template": {
-                        "ia_4_0": "4.0",
-                        "ia_3_0": "3.0",
-                        "ia_2_0": "2.1",
-                        "meta_waba_clean": "1.0",
-                    }.get(modelo_site, "1.0")
+                    "versao_template": "3.0" if modelo_site == "ia_3_0" else "2.1"
                 })
                 site = buscar_site_gerado(site_id)
                 try:
@@ -10980,12 +9423,7 @@ def site_gerado_editar(site_id):
     email = request.form.get("email_exibicao", "").strip()
     empresa = buscar_empresa_por_cnpj(site.get("cnpj", "")) or {}
     endereco = site.get("endereco_exibicao") or site.get("endereco") or montar_endereco_empresa(empresa)
-    site_url = site.get("cloudflare_url") or (
-        f"https://{site.get('cloudflare_hostname')}" if site.get("cloudflare_hostname") else ""
-    )
-    empresa_site = aplicar_personalizacao_site(
-        empresa, nome, telefone, email, endereco, telefone, site_url
-    )
+    empresa_site = aplicar_personalizacao_site(empresa, nome, telefone, email, endereco, telefone)
     bundle = gerar_bundle_site_empresa(empresa_site, site.get("meta_tag", ""), site.get("modelo_site", "ia_2_0"), site.get("observacoes", ""))
     atualizar_site_conteudo(site_id, {
         "nome_exibicao": nome, "nome_fantasia": nome,
@@ -11276,12 +9714,6 @@ def exportar():
         as_attachment=True,
         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
-
-
-# Inicia a leitura fora do ciclo de requisição do Gunicorn. O login e as
-# demais rotas leves permanecem disponíveis enquanto a base é preparada.
-if os.environ.get("DESATIVAR_AQUECIMENTO_BASE", "0") != "1":
-    iniciar_carregamento_base_background()
 
 
 if __name__ == "__main__":
