@@ -6455,8 +6455,48 @@ def _config_cloudflare_mpaineldigital():
         "env_prefix": "CLOUDFLARE_MPAINELDIGITAL",
     }
 
+
+def _config_cloudflare_painelbusiness():
+    """Configuração do domínio painelbusiness.com na conta Cloudflare principal."""
+    account_id = valor_texto(os.environ.get("CLOUDFLARE_ACCOUNT_ID", ""))
+    api_token = valor_texto(os.environ.get("CLOUDFLARE_API_TOKEN", ""))
+    zone_id = valor_texto(os.environ.get(
+        "CLOUDFLARE_PAINELBUSINESS_ZONE_ID",
+        "4822193068eeee0a6c5ff57448c1db4b"
+    ))
+
+    # Usa as credenciais universais da mesma conta Cloudflare.
+    if not account_id or not api_token or not zone_id:
+        return None
+
+    custom_domain = normalizar_dominio_cloudflare(
+        os.environ.get(
+            "CLOUDFLARE_PAINELBUSINESS_ZONE_NAME",
+            "painelbusiness.com"
+        )
+    ) or "painelbusiness.com"
+
+    return {
+        "account_id": account_id,
+        "api_token": api_token,
+        "subdomain": "",
+        "custom_domain": custom_domain,
+        "zone_id": zone_id,
+        "zone_name": custom_domain,
+        "ativo": valor_texto(os.environ.get(
+            "CLOUDFLARE_PAINELBUSINESS_ATIVO", "1"
+        )).lower() not in {"0", "false", "nao", "não", "off"},
+        "publish_mode": valor_texto(os.environ.get(
+            "CLOUDFLARE_PAINELBUSINESS_PUBLISH_MODE",
+            "custom_strict"
+        )).lower(),
+        "rotulo": "Painel Business",
+        "env_prefix": "CLOUDFLARE_PAINELBUSINESS",
+    }
+
+
 def listar_configs_cloudflare():
-    dominios_permitidos = {"painelconectadobr.com", "meupainelnegocios.com", "mpaineldigital.com"}
+    dominios_permitidos = {"painelconectadobr.com", "meupainelnegocios.com", "mpaineldigital.com", "painelbusiness.com"}
     bruto = valor_texto(os.environ.get("CLOUDFLARE_SITES_CONFIG", ""))
     configs = []
 
@@ -6491,6 +6531,7 @@ def listar_configs_cloudflare():
         _config_cloudflare_painelconectado(),
         _config_cloudflare_meupainelnegocios(),
         _config_cloudflare_mpaineldigital(),
+        _config_cloudflare_painelbusiness(),
     ]:
         if not config_dedicada:
             continue
