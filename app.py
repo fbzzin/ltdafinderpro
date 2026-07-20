@@ -1042,6 +1042,42 @@ def montar_cnae_exibicao(codigo, descricao=""):
     return codigo_formatado
 
 
+def obter_dados_cnae_oficial(empresa):
+    """Normaliza código e descrição do CNAE sem reaproveitar texto genérico."""
+    empresa = empresa or {}
+    cnae_bruto = valor_texto(empresa.get("cnae_principal", ""))
+    codigo_bruto = valor_texto(empresa.get("cnae_principal_codigo", ""))
+    descricao = valor_texto(empresa.get("cnae_principal_descricao", ""))
+
+    if " - " in cnae_bruto:
+        prefixo, descricao_embutida = cnae_bruto.split(" - ", 1)
+        if not codigo_bruto:
+            codigo_bruto = prefixo
+        if not descricao:
+            descricao = valor_texto(descricao_embutida, "")
+
+    codigo = re.sub(r"\D", "", codigo_bruto or cnae_bruto)[:7]
+    codigo = codigo.zfill(7) if codigo else ""
+
+    descricoes_genericas = {
+        "atividade empresarial cadastrada",
+        "atividade principal cadastrada",
+        "atividade cadastrada",
+    }
+    if descricao.lower() in descricoes_genericas:
+        descricao = ""
+
+    if codigo and not descricao:
+        descricao = valor_texto(carregar_cnaes().get(codigo, ""))
+
+    cnae_completo = montar_cnae_exibicao(codigo, descricao) if codigo else descricao
+    return {
+        "codigo": codigo,
+        "codigo_formatado": formatar_codigo_cnae(codigo) if codigo else "",
+        "descricao": descricao,
+        "completo": cnae_completo,
+    }
+
 
 def status_usuario(status_geral, usuario, cnpj):
     return status_geral.get(usuario, {}).get(cnpj, STATUS_PADRAO)
@@ -1865,10 +1901,24 @@ def construir_base_estatica():
     )
 
     coluna_descricao_cnae = obter_descricao_cnae_por_coluna(df)
+    descricao_mapeada_cnae = (
+        df["cnae_principal_codigo"]
+        .map(cnaes)
+        .fillna("")
+        .astype(str)
+        .str.strip()
+    )
+
     if coluna_descricao_cnae:
         descricao_cnae = df[coluna_descricao_cnae].fillna("").astype(str).str.strip()
+        descricao_invalida = descricao_cnae.str.lower().isin([
+            "", "nan", "none", "null", "atividade empresarial cadastrada",
+            "atividade principal cadastrada", "atividade cadastrada",
+        ])
+        descricao_cnae = descricao_cnae.where(~descricao_invalida, descricao_mapeada_cnae)
     else:
-        descricao_cnae = df["cnae_principal_codigo"].map(cnaes).fillna("").astype(str).str.strip()
+        descricao_cnae = descricao_mapeada_cnae
+
     df["cnae_principal_descricao"] = descricao_cnae
 
     codigo = df["cnae_principal_codigo"]
@@ -1966,11 +2016,24 @@ def _worker_carregar_base_estatica(assinatura_inicial):
 
             _CACHE_BASE_ESTATICA["carregando"] = False
 
-        print(f"[BASE] Base pronta: {len(df):,} registros processados.")
-
         if assinatura_final != assinatura_inicial:
             print("[BASE] O arquivo mudou durante a leitura. Iniciando nova preparação.")
             iniciar_carregamento_base_background()
+            return
+
+        print(f"[BASE] Base pronta: {len(df):,} registros processados.")
+
+        try:
+            resumo_cnaes = atualizar_cnaes_sites_existentes(df_base=df)
+            if resumo_cnaes.get("total"):
+                print(
+                    "[CNAE-SITES] Atualização concluída: "
+                    f"{resumo_cnaes.get('atualizados', 0)} atualizados, "
+                    f"{resumo_cnaes.get('republicados', 0)} republicados e "
+                    f"{resumo_cnaes.get('falhas', 0)} falhas."
+                )
+        except Exception as erro_cnaes:
+            print(f"[CNAE-SITES] Falha geral na atualização automática: {erro_cnaes!r}")
 
     except Exception as erro:
         with _CACHE_BASE_LOCK:
@@ -3102,6 +3165,13 @@ MODELOS_SITE = [
 
 MODELOS_SITE_DICT = {modelo["slug"]: modelo for modelo in MODELOS_SITE}
 
+# Versão da correção que sincroniza o CNAE oficial da base com os sites já
+# gerados. Sites antigos ficam pendentes até terem o HTML regenerado e, quando
+# publicados, o mesmo Worker/subdomínio republicado com o conteúdo corrigido.
+VERSAO_ATUALIZACAO_CNAE_SITES = "2.0"
+CHAVE_LOCK_ATUALIZACAO_CNAE = 734821906
+_ATUALIZACAO_CNAE_SITES_LOCK = threading.Lock()
+
 
 def criar_tabela_sites_gerados():
     try:
@@ -3175,7 +3245,11 @@ def criar_tabela_sites_gerados():
             "dns_txt_nome": "TEXT",
             "dns_txt_valor": "TEXT",
             "atualizado_em": "TIMESTAMP",
-            "versao_template": "TEXT DEFAULT '1.0'"
+            "versao_template": "TEXT DEFAULT '1.0'",
+            "cnae_principal_descricao": "TEXT",
+            "cnae_atualizacao_versao": "TEXT DEFAULT '1.0'",
+            "cnae_atualizado_em": "TIMESTAMP",
+            "cnae_atualizacao_erro": "TEXT"
         }
 
         with engine.begin() as conn:
@@ -6041,6 +6115,13 @@ def gerar_html_site_empresa(empresa, meta_tag, modelo_site, observacoes=""):
 
 def aplicar_personalizacao_site(empresa, nome_site="", telefone_site="", email_site="", endereco_site="", whatsapp_site="", site_url=""):
     empresa_site = dict(empresa)
+    dados_cnae = obter_dados_cnae_oficial(empresa_site)
+
+    if dados_cnae["codigo"]:
+        empresa_site["cnae_principal_codigo"] = dados_cnae["codigo"]
+        empresa_site["cnae_principal_descricao"] = dados_cnae["descricao"]
+        empresa_site["cnae_principal"] = dados_cnae["completo"]
+
     empresa_site["nome_site"] = valor_texto(nome_site, "") or nome_exibicao_empresa(empresa)
     empresa_site["telefone_formatado"] = valor_texto(telefone_site, "")
     empresa_site["whatsapp_site"] = valor_texto(whatsapp_site, "") or valor_texto(telefone_site, "")
@@ -6852,7 +6933,9 @@ def salvar_site_gerado(dados):
         "nome_empresarial",
         "nome_fantasia",
         "cnae_principal",
+        "cnae_principal_descricao",
         "categoria_cnae",
+        "cnae_atualizacao_versao",
         "endereco",
         "telefone",
         "email",
@@ -6970,7 +7053,11 @@ def listar_sites_gerados(modelo_site="", busca=""):
                     nome_empresarial,
                     nome_fantasia,
                     cnae_principal,
+                    cnae_principal_descricao,
                     categoria_cnae,
+                    cnae_atualizacao_versao,
+                    cnae_atualizado_em,
+                    cnae_atualizacao_erro,
                     endereco,
                     telefone,
                     email,
@@ -7009,6 +7096,7 @@ def listar_sites_gerados(modelo_site="", busca=""):
         item["criado_em"] = converter_data_hora_sql_para_brasilia(item.get("criado_em"))
         item["cloudflare_publicado_em"] = converter_data_hora_sql_para_brasilia(item.get("cloudflare_publicado_em"))
         item["atualizado_em"] = converter_data_hora_sql_para_brasilia(item.get("atualizado_em"))
+        item["cnae_atualizado_em"] = converter_data_hora_sql_para_brasilia(item.get("cnae_atualizado_em"))
         sites.append(item)
 
     return sites
@@ -7042,6 +7130,7 @@ def buscar_site_gerado(site_id):
     site["criado_em"] = converter_data_hora_sql_para_brasilia(site.get("criado_em"))
     site["cloudflare_publicado_em"] = converter_data_hora_sql_para_brasilia(site.get("cloudflare_publicado_em"))
     site["atualizado_em"] = converter_data_hora_sql_para_brasilia(site.get("atualizado_em"))
+    site["cnae_atualizado_em"] = converter_data_hora_sql_para_brasilia(site.get("cnae_atualizado_em"))
     return site
 
 
@@ -7177,7 +7266,9 @@ def atualizar_site_conteudo(site_id, campos):
         "whatsapp_exibicao", "email_exibicao", "email", "endereco_exibicao",
         "endereco", "meta_tag", "html_gerado", "politica_html", "termos_html",
         "arquivos_verificacao", "dns_txt_nome", "dns_txt_valor", "modelo_site",
-        "versao_template", "cloudflare_dominio_base"
+        "versao_template", "cloudflare_dominio_base", "cnae_principal",
+        "cnae_principal_descricao", "categoria_cnae", "cnae_atualizacao_versao",
+        "cnae_atualizacao_erro"
     }
     dados = {chave: valor for chave, valor in campos.items() if chave in permitidos}
     if not dados:
@@ -7204,21 +7295,250 @@ def empresa_site_a_partir_registro(site):
     )
 
 
+def obter_slug_publico_site(site):
+    slug = normalizar_nome_worker_cloudflare(site.get("cloudflare_slug_personalizado", ""))
+    if slug:
+        return slug
+
+    hostname = normalizar_dominio_cloudflare(site.get("cloudflare_hostname", ""))
+    if not hostname:
+        hostname = normalizar_dominio_cloudflare(site.get("cloudflare_url", ""))
+
+    dominio = normalizar_dominio_cloudflare(site.get("cloudflare_dominio_base", ""))
+    if hostname and dominio and hostname.endswith(f".{dominio}"):
+        slug_hostname = hostname[:-(len(dominio) + 1)].split(".")[0]
+        slug_hostname = normalizar_nome_worker_cloudflare(slug_hostname)
+        if slug_hostname:
+            return slug_hostname
+
+    if hostname:
+        primeiro_rotulo = normalizar_nome_worker_cloudflare(hostname.split(".")[0])
+        if primeiro_rotulo:
+            return primeiro_rotulo
+
+    return normalizar_nome_worker_cloudflare(site.get("cloudflare_worker_name", ""))
+
+
 def republicar_site_se_publicado(site_id):
     site = buscar_site_gerado(site_id)
     if not site or site.get("cloudflare_status") != "Publicado":
         return ""
+    slug_publico = obter_slug_publico_site(site)
     resultado = publicar_site_na_cloudflare(
         site,
-        site.get("cloudflare_slug_personalizado") or site.get("cloudflare_worker_name"),
+        slug_publico,
         site.get("cloudflare_dominio_base", ""),
     )
     atualizar_publicacao_cloudflare_site(
         site_id, "Publicado", resultado["worker_name"], resultado["cloudflare_url"],
-        resultado.get("aviso", ""), site.get("cloudflare_slug_personalizado", ""),
+        resultado.get("aviso", ""), slug_publico,
         resultado.get("dominio_base", ""), resultado.get("hostname", "")
     )
     return resultado.get("cloudflare_url", "")
+
+
+def _listar_sites_para_atualizacao_cnae(forcar=False):
+    criar_tabela_sites_gerados()
+    where_sql = ""
+    params = {"versao": VERSAO_ATUALIZACAO_CNAE_SITES}
+
+    if not forcar:
+        where_sql = "WHERE COALESCE(cnae_atualizacao_versao, '') != :versao"
+
+    with engine.connect() as conn:
+        linhas = conn.execute(
+            text(f"""
+                SELECT *
+                FROM sites_gerados
+                {where_sql}
+                ORDER BY id ASC
+            """),
+            params,
+        ).mappings().fetchall()
+
+    return [dict(linha) for linha in linhas]
+
+
+def _registrar_resultado_atualizacao_cnae(site_id, concluido, erro=""):
+    with engine.begin() as conn:
+        conn.execute(
+            text("""
+                UPDATE sites_gerados
+                SET
+                    cnae_atualizacao_versao = CASE
+                        WHEN :concluido THEN :versao
+                        ELSE cnae_atualizacao_versao
+                    END,
+                    cnae_atualizado_em = CASE
+                        WHEN :concluido THEN CURRENT_TIMESTAMP
+                        ELSE cnae_atualizado_em
+                    END,
+                    cnae_atualizacao_erro = :erro,
+                    atualizado_em = CURRENT_TIMESTAMP
+                WHERE id = :site_id
+            """),
+            {
+                "concluido": bool(concluido),
+                "versao": VERSAO_ATUALIZACAO_CNAE_SITES,
+                "erro": valor_texto(erro, "")[:2000],
+                "site_id": int(site_id),
+            },
+        )
+
+
+def atualizar_cnaes_sites_existentes(df_base=None, forcar=False):
+    """Atualiza CNAE e HTML dos sites antigos e preserva suas URLs publicadas.
+
+    A operação é idempotente. Sites publicados só recebem a versão nova depois
+    que o mesmo Worker/subdomínio for republicado com sucesso. Falhas ficam
+    pendentes para nova tentativa no próximo carregamento da aplicação.
+    """
+    if not _ATUALIZACAO_CNAE_SITES_LOCK.acquire(blocking=False):
+        return {"executando": True, "total": 0, "atualizados": 0, "republicados": 0, "falhas": 0}
+
+    lock_conn = None
+    lock_postgres_adquirido = False
+    resumo = {
+        "executando": False,
+        "total": 0,
+        "atualizados": 0,
+        "republicados": 0,
+        "ignorados": 0,
+        "falhas": 0,
+        "erros": [],
+    }
+
+    try:
+        dialect_name = getattr(getattr(engine, "dialect", None), "name", "postgresql")
+        if dialect_name == "postgresql":
+            lock_conn = engine.connect()
+            lock_postgres_adquirido = bool(
+                lock_conn.execute(
+                    text("SELECT pg_try_advisory_lock(:chave)"),
+                    {"chave": CHAVE_LOCK_ATUALIZACAO_CNAE},
+                ).scalar()
+            )
+            if not lock_postgres_adquirido:
+                resumo["executando"] = True
+                return resumo
+
+        sites = _listar_sites_para_atualizacao_cnae(forcar=forcar)
+        resumo["total"] = len(sites)
+        if not sites:
+            return resumo
+
+        if df_base is None:
+            df_base = carregar_base_estatica()
+
+        cnpjs = {limpar_cnpj(site.get("cnpj", "")) for site in sites if site.get("cnpj")}
+        empresas_por_cnpj = {}
+        if cnpjs and df_base is not None and not df_base.empty:
+            encontrados = df_base[df_base["cnpj_limpo"].isin(cnpjs)]
+            for empresa in encontrados.to_dict(orient="records"):
+                cnpj_empresa = limpar_cnpj(empresa.get("cnpj_limpo", empresa.get("cnpj", "")))
+                if cnpj_empresa and cnpj_empresa not in empresas_por_cnpj:
+                    empresas_por_cnpj[cnpj_empresa] = empresa
+
+        for site in sites:
+            site_id = int(site.get("id"))
+            cnpj = limpar_cnpj(site.get("cnpj", ""))
+            empresa = empresas_por_cnpj.get(cnpj)
+
+            if not empresa:
+                erro = f"CNPJ {cnpj or 'não informado'} não encontrado na base atual."
+                _registrar_resultado_atualizacao_cnae(site_id, False, erro)
+                resumo["falhas"] += 1
+                resumo["erros"].append({"site_id": site_id, "erro": erro})
+                continue
+
+            try:
+                dados_cnae = obter_dados_cnae_oficial(empresa)
+                if not dados_cnae["codigo"]:
+                    raise RuntimeError("A base atual não possui o código CNAE principal deste CNPJ.")
+                if not dados_cnae["descricao"]:
+                    raise RuntimeError(
+                        "A descrição oficial do CNAE não foi encontrada. "
+                        "Confirme se downloads/Cnaes.zip está disponível."
+                    )
+
+                site_url = site.get("cloudflare_url") or (
+                    f"https://{site.get('cloudflare_hostname')}" if site.get("cloudflare_hostname") else ""
+                )
+                empresa_site = aplicar_personalizacao_site(
+                    empresa,
+                    site.get("nome_exibicao") or site.get("nome_fantasia") or site.get("nome_empresarial"),
+                    site.get("telefone_exibicao") or site.get("telefone"),
+                    site.get("email_exibicao") or site.get("email"),
+                    site.get("endereco_exibicao") or site.get("endereco") or montar_endereco_empresa(empresa),
+                    site.get("whatsapp_exibicao") or site.get("telefone_exibicao") or site.get("telefone"),
+                    site_url,
+                )
+                bundle = gerar_bundle_site_empresa(
+                    empresa_site,
+                    site.get("meta_tag", ""),
+                    site.get("modelo_site", "ia_2_0"),
+                    site.get("observacoes", ""),
+                )
+
+                campos_atualizados = {
+                    "cnae_principal": dados_cnae["completo"],
+                    "cnae_principal_descricao": dados_cnae["descricao"],
+                    "categoria_cnae": valor_texto(empresa.get("categoria_cnae", "")),
+                    "html_gerado": bundle["html"],
+                    "politica_html": bundle["politica"],
+                    "termos_html": bundle["termos"],
+                    "cnae_atualizacao_erro": "",
+                }
+                atualizar_site_conteudo(site_id, campos_atualizados)
+                site_atualizado = dict(site)
+                site_atualizado.update(campos_atualizados)
+                resumo["atualizados"] += 1
+
+                if site.get("cloudflare_status") == "Publicado":
+                    slug_publico = obter_slug_publico_site(site)
+                    resultado = publicar_site_na_cloudflare(
+                        site_atualizado,
+                        slug_publico,
+                        site.get("cloudflare_dominio_base", ""),
+                    )
+                    atualizar_publicacao_cloudflare_site(
+                        site_id,
+                        "Publicado",
+                        resultado["worker_name"],
+                        resultado["cloudflare_url"],
+                        resultado.get("aviso", ""),
+                        slug_publico,
+                        resultado.get("dominio_base", site.get("cloudflare_dominio_base", "")),
+                        resultado.get("hostname", site.get("cloudflare_hostname", "")),
+                    )
+                    resumo["republicados"] += 1
+
+                _registrar_resultado_atualizacao_cnae(site_id, True, "")
+                print(
+                    f"[CNAE-SITES] Site #{site_id} atualizado para "
+                    f"{dados_cnae['completo']}."
+                )
+            except Exception as exc:
+                erro = str(exc)
+                _registrar_resultado_atualizacao_cnae(site_id, False, erro)
+                resumo["falhas"] += 1
+                resumo["erros"].append({"site_id": site_id, "erro": erro})
+                print(f"[CNAE-SITES] Falha no site #{site_id}: {erro}")
+
+        return resumo
+    finally:
+        if lock_conn is not None:
+            try:
+                if lock_postgres_adquirido:
+                    lock_conn.execute(
+                        text("SELECT pg_advisory_unlock(:chave)"),
+                        {"chave": CHAVE_LOCK_ATUALIZACAO_CNAE},
+                    )
+                    lock_conn.commit()
+            except Exception:
+                pass
+            lock_conn.close()
+        _ATUALIZACAO_CNAE_SITES_LOCK.release()
 
 
 def criar_dns_txt_cloudflare(site, nome, valor):
@@ -10522,13 +10842,16 @@ def gerador_site(cnpj):
                 )
                 bundle = gerar_bundle_site_empresa(empresa_site, "", modelo_site, "")
                 cnpj_limpo = limpar_cnpj(empresa.get("cnpj_limpo", empresa.get("cnpj", cnpj_form)))
+                dados_cnae = obter_dados_cnae_oficial(empresa)
                 site_id = salvar_site_gerado({
                     "usuario": usuario_atual(), "cnpj": cnpj_limpo,
                     "cnpj_formatado": formatar_cnpj(cnpj_limpo),
                     "nome_empresarial": valor_texto(empresa.get("razao_social", "")),
                     "nome_fantasia": valor_texto(empresa.get("nome_fantasia", "")),
-                    "cnae_principal": valor_texto(empresa.get("cnae_principal", "")),
+                    "cnae_principal": dados_cnae["completo"],
+                    "cnae_principal_descricao": dados_cnae["descricao"],
                     "categoria_cnae": valor_texto(empresa.get("categoria_cnae", "")),
+                    "cnae_atualizacao_versao": VERSAO_ATUALIZACAO_CNAE_SITES,
                     "endereco": endereco_site, "telefone": telefone_site, "email": email_site,
                     "nome_exibicao": nome_site, "telefone_exibicao": telefone_site,
                     "whatsapp_exibicao": telefone_site, "email_exibicao": email_site,
