@@ -5191,7 +5191,7 @@ def _config_cloudflare_mpaineldigital():
     }
 
 def listar_configs_cloudflare():
-    dominios_permitidos = {"painelconectadobr.com", "meupainelnegocios.com", "mpaineldigital.com"}
+    dominios_permitidos = {"painelconectadobr.com", "meupainelnegocios.com", "mpaineldigital.com", "painelbusiness.com"}
     bruto = valor_texto(os.environ.get("CLOUDFLARE_SITES_CONFIG", ""))
     configs = []
 
@@ -9718,6 +9718,3 @@ def exportar():
 
 if __name__ == "__main__":
     app.run(debug=True)
-   
- #   A t u a l i z a d o   c o m   p a i n e l b u s i n e s s . c o m   -   2 0 / 0 7 / 2 0 2 6  
- 
